@@ -7,12 +7,12 @@
 
 &net_input
 
-  sunet_fname = 'sunet'
+  sunet_fname = 'sunet.sn160'
 
   netsu_data_dir = './reaclib_data'
   netsu_in_fname = '20180621default'
   reaclib_ver = 1
-  no910 = .true.
+  no910 = .false.
 
   netsu_out_fname = 'netsu'
 
@@ -20,7 +20,7 @@
 
 &ffn_input
 
-  netweak_flag = .false.
+  netweak_flag = .true.
   netweak_data_dir = './ffn_data'
 
   netweak_in_fname = 'lmpffnoda.data'
