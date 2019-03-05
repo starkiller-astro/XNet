@@ -1,0 +1,16 @@
+
+## Output Controls
+0         Diagnostic Output Level
+2         Per Timestep Output Level
+# ASCII output filename root, network will append zone number
+Test_Results/ev_ccsn_nup_
+# Binary output filename root, network will append zone number
+Test_Results/ts_ccsn_nup_
+# Species to output in ASCII output (format 14a5): 14
+    n    p  he4 fe54 co55 ni56 ni57 ni58 cu58 zn60 zn61 ge64 ge65 as68
+## Input Controls
+# Nuclear Data Directory
+Data_nup
+# Initial Abundance and Thermodynamic Trajectory Files
+Data_nup/ab_ye55
+Test_Problems/th_frohlich2006

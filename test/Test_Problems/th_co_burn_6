@@ -1,0 +1,6 @@
+Initial conditions for thermonuclear runaway of degenerate C/O into NSE
+0.000000E+00    Start Time
+1.000000E-05    Stop Time
+1.000000E-12    Init Del t
+0.0E+00 1.7 3.16227766E+09 0.5
+1.0E-05 1.7 3.16227766E+09 0.5

@@ -1,0 +1,22 @@
+169-species nova network form Iliadis                                           
+Number of Nuclear Species=  169
+Reaction Count for the 11 different types
+         1         1       112
+         2       113       712
+         3       713       723
+         4         1       566
+         5       567      1502
+         6      1503      1522
+         7      1523      1528
+         8         1         6
+         9         7        26
+        10         1         6
+        11       724       724
+Necessary dimensions
+  nreac(1,2,3,4)=     724    1528      26       6
+    nan(1,2,3,4)=    2056    5514      89      28
+Reaction Count for non-REACLIB rates
+  nffn=       0   nnu=       0
+Matrix Sparseness parameters
+Border Widths      38   38
+Diagonal Widths    24   42(j<i,j>i)

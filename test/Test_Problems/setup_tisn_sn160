@@ -1,0 +1,16 @@
+
+## Output Controls
+0         Diagnostic Output Level
+2         Per Timestep Output Level
+# ASCII output filename root, network will append zone number
+Test_Results/ev_tisn_sn160_
+# Binary output filename root, network will append zone number
+Test_Results/ts_tisn_sn160_
+# Species to output in ASCII output (format 14a5): 14
+  he4  c12 mg24 si28  s32 ar36 ca40 ti44 cr48 fe52 co54 ni56 ni57 zn60
+## Input Controls
+# Nuclear Data Directory
+Data_SN160
+# Initial Abundance and Thermodynamic Trajectory Files
+Data_SN160/ab_he
+Test_Problems/th_rosswog_4

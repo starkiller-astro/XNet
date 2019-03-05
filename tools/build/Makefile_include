@@ -1,0 +1,518 @@
+## Define programming envionment if not set or on a Cray machine
+MACHINE=$(shell echo $(HOSTNAME) | sed 's/\(-[a-zA-Z]*\)\?[0-9]\+$$//')
+CRAY_MACHINE = \
+               titan \
+               hopper \
+               darter \
+               edison \
+               chester \
+               beacon \
+               mira
+
+## Define CPU LAPACK package (Default is LIBSCI for Cray machines, MKL otherwise)
+#LAPACK_VER = MKL
+#LAPACK_VER = LIBSCIACC
+#LAPACK_VER = ACML
+#LAPACK_VER = LIBSCI
+#LAPACK_VER = NETLIB
+
+ifeq (,$(filter $(MACHINE),$(CRAY_MACHINE)))
+    ## Set flag to not use compiler wrapper
+    USE_CRAY ?= 0
+
+    ## Use GNU compiler by default, unless PE_ENV environment variable already set
+    PE_ENV  ?= GNU
+    #PE_ENV  ?= PGI
+    #PE_ENV  ?= INTEL
+    #PE_ENV  ?= CRAY
+    #PE_ENV  ?= ABSOFT
+
+    FC_MPI  = mpif90
+    CC_MPI  = mpicc
+    CXX_MPI = mpic++
+    LDR_MPI = mpif90
+
+    LAPACK_VER ?= MKL
+else
+    ## Set flag to use compiler wrapper
+    USE_CRAY ?= 1
+
+    FC      = ftn
+    CC      = cc
+    CXX     = CC
+    LDR     = ftn
+    FC_MPI  = ftn
+    CC_MPI  = cc
+    CXX_MPI = CC
+    LDR_MPI = ftn
+
+    LAPACK_VER ?= LIBSCI
+endif
+
+## Define GPU LAPACK package
+#GPU_LAPACK_VER = MAGMA
+#GPU_LAPACK_VER = CULA
+#GPU_LAPACK_VER = CDP_LU
+GPU_LAPACK_VER ?= LIBSCIACC
+
+## Define compiler specific variables
+LC_PE_ENV = $(shell echo $(PE_ENV) | tr A-Z a-z)
+GCC_VER   = 3
+INTEL_VER = 0
+PGI_VER   = 0
+CRAY_VER  = 0
+
+LIBSCI_EXTRA = 
+
+ifeq ($(PE_ENV),INTEL)
+    
+    ifeq ($(USE_CRAY),0)
+        FC      = ifort
+        CC      = icc
+        CXX     = icpc
+        LDR     = ifort
+
+        ARCHOPT = -xHost
+
+        EXTRA_FFLAGS   =
+        EXTRA_CCFLAGS  =
+        EXTRA_CXXFLAGS =
+        EXTRA_LDRFLAGS =
+        EXTRA_LINK     =
+
+        INTEL_LIBS =
+    else ifeq ($(MACHINE),beacon)
+        ARCHOPT = -xAVX
+    else ifeq ($(MACHINE),darter)
+        ARCHOPT = -xAVX
+    else ifeq ($(MACHINE),edison)
+        ARCHOPT = -xAVX
+    else ifeq ($(MACHINE),titan)
+        ARCHOPT = -msse3
+    else ifeq ($(MACHINE),chester)
+        ARCHOPT = -msse3
+    else ifeq ($(MACHINE),hopper)
+        ARCHOPT = -msse3
+    endif
+
+    ifeq ($(MPI_MODE),ON)
+        ifeq ($(OPENMP_MODE),ON)
+            INLINE  = -ip
+        else
+            INLINE  = -ipo
+        endif
+    else
+        INLINE  = -ipo
+    endif
+
+    HIGHOPT = -O3 $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
+
+    DEBUGOPT = $(HIGHOPT) -g -traceback
+    DEBUG    = $(NOOPT) -g -check -traceback
+
+    R8      = -real-size 64 -integer-size 32
+    FCLIST  = -list
+    CCLIST  = -list
+    CXXLIST = -list
+
+    INTEL_VER = $(shell echo $(INTEL_VERSION)| cut -d. -f1,2 | sed -e "s/\.//g")
+    GCC_VER   = 43
+    PE_VER    = 120
+
+    LIBSCI_VER = $(PE_VER)
+
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG   = -openmp-stubs
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP = -liomp5 -lpthread
+        endif
+    else
+        OMP_FLAG   = -openmp
+    endif
+
+else ifeq ($(PE_ENV),PGI)
+    
+    ifeq ($(USE_CRAY),0)
+        FC      = pgf90
+        CC      = pgcc
+        CXX     = pgCC
+        LDR     = pgf90
+
+        ARCHOPT = -Mvect=assoc,simd:128,sse
+
+        EXTRA_CXXFLAGS = 
+        EXTRA_LDRFLAGS =
+        EXTRA_LIBS     = 
+        EXTRA_LINK     = -rpath=/opt/pgi/default/linux86-64/default/libso
+
+        LIBSCI_EXTRA   = 
+    endif
+    INLINE  = -Mipa=fast
+
+    HIGHOPT = -fastsse $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
+
+    DEBUGOPT = $(HIGHOPT) -gopt
+    DEBUG    = $(NOOPT) -g -Minfo=all
+
+    R8      = -r8 -i4
+    FCLIST  = -Mlist
+    CCLIST  = -Mlist
+    CXXLIST = -Mlist
+
+    PGI_VER = $(shell echo $(PGI_VERSION) | cut -d. -f1,2 | sed -e "s/\.//g")
+    PE_VER  = 119
+
+    LIBSCI_VER   = $(PE_VER)
+
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG   = -mp=nonuma -Mnoopenmp
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP = $(OMP_FLAG)
+        endif
+    else
+        OMP_FLAG = -mp
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP = -lpgmp -lpthread
+        endif
+    endif
+
+else ifeq ($(PE_ENV),GNU)
+    
+    ifeq ($(USE_CRAY),0)
+        FC  = gfortran
+        CC  = gcc
+        CXX = g++
+        LDR = gfortran
+
+        ARCHOPT        = -march=native
+
+        EXTRA_FFLAGS   = -fno-second-underscore
+        EXTRA_CCFLAGS  = -fno-second-underscore
+        EXTRA_CXXFLAGS = -fno-second-underscore
+        EXTRA_LDRFLAGS = -fno-second-underscore
+        EXTRA_LIBS     =
+        EXTRA_LINK     = 
+        LIBSCI_OMP     = -lgfortran
+    endif
+
+    HIGHOPT = -O3 $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
+
+    DEBUG   = -g -fbacktrace -Wall
+
+    GCC_VER = $(shell echo $(GCC_VERSION) | cut -d. -f1,2 | sed -e "s/\.//g")
+    PE_VER  = $(GCC_VER)
+
+    R8 = -fdefault-real-8 -fdefault-double-8
+
+    LIBSCI_VER = $(PE_VER)
+    
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG = -lgomp -lpthread
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP += $(OMP_FLAG)
+        endif
+    else
+        OMP_FLAG = -fopenmp
+    endif
+
+else ifeq ($(PE_ENV),CRAY)
+    
+    ifeq ($(USE_CRAY),0)
+        FC  = crayftn
+        CC  = craycc
+        CXX = crayCC
+        LDR = crayftn
+
+        ## This will be set on a cray machine based on the craype target module loaded
+        CRAY_CPU_TARGET ?= x86-64
+        ARCHOPT        = -h cpu=$(CRAY_CPU_TARGET)
+
+        EXTRA_FFLAGS   =
+        EXTRA_CCFLAGS  = -h gnu
+        EXTRA_CXXFLAGS = -h gnu
+        EXTRA_LDRFLAGS = 
+
+        EXTRA_LIBS =
+        EXTRA_LINK =
+    endif
+
+    INLINE_DB = ./$(EXE)_inline
+    INLINE    = -h wp -h pl=$(INLINE_DB)
+
+    HIGHOPT = -O2 $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
+
+    DEBUGOPT = $(HIGHOPT) -G1
+    DEBUG    = -eD
+
+    R8 = -sreal64 -sinteger32
+
+    FCLIST  = -rm
+    CCLIST  = -h list=a
+    CXXLIST = -h list=a
+
+    CRAY_VER   = $(shell echo $(PE_LEVEL) | cut -d. -f1,2 | sed -e "s/\.//g")
+    PE_VER     = 74
+
+    #LIBSCI_VER = $(CRAY_VER)
+    LIBSCI_VER = $(PE_VER)
+
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG = -h noomp
+    endif
+
+else
+
+    $(error PE_ENV = \"$(PE_ENV)\" not supported )
+
+endif
+
+ifneq ($(FC),ftn)
+    LIBSCI_EXTRA += -lstdc++ $(LIBSCI_OMP)
+    LIBSCI_DIR    = /opt/cray/libsci/default/$(PE_ENV)/$(PE_VER)/$(CRAY_CPU_TARGET)
+    LIBSCI_INC    = -I$(LIBSCI_DIR)/include
+    LIBSCI_LIBDIR = -L$(LIBSCI_DIR)/lib
+    LIBSCI_LIBS   = -lscicpp_$(LC_PE_ENV) -lsci_$(LC_PE_ENV)_mp $(LIBSCI_EXTRA)
+endif
+
+UDREG_DIR    = /opt/cray/udreg/default
+UDREG_INC    = -I$(UDREG_DIR)/include
+UDREG_LIBDIR = -L$(UDREG_DIR)/lib64
+UDREG_LIBS   = -ludreg
+
+UGNI_DIR     = /opt/cray/ugni/default
+UGNI_INC     = -I$(UGNI_DIR)/include
+UGNI_LIBDIR  = -L$(UGNI_DIR)/lib64
+UGNI_LIBS    = -lugni
+
+DMAPP_DIR    = /opt/cray/dmapp/default
+DMAPP_INC    = -I$(DMAPP_DIR)/include
+DMAPP_LIBDIR = -L$(DMAPP_DIR)/lib64
+DMAPP_LIBS   = -ldmapp
+
+GNIH_DIR     = /opt/cray/gni-headers/default
+GNIH_INC     = -I$(GNIH_DIR)/include
+GNIH_LIBDIR  = -L$(GNIH_DIR)/lib64
+GNIH_LIBS    =
+
+XPMEM_DIR    = /opt/cray/xpmem/default
+XPMEM_INC    = -I$(XPMEM_DIR)/include
+XPMEM_LIBDIR = -L$(XPMEM_DIR)/lib64
+XPMEM_LIBS   = -lxpmem
+
+PMI_DIR    = /opt/cray/pmi/default
+PMI_INC    = -I$(PMI_DIR)/include
+PMI_LIBDIR = -L$(PMI_DIR)/lib64
+PMI_LIBS   = -lpmi
+
+MPICH_DIR    = /opt/cray/mpt/default/gni/mpich2-$(LC_PE_ENV)/$(PE_VER)
+MPICH_INC    = -I$(MPICH_DIR)/include
+MPICH_LIBDIR = -L$(MPICH_DIR)/lib 
+MPICH_LIBS   = -lmpichf90_$(LC_PE_ENV) -lmpich_$(LC_PE_ENV) -lmpichf90_$(LC_PE_ENV) -lmpl -lrt
+
+ALPS_INC    = -I/usr/include/alps
+ALPS_LIBDIR = -L/usr/lib/alps
+ALPS_LIBS   = -lalpslli -lalpsutil
+
+CUDA_DIR    = /opt/cray/nvidia/default
+CUDA_INC    = -I$(CUDA_DIR)/include
+CUDA_LIBDIR = -L$(CUDA_DIR)/lib64
+CUDA_LIBS   =# -lcuda
+CUDA_SRC    = cudaf.f90
+
+CUDATK_DIR    = /opt/nvidia/cudatoolkit/default
+CUDATK_INC    = -I$(CUDATK_DIR)/include
+CUDATK_LIBDIR = -L$(CUDATK_DIR)/lib64 $(CUDA_LIBDIR)
+CUDATK_LIBS   = -lcublas -lcudart $(CUDA_LIBS)
+CUDATK_SRC    = cublasf.f90 $(CUDA_SRC)
+
+CUPTI_DIR    = $(CUDA_DIR)/extras/CUPTI
+CUPTI_INC    = -I$(CUPTI_DIR)/include
+CUPTI_LIBDIR = -L$(CUPTI_DIR)/lib64
+CUPTI_LIBS   = -lcupti
+
+CUDBG_DIR    = $(CUDA_DIR)/extras/Debugger
+CUDBG_INC    = -I$(CUDBG_DIR)/include
+CUDBG_LIBDIR = -L$(CUDBG_DIR)/lib64
+
+INTEL_PATH  ?= /opt/intel/composerxe
+INTEL_INC    = -I$(INTEL_PATH)/compiler/include
+INTEL_LIBDIR = -L$(INTEL_PATH)/compiler/lib/intel64
+ifneq ($(FC),ftn)
+    INTEL_LIBS  += -limf -lifport -lifcore -lm
+endif
+
+MKLROOT    ?= $(INTEL_PATH)/mkl
+MKL_LIBDIR  = -L$(MKLROOT)/lib/intel64
+ifeq ($(OPENMP_MODE),ON)
+    ifeq ($(PE_ENV),INTEL)
+        MKL_INC += -mkl=sequential
+#       MKL_LIBS = -lmkl_intel_lp64 -lmkl_core -lmkl_sequential
+    else ifeq ($(PE_ENV),PGI)
+        MKL_INC  = -I$(MKLROOT)/include
+        MKL_LIBS = -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
+    else ifeq ($(PE_ENV),GNU)
+        MKL_INC  = -I$(MKLROOT)/include
+        MKL_LIBS = -lmkl_gf_lp64 -lmkl_core -lmkl_sequential
+    else ifeq ($(PE_ENV),CRAY)
+        MKL_INC  = -I$(MKLROOT)/include
+        MKL_LIBS = -lmkl_gf_lp64 -lmkl_sequential -lmkl_core
+    endif
+else
+    ifeq ($(PE_ENV),INTEL)
+        MKL_INC += -mkl=sequential
+#       MKL_LIBS = -lmkl_intel_lp64 -lmkl_core -lmkl_intel_thread
+    else ifeq ($(PE_ENV),PGI)
+        MKL_INC += -mp -pgf90libs -I$(MKLROOT)/include
+        MKL_LIBS = -lmkl_intel_lp64 -lmkl_pgi_thread -lmkl_core -ldl -lpthread -pgf90libs
+    else ifeq ($(PE_ENV),GNU)
+        MKL_INC += -fopenmp -I$(MKLROOT)/include
+        MKL_LIBS = -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core -ldl -lpthread
+    else ifeq ($(PE_ENV),CRAY)
+        MKL_INC += -h omp -I$(MKLROOT)/include
+        MKL_LIBS = -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core -ldl -lpthread
+    endif
+endif
+
+NETLIB_DIR     = ../tools/LAPACK
+BLAS_LVL3_SRC  = dgemm.f dtrsm.f
+BLAS_LVL2_SRC  = dgemv.f dger.f dtrsv.f
+BLAS_LVL1_SRC  = dlamch.f daxpy.f ddot.f dscal.f dswap.f idamax.f lsame.f xerbla.f
+LAPACK_UTL_SRC = ieeeck.f iparmq.f
+LAPACK_AUX_SRC = dgetf2.f dlaswp.f ilaenv.f
+NETLIB_SRC     = $(addprefix $(NETLIB_DIR)/, \
+		 $(BLAS_LVL1_SRC) $(BLAS_LVL2_SRC) $(BLAS_LVL3_SRC) \
+		 $(LAPACK_UTL_SRC) $(LAPACK_AUX_SRC) \
+		 dgetrf.f dgetrs.f dgesv.f)
+NETLIB_OBJ     = $(addsuffix .o,$(basename $(NETLIB_SRC)))
+
+CDP_LU_DIR    = $(CUDATK_DIR)
+CDP_LU_INC    = $(CUDATK_INC)
+CDP_LU_LIBDIR = $(CUDATK_LIBDIR)
+CDP_LU_LIBS   = -lcublas -lcublas_device -lcudadevrt# -lgomp
+CDP_LU_LINK   = $(CDP_LU_LIBDIR) $(CDP_LU_LIBS)
+CDP_LU_SRC    = dlaswp.cu dgetf2.cu dgetrf.cu dgesv.cu cdp_lu.cu
+CDP_LU_OBJ    = $(addsuffix .o,$(basename $(CDP_LU_SRC)))
+NVCC = nvcc
+NVCCFLAGS = -O3 -m64 -gencode arch=compute_35,code=sm_35# --ptxas-options=-v# -Xcompiler '-fPIC'
+NVLDFLAGS = -m64 -gencode arch=compute_35,code=sm_35
+
+CULA_DIR     = /sw/xk6/cula-dense/R16a/binary
+CULA_INC     = -I$(CULA_DIR)/include $(CUDATK_INC)
+CULA_LIBDIR  = -L$(CULA_DIR)/lib64 $(CUDATK_LIBDIR)
+CULA_LIBS    = -lcula_core -lcula_lapack $(CUDATK_LIBS)
+CULA_LINK    = $(CULA_LIBDIR) $(CULA_LIBS)
+CULA_SRC     = culaf.f90 $(CUDATK_SRC)
+CULA_OBJ     = $(addsuffix .o,$(basename $(CULA_SRC)))
+CULA_EXTRA   = -DADD_ -DHAVE_CUBLAS -DCUBLAS_GFORTRAN
+
+MAGMA_DIR    = $(HOME)/magma-1.3.0
+MAGMA_INC    = -I$(MAGMA_DIR)/include $(CUDATK_INC)
+MAGMA_LIBDIR = -L$(MAGMA_DIR)/lib $(CUDATK_LIBDIR)
+MAGMA_LIBS   = -lmagma -lmagmablas -lmagma $(CUDATK_LIBS)
+MAGMA_LINK   = $(MAGMA_LIBDIR) $(MAGMA_LIBS)
+MAGMA_SRC    = magmaf.f90 $(CUDATK_SRC)
+MAGMA_OBJ    = $(addsuffix .o,$(basename $(MAGMA_SRC)))
+MAGMA_EXTRA  = -DADD_ -DHAVE_CUBLAS -DCUBLAS_GFORTRAN
+
+GPU_DIR    =
+GPU_INC    = $(MAGMA_INC)
+GPU_LIBDIR = $(MAGMA_LIBS)
+GPU_LIBS   = $(MAGMA_LIBS)
+GPU_LINK   = $(MAGMA_LINK)
+GPU_SRC    = $(MAGMA_SRC)
+GPU_EXTRA  = $(MAGMA_EXTRA)
+
+ifneq ($(FC),ftn)
+    LIBSCIACC_DIR    = /opt/cray/libsci_acc/default/$(PE_ENV)/$(PE_VER)/$(CRAY_CPU_TARGET)
+    LIBSCIACC_INC    = -I$(LIBSCIACC_DIR)/include $(CUDATK_INC) $(LIBSCI_INC)
+    LIBSCIACC_LIBDIR = -L$(LIBSCIACC_DIR)/lib $(CUDATK_LIBDIR) $(LIBSCI_LIBDIR)
+    LIBSCIACC_LIBS   = -lsci_acc_$(LC_PE_ENV)_nv35 $(CUDATK_LIBS) $(LIBSCI_LIBS)
+    LIBSCIACC_LINK   = $(LIBSCIACC_LIBDIR) $(LIBSCIACC_LIBS)
+endif
+LIBSCIACC_SRC = libscif.f90 $(CUDATK_SRC)
+LIBSCIACC_OBJ = $(addsuffix .o,$(basename $(LIBSCIACC_SRC)))
+
+PAPI_DIR    = /opt/cray/papi/default/perf_events/no-cuda
+PAPI_INC    = -I$(PAPI_DIR)/include
+PAPI_LIBDIR = -L$(PAPI_DIR)/lib
+PAPI_LIBS   = -lpapi
+
+SYS_INC     = /usr/include
+SYS_LIBDIR  = -L/usr/lib64 -L/lib64
+SYS_OPT     = -isystem $(SYS_INC)
+
+##
+
+PARDISO_INC    = $(MKL_INC)
+PARDISO_LIBDIR = $(MKL_LIBDIR)
+PARDISO_LIBS   = $(MKL_LIBS)
+
+GPU_LAPACK_INC    = $($(GPU_LAPACK_VER)_INC)
+GPU_LAPACK_LIBDIR = $($(GPU_LAPACK_VER)_LIBDIR)
+GPU_LAPACK_LIBS   = $($(GPU_LAPACK_VER)_LIBS)
+GPU_LAPACK_SRC    = $($(GPU_LAPACK_VER)_SRC)
+GPU_LAPACK_OBJ    = $(addsuffix .o,$(basename $($(GPU_LAPACK_VER)_SRC)))
+
+LAPACK_INC    = $($(LAPACK_VER)_INC)
+LAPACK_LIBDIR = $($(LAPACK_VER)_LIBDIR)
+LAPACK_LIBS   = $($(LAPACK_VER)_LIBS)
+LAPACK_SRC    = $($(LAPACK_VER)_SRC)
+LAPACK_OBJ    = $(addsuffix .o,$(basename $($(LAPACK_VER)_SRC)))
+
+ifeq ($(MPI_MODE),ON)
+    ifneq ($(USE_CRAY),1)
+        CRAY_INC    = $(UDREG_INC) \
+                      $(UGNI_INC) \
+                      $(DMAPP_INC) \
+                      $(GNIH_INC) \
+                      $(XPMEM_INC) \
+                      $(PMI_INC) \
+                      $(MPICH_INC) \
+                      $(ALPS_INC) \
+                      $(SYS_OPT)
+        CRAY_LIBDIR = $(UDREG_LIBDIR) \
+                      $(UGNI_LIBDIR) \
+                      $(DMAPP_LIBDIR) \
+                      $(GNIH_LIBDIR) \
+                      $(XPMEM_LIBDIR) \
+                      $(PMI_LIBDIR) \
+                      $(MPICH_LIBDIR) \
+                      $(ALPS_LIBDIR) \
+                      $(SYS_LIBDIR)
+        CRAY_LIBS   = $(UDREG_LIBS) \
+                      $(UGNI_LIBS) \
+                      $(DMAPP_LIBS) \
+                      $(GNIH_LIBS) \
+                      $(XPMEM_LIBS) \
+                      $(PMI_LIBS) \
+                      $(MPICH_LIBS) \
+                      $(ALPS_LIBS)
+    endif
+endif
+
+EXTRA_LIBDIR = $(CRAY_LIBDIR) $($(PE_ENV)_LIBDIR)
+EXTRA_LIBS  += $(CRAY_LIBS) $($(PE_ENV)_LIBS)
+EXTRA_SRC    = 
+EXTRA_OBJ    = $(addsuffix .o,$(basename $(EXTRA_SRC)))
+
+EXTRA_FFLAGS   += $(CRAY_INC)
+EXTRA_CCFLAGS  += $(CRAY_INC)
+EXTRA_CXXFLAGS += $(CRAY_INC)
+EXTRA_LDRFLAGS += 
+EXTRA_LINK     += $(LAPACK_INC) $(CRAY_INC) $(EXTRA_LIBDIR) $(EXTRA_LIBS)
+
+OPT     = $(HIGHOPT)
+LAPACK  = $(LAPACK_INC)
+PARDISO = $(PARDISO_INC)

@@ -1,0 +1,22 @@
+Data_Reaclib20180621                                                            
+Number of Nuclear Species= 7852
+Reaction Count for the 11 different types
+         1         1     10691
+         2     10692     31699
+         3     31700     34285
+         4         1     17680
+         5     17681     47832
+         6     47833     47856
+         7     47857     47862
+         8         1         7
+         9         8        31
+        10         1         6
+        11     34286     36423
+Necessary dimensions
+  nreac(1,2,3,4)=   36423   47862      31       6
+    nan(1,2,3,4)=   98573  173736     108      28
+Reaction Count for non-REACLIB rates
+  nffn=     458   nnu=    3307
+Matrix Sparseness parameters
+Border Widths     101  101
+Diagonal Widths   196  467(j<i,j>i)

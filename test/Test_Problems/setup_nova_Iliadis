@@ -1,0 +1,16 @@
+
+## Output Controls
+0         Diagnostic Output Level
+2         Per Timestep Output Level
+# ASCII output filename root, network will append zone number
+Test_Results/ev_nova_iliadis_
+# Binary output filename root, network will append zone number
+Test_Results/ts_nova_iliadis_
+# Species to output in ASCII output (format 14a5): 14
+    p  he4  o15  o16  f17 ne18 ne20 mg22 mg23 mg24 si27  s30  s31  s32
+## Input Controls
+# Nuclear Data Directory
+Data_Nova
+# Initial Abundance and Thermodynamic Trajectory Files
+Data_Nova/ab_init_P95
+Test_Problems/th_starr2009_13502

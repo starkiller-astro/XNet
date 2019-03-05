@@ -1,0 +1,110 @@
+\begin{thebibliography}{33}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+
+\bibitem[{REV(????)}]{REVTEX41Control}
+ ????
+
+\bibitem[{08(1)}]{apsrev41Control}
+08. 1
+
+\bibitem[{{Arnett}(1996)}]{Arne96}
+{Arnett}, W.~D. 1996, {Supernovae and nucleosynthesis : an investigation of the
+  history of matter, from the big bang to the present} (Princeton: Princeton
+  University Press)
+
+\bibitem[{{Arnett} \& {Truran}(1969)}]{ArTr69}
+{Arnett}, W.~D. \& {Truran}, J.~W. 1969, ApJ, 157, 339
+
+\bibitem[{Borzov(2004)}]{Borz04}
+Borzov, I. 2004, Nucl. Phys. A, this volume
+
+\bibitem[{{Bravo} \& Garc{\'\i}a-Senz(1999)}]{BrGa99}
+{Bravo}, E. \& Garc{\'\i}a-Senz, D. 1999, MNRAS, 307, 984
+
+\bibitem[{{Brown} \& {Sawyer}(1997)}]{BrSa97}
+{Brown}, L.~S. \& {Sawyer}, R.~F. 1997, Rev. Mod. Phys., 69, 411
+
+\bibitem[{Bruenn(1985)}]{Brue85}
+Bruenn, S.~W. 1985, ApJS, 58, 771
+
+\bibitem[{Buchmann \& Barnes(2004)}]{BuBa04}
+Buchmann, L. \& Barnes, C. 2004, Nucl. Phys. A, this volume
+
+\bibitem[{{Caughlan} \& {Fowler}(1988)}]{CaFo88}
+{Caughlan}, G.~R. \& {Fowler}, W.~A. 1988, At. Data Nuc. Data Tab., 40, 283
+
+\bibitem[{{Dewitt} {et~al.}(1973){Dewitt}, {Graboske}, \& {Cooper}}]{DeGrCo73}
+{Dewitt}, H.~E., {Graboske}, H.~C., \& {Cooper}, M.~S. 1973, ApJ, 181, 439
+
+\bibitem[{Fields \& Olive(2004)}]{FiOl04}
+Fields, B. \& Olive, K. 2004, Nucl. Phys. A, this volume
+
+\bibitem[{{Fuller} \& {Meyer}(1995)}]{FuMe95}
+{Fuller}, G.~M. \& {Meyer}, B.~S. 1995, ApJ, 453, 792
+
+\bibitem[{Gear(1971)}]{Gear71}
+Gear, C. 1971, {Numerical Initial Value Problems in Ordinary Differential
+  Equations} (Englewood Cliffs, NJ: Prentice-Hall)
+
+\bibitem[{{Gupta} \& {Meyer}(2001)}]{GuMe01}
+{Gupta}, S.~S. \& {Meyer}, B.~S. 2001, Phys. Rev. C, 64, 025805
+
+\bibitem[{{Hix} \& {Thielemann}(1996)}]{HiTh96}
+{Hix}, W.~R. \& {Thielemann}, F.-K. 1996, ApJ, 460, 869
+
+\bibitem[{{Ichimaru}(1993)}]{Ichi93}
+{Ichimaru}, S. 1993, Rev. Mod. Phys., 65, 255
+
+\bibitem[{{Ichimaru} \& {Kitamura}(1999)}]{IcKi99}
+{Ichimaru}, S. \& {Kitamura}, H. 1999, Physics of Plasmas, 6, 2649
+
+\bibitem[{Kaeppeler \& Mengoni(2004)}]{KaMe04}
+Kaeppeler, F. \& Mengoni, A. 2004, Nucl. Phys. A, this volume
+
+\bibitem[{Khokhlov(1996)}]{Khok96}
+Khokhlov, A. 1996, {YASS - Yet another stiff solver that works.}, Tech. rep.,
+  NRL Technical Memorandum Report
+
+\bibitem[{Lambert(1980)}]{Lamb80}
+Lambert, J. 1980, in {Computational Techniques for Ordinary Differential
+  Equations}, ed. I.~Gladwell \& D.~Sayars (New York: Academic Press), 19--46
+
+\bibitem[{Mezzacappa \& Messer(1999)}]{MeMe99}
+Mezzacappa, A. \& Messer, O. E.~B. 1999, J. Comp. Appl. Math, 109, 281
+
+\bibitem[{{M{\"u}ller}(1986)}]{Mull86}
+{M{\"u}ller}, E. 1986, A\&A, 162, 103
+
+\bibitem[{{M{\"u}ller}(1998)}]{Mull98}
+{M{\"u}ller}, E. 1998, in {Saas-Fee Advanced Course 27: Computational Methods
+  for Astrophysical Fluid Flow.}, 343
+
+\bibitem[{Oran \& Boris(2001)}]{OrBo01}
+Oran, E. \& Boris, J. 2001, {Numerical Simulation of Reactive Flow, 2nd
+  Edition} (Cambridge: Cambridge University Press)
+
+\bibitem[{Rauscher \& Descouvemont(2004)}]{RaDe04}
+Rauscher, T. \& Descouvemont, P. 2004, Nucl. Phys. A, this volume
+
+\bibitem[{{Rauscher} \& {Thielemann}(2000)}]{RaTh00}
+{Rauscher}, T. \& {Thielemann}, F. 2000, At. Data Nuc. Data Tab., 75, 1
+
+\bibitem[{{Salpeter}(1954)}]{Salp54}
+{Salpeter}, E.~E. 1954, Australian Journal of Physics, 7, 373
+
+\bibitem[{{Salpeter} \& {van Horn}(1969)}]{SaVa69}
+{Salpeter}, E.~E. \& {van Horn}, H.~M. 1969, ApJ, 155, 183
+
+\bibitem[{{Smith}(2003)}]{Smit03}
+{Smith}, M.~S. 2003, Nucl. Phys. A, 718, 339
+
+\bibitem[{{Timmes}(1999)}]{Timm99}
+{Timmes}, F.~X. 1999, ApJS, 124, 241
+
+\bibitem[{{Wagoner}(1973)}]{Wago73}
+{Wagoner}, R.~V. 1973, ApJ, 179, 343
+
+\bibitem[{{Ward} \& {Fowler}(1980)}]{WaFo80}
+{Ward}, R.~A. \& {Fowler}, W.~A. 1980, ApJ, 238, 266
+
+\end{thebibliography}

@@ -1,0 +1,16 @@
+
+## Output Controls
+0         Diagnostic Output Level
+2         Per Timestep Output Level
+# ASCII output filename root, network will append zone number
+Test_Results/ev_nuwind_rprocess_
+# Binary output filename root, network will append zone number
+Test_Results/ts_nuwind_rprocess_
+# Species to output in ASCII output (format 14a5): 14
+    n    p  he4 ni78 ge78pd130cd130sn130la164pr164eu164yb198hf198 w198
+## Input Controls
+# Nuclear Data Directory
+Data_Reaclib20180621
+# Initial Abundance and Thermodynamic Trajectory Files
+Data_Reaclib20180621/ab_ye26
+Test_Problems/th_mb_s200t010

@@ -1,0 +1,16 @@
+
+## Output Controls
+0         Diagnostic Output Level
+2         Per Timestep Output Level
+# ASCII output filename root, network will append zone number
+Test_Results/ev_xrb_fisker_
+# Binary output filename root, network will append zone number
+Test_Results/ts_xrb_fisker_
+# Species to output in ASCII output (format 14a5): 14
+    p  he4  c12 ne18  s30 ar34 ca38 ni56 ni60 cu60 zn60 zn64 ga64 ge64
+## Input Controls
+# Nuclear Data Directory
+Data_XRB304
+# Initial Abundance and Thermodynamic Trajectory Files
+Data_XRB304/solar_ab_init
+Test_Problems/th_fisker_aboveign_b1

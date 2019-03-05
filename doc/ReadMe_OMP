@@ -1,0 +1,17 @@
+XNet OMP NOTES 
+-------------------------------------------------------------------------------
+Experience tells us that the most efficient way to use OpenMP with XNet is to 
+loop over the zones, assigning each network call to successive threads.  Thus 
+most of the OMP is in the standalone driver, net.f, or in the interface 
+between XNet and the hydrodynamic code to which it is coupled. 
+
+However, to work properly (ie be calculated by zone) in the threads, variable 
+which are a function of zone must be allocated or initialized in a parallel region 
+and scoped as OMP Threadprivate.
+
+There is, however, thread scoping in many modules in full_net.f, data.f, 
+flux.f and esonom90.f common.f.  In addition, there are 2 variables to thread 
+variables, mythread is the thread ID determined by the number of the threads, 
+nthread is the number of threads.  These are distinct from the task identifiers 
+myid and nproc, which identify processors or MPI_tasks.
+-------------------------------------------------------------------------------
