@@ -1,11 +1,14 @@
+XNet
+============
+
 This discussion covers version 5.0 of the network.
 
 Compared to version 4, there is a division of the build and solve of the
 jacobian from the full_net.f file.  For more details, see the repository
 for changes.
 
-Required Fortran files
--------------
+## Fortran files
+
 net.f                The outer wrapper for post-processing use.
                      Contains the main program, which handles I/O and loops
                      over zones, and 3 output routines, one called at the
@@ -63,8 +66,6 @@ net_setup.f          Standalone program which preprocesses the REACLIB formated
                      reaction rate libraries.  Makes binary data files read by XNet,
                      so this must be re-run for each architecture.
 
-Optional Fortran files
-----------------------
 ffn.f               Contains the data structures and routines for using rates
                     tabulated in the format of Fuller, Fowler & Newman 1985.
 
@@ -98,8 +99,8 @@ th_const           An Example thermodynamic trajectory file.  This example
 Data               The input data, as prepared by net_setup.f, is expected
                    to be in a self contained directory.
 
-Common Errors
--------------
+## Common Errors
+
 The most common errors come from errors in the input of the initial
 abundances or thermodynamic trajectory.  By default the network is
 configured to output to the screen the time, Temp. and density for each
@@ -138,3 +139,8 @@ Typing "limit stacksize 12M" will set the stack size to 12 MB, sufficient for
 ny=1000 or so.  The equivalent bash command is apparently ulimit, but Google
 knows more about this than I.  Using one of the sparse solvers can also
 significantly decrease the memory usage of xnet for large networks.
+
+## Documentation
+
+Old repo link: http://eagle.phys.utk.edu/xnet/trac/
+
