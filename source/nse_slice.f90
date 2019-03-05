@@ -1,102 +1,91 @@
-!***************************************************************************************************
-! nse_slice.f90 10/18/17
-! The program is an example driver to the provided NSE routines.
-!
-! For a given density, temperature,  and Ye, this program solves for NSE
-!***************************************************************************************************
-
 Program nse_slice
-  Use nuclear_data, Only: ny, aa, zz, benuc, read_nuclear_data
-  Use reaction_data, Only: read_reaction_data
-  Use xnet_controls, Only: descript, iconvc, idiag, iheat, iprocess, iscrn, isolv, itsout, iweak0, &
-    & changemx, tolm, tolc, yacc, ymin, tdel_maxmult, kstmx, kitmx, bin_file_base, lun_diag, &
-    & lun_stdin, lun_stdout, read_controls
-  Use xnet_eos, Only: eos_initialize
-  Use xnet_nse, Only: ynse, nse_initialize, nse_solve
-  Use xnet_preprocess, Only: net_preprocess
-  Use xnet_types, Only: dp
-  Use xnet_util, Only: name_ordered
-  Implicit None
+  Use controls
+  Character (LEN=80) :: descript(3),data_desc,data_dir
+  Character (LEN=80) :: diag_file_base='nse_diag'
+  Character (LEN=80) :: diag_file
+  Real(8) :: rho,ye,t9fnl
+  Real(8) :: t9w(27)=(/100.,75.,50.,40.,35.,30.,28.,26.,24.,22.,20., &
+&   18.,16.,15.,14.,13.,12.,11.,10.,9.,8.,7.,6.,5.,4.,3.,2./)
+  Integer :: lun_control,ierr
 
-  ! Local variables
-  Character(80) :: data_dir, data_desc, thermo_desc, abund_desc
-  Character(80) :: diag_file_base = 'nse_diag'
-  Character(80) :: diag_file, bin_file, inab_file, thermo_file
-  Real(dp) :: rho, ye, t9, t, tdel, flx, edot, enb, enm, ytot, ztot, atot
-  Integer :: i, kstep, mflx, ifl_orig, ifl_term, lun_ts
+! For a given density and Ye, this program solves for NSE as a funtion of T9
+! down to T9fnl.
 
-  Write(lun_stdout,"(a)") 'Rho? Ye? T9?'
-  Read(lun_stdin,*) rho, ye, t9
-  Write(lun_stdout,"(a,f7.4,a,es11.3,a,f7.3)") 'NSE for Ye=',ye,'and Rho=',rho,', stopping at T9=',t9
+  Write(6,'(a)') 'Rho?'
+  Read(5,*) rho
+  Write(6,'(a)') 'Ye?'
+  Read(5,*) ye
+  Write(6,'(a)') 'T9 stop?'
+  Read(5,*) t9fnl
+  Write(6,'(a,f7.4,a,es11.3,a,f7.3)') 'NSE for Ye=',ye,'and Rho=',rho,', stopping at T9=',t9fnl
 
-  ! Read user-defined controls
-  Call read_controls(data_dir)
+!-----------------------------------------------------------------------
+! The control file contains the parameters which determine the actions
+! of XNet.
+!-----------------------------------------------------------------------
+  lun_control=5
+  Open(lun_control,FILE='control')
 
-  ! In requested, pre-process the nuclear and reaction data.
-  If ( iprocess > 0 ) Call net_preprocess(lun_stdout,data_dir,data_dir)
+! Read Problem Description
+  call find_controls_block(lun_control,'Problem Description',ierr)
+  Read(lun_control,"(a80)") (descript(i),i=1,3) ! text description of the problem.
 
-  ! Open diagnositic output file
-  If ( idiag >= 0 ) Then
-    diag_file = trim(diag_file_base)
-    Call name_ordered(diag_file,0,1)
-    Call name_ordered(diag_file,1,1)
-    Open(newunit=lun_diag, file=diag_file)
+! Read Job Controls
+  call find_controls_block(lun_control,'Job Controls',ierr)
+  Read(lun_control,*) szone        ! number of the zone with which to begin
+  Read(lun_control,*) nzone        ! total # of zones
+  Read(lun_control,*) iweak0       ! controls the treatment of weak reactions
+  Read(lun_control,*) iscrn        ! controls the treatment of nuclear screening
+  Read(lun_control,*) iprocess     ! controls the runtime pre-processing of the network data
+
+! Read Integration Controls
+  call find_controls_block(lun_control,'Integration Controls',ierr)
+  Read(lun_control,*) isolv        ! Choice of integrations scheme
+  Read(lun_control,*) kstmx        ! max # of timesteps for each zone
+  Read(lun_control,*) kitmx        ! max # of iterations before retry
+  Read(lun_control,*) iconvc       ! determines which convergence condition is Used
+  Read(lun_control,*) changemx     ! allowed abundance change Used to set the timestep.
+  Read(lun_control,*) yacc         ! abundances > yacc Used for timestep calculation
+  Read(lun_control,*) tolm         ! mass conservation convergence criterion
+  Read(lun_control,*) tolc         ! convergence limit on the iterative abundance change
+  Read(lun_control,*) ymin         ! abundance < ymin is set to 0.0
+  Read(lun_control,*) tdel_maxmult ! max factor by which the timestep is changed
+
+! Read Output Controls
+  call find_controls_block(lun_control,'Output Controls',ierr)
+  Read(lun_control,*) idiag        ! sets diagnostic output level
+  Read(lun_control,*) itsout       ! sets per timestep output level
+
+! Read Input Controls
+  call find_controls_block(lun_control,'Input Controls',ierr)
+  Read(lun_control,"(72x)")
+  Read(lun_control,"(a80)") data_dir
+  Read(lun_control,"(72x)")
+
+  Close(lun_control)
+
+! Open diagnositic output file, per thread if OMP
+  If(idiag>=0) Then
+    lun_diag=50
+    diag_file=trim(diag_file_base)
+    Open(lun_diag,file=diag_file)
   EndIf
 
-  ! Read nuclear dataset
+! In requested, pre-process the nuclear and reaction data.
+  If(iprocess>0) Call net_preprocess(6,data_dir,data_dir)
+
+! Initialize EoS for screening
+  If(iscrn>0) call eos_initialize
+
+! Read nuclear dataset
   Call read_nuclear_data(data_dir,data_desc)
-  Call read_reaction_data(data_dir)
 
-  ! Initialize EoS for screening
-  If ( iscrn > 0 ) Call eos_initialize
-
-  ! Initialize NSE
+! Allocate and initialize NSE arrays
   Call nse_initialize
 
-  ! Open the binary time series file
-  If ( itsout > 0 ) Then
-    bin_file = trim(bin_file_base)
-    Call name_ordered(bin_file,1,1)
-    Open(newunit=lun_ts, file=bin_file, form='unformatted')
+! Calculate NSE abundances
+  Call nse_descend(rho,ye,t9fnl,t9fnl)
 
-    ! Write Control Parameters to ts file
-    Write(lun_ts) (descript(i),i=1,3),data_desc
-    Write(lun_ts) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
-
-    ! Write abundance description to ts file
-    inab_file = " "
-    abund_desc = " "
-    Write(lun_ts) inab_file,abund_desc
-
-    ! Write thermo description to ts file
-    thermo_file = " "
-    thermo_desc = " "
-    Write(lun_ts) thermo_file,thermo_desc
-
-    ! Write species identifiers to ts file
-    Write(lun_ts) ny,zz,aa
-
-    ! Write flux identifiers to ts file
-    mflx = 1
-    ifl_orig = 0
-    ifl_term = 0
-    Write(lun_ts) mflx,ifl_orig,ifl_term
-  EndIf
-
-  ! Calculate NSE abundances
-  Call nse_solve(rho,t9,ye)
-
-  If ( itsout > 0 ) Then
-    Call benuc(ynse,enb,enm,ytot,ztot,atot)
-    kstep = 0
-    t = 0.0_dp
-    tdel = 1.0_dp
-    flx = 0.0_dp
-    edot = -enm
-    Write(lun_ts) kstep, t, t9, rho, tdel, edot, ynse, flx
-    Close(lun_ts)
-  EndIf
-
-  If ( idiag >= 0 ) Close(lun_diag)
+  Close(lun_diag)
 
 End Program nse_slice

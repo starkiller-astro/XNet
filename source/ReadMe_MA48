@@ -1,0 +1,21 @@
+Using the HSL (formerly Harwell Subroutine Library) sparse solver MA48
+----------------------------------------------------------------------
+
+jacobian_MA48.f90    Contains the sparse Jacobian build and solves with MA48 
+                     package from the HSL Mathematical Software Library
+
+                     MA48 is thread-safe and represents a significant
+                     improvement in performance over the obsolete MA28 routine.
+
+                     MA48 is proprietary software from Harwell, but a free 
+                     academic license can be obtained from 
+                     http://hsl.rl.ac.uk/archive/academic.html
+                     If you use the MA48 code, register at the HSL archive.  
+                     Registration is free with a *.edu e-mail address, and 
+                     makes your use of the code legal.
+
+                     Download both the Package and HSL dependencies and put 
+                     them in a single file called MA48.f.
+
+HSL(2013). A collection of Fortran codes for large scale scientific computation.
+  http://www.hsl.rl.ac.uk

@@ -1,848 +1,553 @@
-!***************************************************************************************************
-! jacobian_MA48.f90 10/18/17
-! Sparse Jacobian interface for MA48
+!*******************************************************************************
+! Jacobian Sparce for MA48, part of XNet 7, 6/2/10
 !
-! The routines in this file are used to replace the standard dense Jacobian and associated solver
-! with the HSL MA48 sparse solver package.
+! The routines in this file are used to replace the standard dense Jacobian 
+! and associated solver with the Harwell MA48 sparse solver package.  
 !
-! The bulk of the computational cost of the network (60-95%) is the solving of the matrix equation.
-! Careful selection of the matrix solver is therefore very important to fast computation. For
-! networks from a few dozen up to a couple hundred species, hand tuned dense solvers such as those
-! supplied by the hardware manufacturer (often LAPACK) or third-parties like NAG, IMSL, etc. are
-! fastest. However for larger matrices, sparse solvers are faster. MA48 is a solver from HSL, which
-! is available under an academic license. We find it to be faster than PARDISO for matrices of size
-! 100 < ny < 1000, but slower at larger sizes, but the availablilty of the MA48 source makes it
-! valuable for some applications.
-!
-! Reference:
-! HSL(2013). A collection of Fortran codes for large scale scientific computation.
-!   http://www.hsl.rl.ac.uk
-!***************************************************************************************************
+! The bulk of the computational cost of the network (60-95%) is the solving 
+! of the matrix equation.  Careful selection of the matrix solver is therefore 
+! very important to fast computation.  For networks from a few dozen up to a 
+! couple hundred species, hand tuned dense solvers such as those supplied by the 
+! hardware manufacturer (often LAPACK) or third-parties like NAG, IMSL, etc. are 
+! the fastest. However for larger matrices, sparse solvers are faster.  MA48 is 
+! a solver from the Harwell Subroutine Library, which is available under an
+! academic license.  We find it to be faster than PARDISO for matrices of size
+! 100<ny<1000, but slower at larger sizes, but the availablilty of the MA48 source
+! makes it valuable for some applications. 
+!*******************************************************************************
 
-Module xnet_jacobian
-  !-------------------------------------------------------------------------------------------------
-  ! Contains data for use in the sparse solver.
-  !-------------------------------------------------------------------------------------------------
-  Use xnet_types, Only: dp
-  Implicit None
+Module jacobian_data
+!===============================================================================
+! Contains data for use in the sparse solver.
+!===============================================================================
+  Use nuclear_data
+  Real(8), Dimension(:), Allocatable :: vals,tvals,sident,wB,wC
+  Integer, Dimension(:), Allocatable :: ridx,cidx
+  Integer, Dimension(:), Allocatable :: irn,jcn
+  Integer, Dimension(:), Allocatable :: ns11,ns21,ns22
+  Integer, Dimension(:), Allocatable :: ns31,ns32,ns33
+  Integer, Dimension(:), Allocatable :: keep,iwA,iwB,iwC
+  Integer :: lval,lia,nnz,msize
+  Integer :: l1s,l2s,l3s
+  Integer :: jobA,jobB,jobC
+  Integer :: icntl(20),info(20)
+  Real(8) :: cntl(10),rinfo(10),maxerr
+  Logical :: trans = .false.
+!$OMP THREADPRIVATE(tvals,vals,lia,jcn,irn,wB,wC,iwA,iwB,iwC, &
+!$OMP   keep,info,rinfo,cntl,icntl,jobA,jobB,jobC)
 
-  ! Jacobian data arrays
-  Real(dp), Allocatable :: dydotdy(:,:) ! dYdot/dY part of jac
-  Real(dp), Allocatable :: tvals(:,:)   ! Jacobian matrix
-  Real(dp), Allocatable :: sident(:)    ! Identity matrix
-  Integer, Allocatable  :: ridx(:)      ! Row indices of non-zeroes
-  Integer, Allocatable  :: cidx(:)      ! Column indices of non-zeroes
-  Integer, Allocatable  :: pb(:)        ! Pointer to first non-zero for each column
-  Integer               :: lval         ! Number of non-zeroes from reaction rates only
-  Integer               :: nnz          ! Number of non-zeroes (including self-heating terms)
-  Integer               :: msize        ! Size of linear system to be solved
-  !$omp threadprivate(dydotdy,tvals)
+  Real(8), Dimension(:), Allocatable :: mc29r,mc29c,mc29w
+  Integer :: ifail
+  Logical :: scale_jac
+!$OMP THREADPRIVATE(mc29r,mc29c,mc29w,ifail,scale_jac)
 
-  ! nsij(k) is the matrix index in CRS format of the jth reactant in i-reactant reactions for reaction k
-  Integer, Allocatable  :: ns11(:), ns21(:), ns22(:), ns31(:), ns32(:), ns33(:)
-  Integer, Allocatable  :: ns41(:), ns42(:), ns43(:), ns44(:)
-  Integer               :: l1s, l2s, l3s, l4s ! Sizes of ns arrays
+End Module jacobian_data
+  
+Subroutine read_jacobian_data(data_dir)
+!===============================================================================
+! Reads in data necessary to use sparse solver and initializes the Jacobian data.
+!===============================================================================
+  Use controls
+  Use reac_rate_data
+  Use jacobian_data
+       
+  Character (LEN=*),  Intent(in)  :: data_dir
+  Integer :: i,pb(ny+1)
 
-  ! MA48 internal working arrays and solver controls
-  Real(dp), Allocatable :: vals(:,:), wB(:), wC(:)
-  Integer, Allocatable  :: irn(:,:), jcn(:,:)
-  Integer, Allocatable  :: keep(:,:), iwA(:), iwB(:), iwC(:)
-  Integer, Allocatable :: jobA(:), jobB(:), jobC(:)
-  Integer :: lia
-  Integer :: icntl(20), info(20)
-  Real(dp) :: cntl(10), rinfo(10), maxerr
-  !$omp threadprivate(vals,lia,jcn,irn,wB,wC,iwA,iwB,iwC,keep,info,rinfo,cntl,icntl,jobA,jobB,jobC)
-  Namelist /ma48_controls/ icntl, cntl, maxerr
+  If(iheat>0) Then
+    msize=ny+1
+  Else
+    msize=ny
+  EndIf
+  
+!$OMP PARALLEL DEFAULT(SHARED)
+! Set default values for MA48 control parameters
+  Call MA48ID(cntl,icntl)
 
-  ! Temporary copies for reallocating
-  Real(dp), Allocatable ::  vals0(:,:)
-  Integer, Allocatable :: irn0(:,:), jcn0(:,:)
-  Integer :: lia0
-  !$omp threadprivate(vals0,jcn0,irn0,lia0)
+! Set error/diagnostic output to XNet diagnostic file (default=6)
+  icntl(1) = lun_diag
+  icntl(2) = lun_diag
 
-  ! Some other solver parameters
-  Logical, Parameter :: trans = .false. ! Flag for solving the transposed system
-  Integer, Parameter :: kbksubmx = 3, kdecompmx = 5 ! Max loop counts
+! Set level of MA48 error/diagnostic output (default=2)
+  If(idiag>=4) Then
+    icntl(3) = 3
+  EndIf
 
-Contains
+! Limit pivot search to maximum icntl(4) columns or use special search technique for 0 (default=3)
+! icntl(4) = 0
 
-  Subroutine read_jacobian_data(data_dir)
-    !-----------------------------------------------------------------------------------------------
-    ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
-    Use parallel, Only: parallel_bcast, parallel_IOProcessor
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx
-    Implicit None
+! Set block size (default=32)
+  If (msize<32) Then
+    icntl(5) = msize
+  ElseIf (msize<512) Then
+    icntl(5) = 32
+  ElseIf (msize<2048) Then
+    icntl(5) = 128
+  Else
+    icntl(5) = 256
+  EndIf
 
-    ! Input variables
-    Character(*), Intent(in) :: data_dir
+! Set the minimum size of a block of the block triangular form other than the final block (defualt=1)
+! icntl(6) = msize
 
-    ! Local variables
-    Integer :: i, ierr, lun_sparse, lun_solver
+! Set option to move each column for which iwA(j)=0 to the end of the pivot sequence within its block (default=0)
+! icntl(8) = 1
 
-    If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_sparse, file=trim(data_dir)//"/sparse_ind", status='old', form='unformatted')
-      Read(lun_sparse) lval
-    EndIf
-    Call parallel_bcast(lval)
+! Set option to automatically reset to job=1 if MA48BD fails for job=2
+! icntl(11) = 1
 
-    ! Determine number of non-zeroes
-    If ( iheat > 0 ) Then
-      nnz = lval + 2*ny + 1
-      msize = ny+1
-    Else
-      nnz = lval
-      msize = ny
-    EndIf
+! Set the pivoting threshold (near 0.0 emphasizes sparsity; near 1.0 emphasizes stability) (default=0.1)
+! cntl(2) = 1.0
+!$OMP END PARALLEL
+  
+  Open(600,file=trim(data_dir)//"/sparse_ind",status='old',form='unformatted')
+  
+  Read(600) lval
+  If(iheat>0) Then
+    nnz=lval+2*ny+1
+  Else
+    nnz=lval
+  EndIf
 
-    ! Allocate, read, and broadcast CRS arrays
-    Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
-    If ( parallel_IOProcessor() ) Then
-      Read(lun_sparse) ridx(1:lval), cidx(1:lval), pb(1:ny+1)
-      If ( iheat > 0 ) Then
-        ! Add indices for self-heating
-        Do i = 1, ny
-          cidx(i+lval) = ny + 1     ! Extra column (dYdot/dT9)
-          ridx(i+lval) = i
-          cidx(i+lval+ny) = i       ! Extra row (dT9dot/dY)
-          ridx(i+lval+ny) = ny + 1
-        EndDo
-        cidx(nnz) = ny + 1          ! dT9dot/dT9 term
-        ridx(nnz) = ny + 1
+  Allocate(ridx(nnz),cidx(nnz),sident(nnz))
+!$OMP PARALLEL DEFAULT(SHARED)
+  Allocate(tvals(nnz))
+!$OMP END PARALLEL
+  
+!$OMP PARALLEL DEFAULT(SHARED)
+  lia = 8*nnz
+! These are variables to be used by the MA48 solver
+  Allocate(vals(lia),jcn(lia),irn(lia))
+  Allocate(wB(msize),wC(4*msize))
+  Allocate(iwA(9*msize),iwB(4*msize),iwC(msize))
+  If (icntl(8) == 0) Then
+    Allocate(keep(6*msize+4*msize/icntl(6)+7-max(msize/icntl(6),1)))
+  Else
+    Allocate(keep(6*msize+4*msize/icntl(6)+7))
+  EndIf
+
+! These are variables to be used by MC29 if scaling is deemed necessary
+  Allocate(mc29r(msize),mc29c(msize),mc29w(5*msize))
+  mc29r = 0.0
+  mc29c = 0.0
+  mc29w = 0.0
+  scale_jac = .false.
+!$OMP END PARALLEL
+
+! Set the value for the maximum allowed error in the call to MA48CD
+  maxerr = 1.0d-11
+  
+  Read(600) ridx(1:lval),cidx(1:lval),pb
+  If(iheat>0) Then
+! Add jacobian indices for temperature coupling
+    Do i=1,ny
+      cidx(i+lval) = ny+1    ! Extra column
+      ridx(i+lval) = i
+     
+      cidx(i+lval+ny) = i    ! Extra row
+      ridx(i+lval+ny) = ny+1
+    EndDo
+    cidx(lval+2*ny+1) = ny+1 ! dT9dot/dT9 term
+    ridx(lval+2*ny+1) = ny+1
+  EndIf
+  
+! Build a compressed row format version of the identity matrix
+  sident=0.0
+  Do i=1,nnz
+    If (ridx(i)==cidx(i)) sident(i)=1.0
+  EndDo
+  
+  Read(600) l1s,l2s,l3s
+  
+! Build  arrays for direct sparse representation Jacobian build
+  Allocate(ns11(l1s))
+  Allocate(ns21(l2s),ns22(l2s))
+  Allocate(ns31(l3s),ns32(l3s),ns33(l3s))
+  
+  ns11 = 0
+  ns21 = 0
+  ns22 = 0
+  ns31 = 0
+  ns32 = 0
+  ns33 = 0
+  
+  Read(600) ns11,ns21,ns22
+  Read(600) ns31
+  Read(600) ns32
+  Read(600) ns33
+  Close(600)  
+  
+End Subroutine read_jacobian_data
+
+Subroutine jacobian_build(diag,mult)
+!===============================================================================
+! This routine calculates the Jacobian matrix dYdot/dY, and and augments 
+! by multiplying all elements by mult and adding diag to the diagonal elements.
+!===============================================================================
+  Use controls
+  Use conditions
+  Use abundances
+  Use reac_rate_data
+  Use cross_sect_data
+  Use jacobian_data
+  Use timers
+  
+  Real(8), Intent(in) :: diag, mult
+  Integer :: i,j,kstep,i0,la1,le1,la2,le2,la3,le3,j1,l1,l2,l3
+  Integer :: ls1,ls2,ls3
+  Real(8) :: dydotdt9(ny),dt9dotdy(ny)
+  
+! Initiate timer
+  start_timer = xnet_wtime()
+  timer_jacob = timer_jacob - start_timer  
+
+! The quick solution to taking advantage of sparseness is to create a values array that has the maximum
+! number of non-zero elements as well as a 2-by-#non-zero elements matrix and the other vectors
+! required by the sparse solver.  The second matrix will contain the ordered pairs that map to a 
+! particular place in the Jacobian.  Build the Jacobian as it is built now, Then pull the values 
+! from it using the ordered pairs to fill the values array. 
+
+! Build the Jacobian, species by species
+  tvals = 0.0
+
+  Do i0=1,ny
+    la1=la(1,i0)
+    le1=le(1,i0)
+    Do j1=la1,le1
+      ls1 = ns11(j1) ! ns11(j1) gives the index effected reaction j1 by in the compressed row storage scheme
+      tvals(ls1)=tvals(ls1)+b1(j1)
+    EndDo
+    la2=la(2,i0) 
+    le2=le(2,i0)  
+    Do j1=la2,le2
+      ls1=ns21(j1) ! ns21(j1) gives the first index effected reaction j1 by in the compressed row storage scheme
+      ls2=ns22(j1) ! ns22(j1) gives the second index effected reaction j1 by in the compressed row storage scheme
+      l1=n21(j1)   ! n21(k) gives the index of first reactant in reaction mu2(k)
+      l2=n22(j1)   ! n22(k) gives the index of second reactant in reaction mu2(k)
+      tvals(ls1)=tvals(ls1)+b2(j1)*yt(l2)
+      tvals(ls2)=tvals(ls2)+b2(j1)*yt(l1)
+    EndDo
+    la3=la(3,i0)
+    le3=le(3,i0)
+    Do j1=la3,le3
+      ls1=ns31(j1) ! ns31(j1) gives the first index effected reaction j1 by in the compressed row storage scheme
+      ls2=ns32(j1) ! ns32(j1) gives the second index effected reaction j1 by in the compressed row storage scheme
+      ls3=ns33(j1) ! ns33(j1) gives the third index effected reaction j1 by in the compressed row storage scheme
+      l1=n31(j1)   ! n31(k) gives the index of first reactant in reaction mu3(k)
+      l2=n32(j1)   ! n32(k) gives the index of second reactant in reaction mu3(k)
+      l3=n33(j1)   ! n33(k) gives the index of third reactant in reaction mu3(k)
+      tvals(ls1)=tvals(ls1)+b3(j1)*yt(l2)*yt(l3)
+      tvals(ls2)=tvals(ls2)+b3(j1)*yt(l1)*yt(l3)
+      tvals(ls3)=tvals(ls3)+b3(j1)*yt(l1)*yt(l2)
+    EndDo
+  EndDo
+
+  If(iheat>0) Then
+
+    dr1dt9=a1*dcsect1dt9(mu1)*yt(n11)
+    dr2dt9=a2*dcsect2dt9(mu2)*yt(n21)*yt(n22)
+    dr3dt9=a3*dcsect3dt9(mu3)*yt(n31)*yt(n32)*yt(n33)
+
+    dydotdt9=0.0
+    Do i0=1,ny
+      la1=la(1,i0)
+      le1=le(1,i0)
+      Do j1=la1,le1
+        dydotdt9(i0)=dydotdt9(i0)+dr1dt9(j1)
+      EndDo
+      la2=la(2,i0)
+      le2=le(2,i0)
+      Do j1=la2,le2
+        dydotdt9(i0)=dydotdt9(i0)+dr2dt9(j1)
+      EndDo
+      la3=la(3,i0)
+      le3=le(3,i0)
+      Do j1=la3,le3
+        dydotdt9(i0)=dydotdt9(i0)+dr3dt9(j1)
+      EndDo
+    EndDo
+    tvals(lval+1:lval+ny)=dydotdt9
+
+    dt9dotdy=0.0
+    Do j1=1,lval
+      dt9dotdy(cidx(j1))=dt9dotdy(cidx(j1))+mex(ridx(j1))*tvals(j1)/cv
+    EndDo
+    tvals(lval+ny+1:lval+2*ny)=-dt9dotdy
+    tvals(nnz)=-sum(mex*dydotdt9)/cv
+
+  EndIf
+
+! Augment matrix with externally provided factors  
+  tvals = mult * tvals
+  tvals = tvals + sident * diag 
+
+  If(idiag>=5) Then
+    Write(lun_diag,"(a9,2es14.7)") 'JAC_build',diag,mult
+    Write(lun_diag,"(14es9.1)") tvals
+  EndIf
+
+! Stop timer
+  stop_timer = xnet_wtime()
+  timer_jacob = timer_jacob + stop_timer
+
+  Return   
+End Subroutine jacobian_build
+  
+Subroutine jacobian_solve(kstep,yrhs,dy,t9rhs,dt9) 
+!===============================================================================
+! This routine solves the system of abundance equations composed of the jacobian
+! matrix and rhs vector.
+!===============================================================================
+  Use controls
+  Use jacobian_data
+  Use timers
+  Integer, Intent(in)  :: kstep
+  Real(8), Intent(in)  :: yrhs(ny)
+  Real(8), Intent(out) :: dy(ny)
+  Real(8), Intent(in)  :: t9rhs
+  Real(8), Intent(out) :: dt9
+
+  Call jacobian_decomp(kstep)
+  Call jacobian_bksub(yrhs,dy,t9rhs,dt9)
+  
+! Diagnostic output
+  If(idiag>=4) Then
+    Write(lun_diag,"(a)") 'JAC_SOLV'
+    Write(lun_diag,"(14es10.3)") dy
+    If(iheat>0) Write(lun_diag,"(es10.3)") dt9
+  EndIf
+
+  Return
+End Subroutine jacobian_solve                                                                       
+  
+Subroutine jacobian_decomp(kstep) 
+!===============================================================================
+! This routine performs a matrix decomposition for the jacobian
+!===============================================================================
+  Use controls
+  Use jacobian_data
+  Use timers
+  Integer, Intent(in)  :: kstep
+  Integer :: i,j,kdecomp,jdecomp
+  
+! Initiate timer
+  start_timer = xnet_wtime()
+  timer_solve = timer_solve - start_timer  
+  
+! Use Harwell MA48 sparse solver (this one is portable)
+  If(kstep == 1 .or. jobB == 1) Then
+
+    If(scale_jac) Then
+      If(kstep == 1) Then
+        ifail = 0
+        Call MC29AD(msize,msize,nnz,tvals,ridx,cidx,mc29r,mc29c,mc29w,lun_diag,ifail)
+        If(ifail<0) Write(lun_diag,"(1x,a,i2)") 'Error during MC29AD.  Code: ',ifail
+        mc29r(1:msize) = exp(mc29r(1:msize))
+        mc29c(1:msize) = exp(mc29c(1:msize))
       EndIf
-      Read(lun_sparse) l1s, l2s, l3s, l4s
     EndIf
-    Call parallel_bcast(ridx)
-    Call parallel_bcast(cidx)
-    Call parallel_bcast(pb)
-    Call parallel_bcast(l1s)
-    Call parallel_bcast(l2s)
-    Call parallel_bcast(l3s)
-    Call parallel_bcast(l4s)
 
-    ! Allocate, read, and broadcast arrays for direct sparse representation Jacobian build
-    Allocate (ns11(l1s))
-    Allocate (ns21(l2s),ns22(l2s))
-    Allocate (ns31(l3s),ns32(l3s),ns33(l3s))
-    Allocate (ns41(l4s),ns42(l4s),ns43(l4s),ns44(l4s))
-    If ( parallel_IOProcessor() ) Then
-      Read(lun_sparse) ns11, ns21, ns22
-      Read(lun_sparse) ns31
-      Read(lun_sparse) ns32
-      Read(lun_sparse) ns33
-      Read(lun_sparse) ns41
-      Read(lun_sparse) ns42
-      Read(lun_sparse) ns43
-      Read(lun_sparse) ns44
-      Close(lun_sparse)
-    EndIf
-    Call parallel_bcast(ns11)
-    Call parallel_bcast(ns21)
-    Call parallel_bcast(ns22)
-    Call parallel_bcast(ns31)
-    Call parallel_bcast(ns32)
-    Call parallel_bcast(ns33)
-    Call parallel_bcast(ns41)
-    Call parallel_bcast(ns42)
-    Call parallel_bcast(ns43)
-    Call parallel_bcast(ns44)
+    jobA = 3 ! Try to restrict pivoting to the diagonal
 
-    ! Build a compressed row format version of the identity matrix
-    Where ( ridx(:) == cidx(:) )
-      sident(:) = 1.0
-    ElseWhere
-      sident(:) = 0.0
-    EndWhere
+    Do kdecomp=1,5
 
-    ! Read and broadcast user-defined MA48 controls
-    If ( parallel_IOProcessor() ) Then
+      jcn(1:nnz) = cidx
+      irn(1:nnz) = ridx
+      vals(1:nnz) = tvals
+      If(scale_jac) vals(1:nnz) = vals(1:nnz)*mc29r(irn(1:nnz))*mc29c(jcn(1:nnz))
 
-      ! Set the value for the maximum allowed error in the call to MA48CD
-      maxerr = 1.0d-11
+! Perform symbolic analysis
+      info = 0
+      rinfo = 0.0
+      Call MA48AD(msize,msize,nnz,jobA,lia,vals,irn,jcn,keep,cntl,icntl,iwA,info,rinfo)
 
-      ! Set default values for MA48 control parameters
-      Call MA48ID(cntl,icntl)
-
-      ! Set level of MA48 verbosity (default=2)
-      If ( idiag >= 5 ) Then
-        icntl(3) = 3
-      EndIf
-
-      ! Set block column size (default=32)
-      If ( msize < 32 ) Then
-        icntl(5) = msize
-      ElseIf ( msize < 512 ) Then
-        icntl(5) = 32
-      ElseIf ( msize < 2048 ) Then
-        icntl(5) = 128
+      If(info(1) == 0 .and. info(4) <= lia .and. info(2) <= 10) Then
+        jobB = 1 ! If analysis is successful, proceed to factorization
+        Exit
+      ElseIf(kdecomp == 5) Then
+        Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48AD. kdecomp=',kdecomp,', info(1)=',info(1)
+        Stop
       Else
-        icntl(5) = 256
-      EndIf
+        Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48AD. kdecomp=',kdecomp,', info(1)=',info(1)
 
-      ! Unit numbers for MA48 error/diagnostic output will be set to XNet diagnostic file by default,
-      ! but we put in random values here so we can later check for user-defined input
-      icntl(1) = -99
-      icntl(2) = -99
+        If(info(1) == -3 .or. info(4) > lia) Then
+          Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',max(info(3),info(4))
+          Deallocate(irn,jcn,vals)
+          lia = max(info(3),info(4))
+          Allocate(irn(lia),jcn(lia),vals(lia))
+        ElseIf(info(2) > 10) Then
+          Write(lun_diag,"(1x,a,i3,a,i7)") 'Reallocating MA48 arrays: info(2)=',info(2),', info(4)=',max(info(3),info(4))
+          Deallocate(irn,jcn,vals)
+          lia = 2*max(info(3),info(4))
+          Allocate(irn(lia),jcn(lia),vals(lia))
+        EndIf  
 
-      ! Override defaults with user-defined inputs
-      Open(newunit=lun_solver, file="sparse_controls.nml", action='read', status='old', iostat=ierr)
-      If ( ierr == 0 ) Then
-        Read(lun_solver,nml=ma48_controls)
-        Close(lun_solver)
-      EndIf
-    EndIf
-    Call parallel_bcast(icntl)
-    Call parallel_bcast(cntl)
-    Call parallel_bcast(maxerr)
+        If(info(1) == 4 .and. jobA == 3) Then
+          Write(lun_diag,"(1x,a,i3,a,i7)") 'Not possible to choose all pivots from diagonal'
+          jobA = 1
+        EndIf
 
-    !$omp parallel default(shared) copyin(cntl,icntl)
-    Allocate (dydotdy(nnz,nzbatchmx),tvals(nnz,nzbatchmx))
-
-    ! These are variables to be used by the MA48 solver
-    lia = 8*nnz
-    Allocate (vals(lia,nzbatchmx),jcn(lia,nzbatchmx),irn(lia,nzbatchmx))
-    Allocate (wB(msize),wC(4*msize))
-    Allocate (iwA(9*msize),iwB(4*msize),iwC(msize))
-    If (icntl(8) == 0) Then
-      Allocate (keep(6*msize + 4*msize/icntl(6) + 7 - max(msize/icntl(6),1),nzbatchmx))
-    Else
-      Allocate (keep(6*msize + 4*msize/icntl(6) + 7,nzbatchmx))
-    EndIf
-
-    ! Initialize work arrays
-    vals(:,:) = 0.0
-    wB(:) = 0.0
-    wC(:) = 0.0
-    jcn(:,:) = 0
-    irn(:,:) = 0
-    iwA(:) = 0
-    iwB(:) = 0
-    iwC(:) = 0
-    keep(:,:) = 0
-
-    Allocate(jobA(nzbatchmx))
-    Allocate(jobB(nzbatchmx))
-    Allocate(jobC(nzbatchmx))
-    !$omp end parallel
-
-    Return
-  End Subroutine read_jacobian_data
-
-  Subroutine jacobian_scale(diag,mult,mask_in)
-    !-----------------------------------------------------------------------------------------------
-    ! This augments a previously calculation Jacobian matrix by multiplying all elements by mult and
-    ! adding diag to the diagonal elements.
-    !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzbatchmx, lzactive
-    Use xnet_types, Only: dp
-    Implicit None
-
-    ! Input variables
-    Real(dp), Intent(in) :: diag(:), mult(:)
-
-    ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
-
-    ! Local variables
-    Integer :: i, i0, izb
-    Logical, Pointer :: mask(:)
-
-    If ( present(mask_in) ) Then
-      mask => mask_in(:)
-    Else
-      mask => lzactive(:)
-    EndIf
-    If ( .not. any(mask(:)) ) Return
-
-    Do izb = 1, nzbatchmx
-      If ( mask(izb) ) Then
-        tvals(:,izb) = mult(izb) * dydotdy(:,izb) + diag(izb) * sident(:)
       EndIf
     EndDo
+  Else
+! Build sparse value array    
+    vals(1:nnz) = tvals
+    If(scale_jac) vals(1:nnz) = vals(1:nnz)*mc29r(irn(1:nnz))*mc29c(jcn(1:nnz))
+  EndIf
+
+! Perform numerical decomposition using previously determined symbolic decomposition
+  Do kdecomp=1,5
+    info = 0
+    rinfo = 0.0
+    Call MA48BD(msize,msize,nnz,jobB,lia,vals,irn,jcn,keep,cntl,icntl,wB,iwB,info,rinfo)
+
+    If(info(1) == 0 .and. info(4) <= lia .and. info(6) == 0) Then
+      If( icntl(8)==0 ) Then
+        jobB = 2 ! Unless using special case of icntl(8)/=0, use the "fast" MA48BD call
+      Else
+        jobB = 3 ! For the case of icntl(8)/=0, use the "intermediate" MA48BD all
+      EndIf
+      If(kstep/=0) jobC = 1
+      Exit
+    ElseIf(kdecomp == 5) Then
+      Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48BD. kdecomp=',kdecomp,', info(1)=',info(1)
+      Stop
+    Else
+      Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48BD. kdecomp=',kdecomp,', info(1)=',info(1)
+      
+! Perform check to see if an error occured in MA48BD.  Most likely a singularity error
+! caused by incorrect symbolic matrix, so run MA48AD again.  Also, make sure that 
+! workspaces are large enough.
+      If(info(1) == -3 .or. info(4) > lia) Then
+        Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',info(4)
+        Deallocate(irn,jcn,vals)
+        lia = max(info(3),info(4))
+        Allocate(irn(lia),jcn(lia),vals(lia))
+      EndIf
+      
+      jobA = 3 ! Try to restrict pivoting to the diagonal
+
+      Do jdecomp=1,5
+
+! Rebuild vals array
+        jcn(1:nnz) = cidx
+        irn(1:nnz) = ridx
+        vals(1:nnz) = tvals
+        If(scale_jac) vals(1:nnz) = vals(1:nnz)*mc29r(irn(1:nnz))*mc29c(jcn(1:nnz))
+
+! Perform symbolic analysis
+        info = 0
+        rinfo = 0.0
+        Call MA48AD(msize,msize,nnz,jobA,lia,vals,irn,jcn,keep,cntl,icntl,iwA,info,rinfo)
+
+        If(info(1) == 0 .and. info(4) <= lia .and. info(2) <= 10) Then
+          jobB = 1 ! If analysis is successful, proceed to factorization
+          Exit
+        ElseIf(jdecomp == 5) Then
+          Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48AD. jdecomp=',jdecomp,', info(1)=',info(1)
+          Stop
+        Else
+          Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48AD. jdecomp=',jdecomp,', info(1)=',info(1)
+
+          If(info(1) == -3 .or. info(4) > lia) Then
+            Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',max(info(3),info(4))
+            Deallocate(irn,jcn,vals)
+            lia = max(info(3),info(4))
+            Allocate(irn(lia),jcn(lia),vals(lia))
+          ElseIf(info(2) > 10) Then
+            Write(lun_diag,"(1x,a,i3,a,i7)") 'Reallocating MA48 arrays: info(2)=',info(2),', info(4)=',max(info(3),info(4))
+            Deallocate(irn,jcn,vals)
+            lia = 2*max(info(3),info(4))
+            Allocate(irn(lia),jcn(lia),vals(lia))
+          EndIf  
+
+          If(info(1) >= 4 .and. jobA == 3) Then
+            Write(lun_diag,"(1x,a,i3,a,i7)") 'Not possible to choose all pivots from diagonal'
+            jobA = 1
+          EndIf
+
+        EndIf
+      EndDo
+    EndIf
+  EndDo
+
+! Stop timer
+  stop_timer = xnet_wtime()
+  timer_solve = timer_solve + stop_timer
+
+  Return
+End Subroutine jacobian_decomp                                                                       
+  
+Subroutine jacobian_bksub(yrhs,dy,t9rhs,dt9) 
+!===============================================================================
+! This routine performs back-substitution for a previously factored matrix and 
+! the vector rhs.   
+!===============================================================================
+  Use controls
+  Use jacobian_data
+  Use timers
+  Use abundances
+  Real(8), Intent(in)  :: yrhs(ny)
+  Real(8), Intent(out) :: dy(ny)
+  Real(8), Intent(in)  :: t9rhs
+  Real(8), Intent(out) :: dt9
+  Real(8) :: rhs(msize),dx(msize)
+  Real(8) :: relerr(3)
+  Integer :: kbksub
+  
+! Initiate timer
+  start_timer = xnet_wtime()
+  timer_solve = timer_solve - start_timer  
+
+! Perform back substitution 
+  If(kmon(2) > kitmx) Then
+    jobC = 2 ! Previous NR iteration failed, so estimate error for possible recalculation of data structures
+  Else
+    jobC = 1 ! Do not estimate error
+  EndIf
+
+  Do kbksub=1,5
+
+    rhs(1:ny)=yrhs
+    If(iheat>0) rhs(ny+1)=t9rhs
+
+    If(scale_jac) rhs(1:msize) = rhs(1:msize)*mc29r(1:msize)
+
+    relerr = 0.0
+    info = 0
+    Call MA48CD(msize,msize,trans,jobC,lia,vals,irn,keep,cntl,icntl,rhs,dx,relerr,wC,iwC,info)
+
+    If(info(1) == 0 .and. (jobC == 1 .or. maxval(relerr) <= maxerr)) Then
+      If(scale_jac) dx(1:msize) = dx(1:msize)*mc29c(1:msize)
+      dy=dx(1:ny)
+      If(iheat>0) dt9=dx(ny+1)
+      Exit
+    ElseIf(kbksub == 5) Then
+      Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48CD. kbksub=',kbksub,', info(1)=',info(1)
+      Stop
+    Else
+      Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48CD. kbksub=',kbksub,', info(1)=',info(1)
+
+    ! If the relative error becomes sufficiently large, regenerate data structures
+      If( jobC>1 .and. maxval(relerr)>maxerr ) Then
+        Write(lun_diag,"(1x,a,3es12.5,a)") 'Warning: relerr=',(relerr(i),i=1,3),' > maxerr'
+        jobB = 1
+        Call jacobian_decomp(0)
+      EndIf
+
+    EndIf
+  EndDo
     
-    Return
-  End Subroutine jacobian_scale
-
-  Subroutine jacobian_build(diag_in,mult_in,mask_in)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the reaction Jacobian matrix, dYdot/dY, and augments by multiplying
-    ! all elements by mult and adding diag to the diagonal elements.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, mex
-    Use reaction_data, Only: a1, a2, a3, a4, b1, b2, b3, b4, la, le, mu1, mu2, mu3, mu4, n11, n21, &
-      & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9, nan
-    Use xnet_abundances, Only: yt
-    Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, lzactive
-    Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
-    Use xnet_types, Only: dp
-    Implicit None
-
-    ! Optional variables
-    Real(dp), Optional, Intent(in) :: diag_in(:), mult_in(:)
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
-
-    ! Local variables
-    Integer :: i, j, i0, j1, izb, izone
-    Integer :: la1, le1, la2, le2, la3, le3, la4, le4
-    Integer :: i11, i21, i22, i31, i32, i33, i41, i42, i43, i44
-    Integer :: is11, is21, is22, is31, is32, is33, is41, is42, is43, is44
-    Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
-    Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
-    Real(dp) :: dt9dotdy(ny), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp) :: diag(nzbatchmx), mult(nzbatchmx)
-    Logical, Pointer :: mask(:)
-
-    If ( present(mask_in) ) Then
-      mask => mask_in(:)
-    Else
-      mask => lzactive(:)
-    EndIf
-    If ( .not. any(mask(:)) ) Return
-
-    start_timer = xnet_wtime()
-    timer_jacob = timer_jacob - start_timer
-
-    ! Build the Jacobian
-    Do izb = 1, nzbatchmx
-      If ( mask(izb) ) THen
-        dydotdy(:,izb) = 0.0
-        Do j1 = 1, nan(1)
-          r1 = b1(j1,izb)
-          is11 = ns11(j1)
-          dydotdy(is11,izb) = dydotdy(is11,izb) + r1
-        EndDo
-        Do j1 = 1, nan(2)
-          r2 = b2(j1,izb)
-          is21 = ns21(j1)
-          is22 = ns22(j1)
-          i21 = n21(j1)
-          i22 = n22(j1)
-          y21 = yt(i21,izb)
-          y22 = yt(i22,izb)
-          dydotdy(is21,izb) = dydotdy(is21,izb) + r2 * y22
-          dydotdy(is22,izb) = dydotdy(is22,izb) + r2 * y21
-        EndDo
-        Do j1 = 1, nan(3)
-          r3 = b3(j1,izb)
-          is31 = ns31(j1)
-          is32 = ns32(j1)
-          is33 = ns33(j1)
-          i31 = n31(j1)
-          i32 = n32(j1)
-          i33 = n33(j1)
-          y31 = yt(i31,izb)
-          y32 = yt(i32,izb)
-          y33 = yt(i33,izb)
-          dydotdy(is31,izb) = dydotdy(is31,izb) + r3 * y32 * y33
-          dydotdy(is32,izb) = dydotdy(is32,izb) + r3 * y31 * y33
-          dydotdy(is33,izb) = dydotdy(is33,izb) + r3 * y31 * y32
-        EndDo
-        Do j1 = 1, nan(4)
-          r4 = b4(j1,izb)
-          is41 = ns41(j1)
-          is42 = ns42(j1)
-          is43 = ns43(j1)
-          is44 = ns44(j1)
-          i41 = n41(j1)
-          i42 = n42(j1)
-          i43 = n43(j1)
-          i44 = n44(j1)
-          y41 = yt(i41,izb)
-          y42 = yt(i42,izb)
-          y43 = yt(i43,izb)
-          y44 = yt(i44,izb)
-          dydotdy(is41,izb) = dydotdy(is41,izb) + r4 * y42 * y43 * y44
-          dydotdy(is42,izb) = dydotdy(is42,izb) + r4 * y43 * y44 * y41
-          dydotdy(is43,izb) = dydotdy(is43,izb) + r4 * y44 * y41 * y42
-          dydotdy(is44,izb) = dydotdy(is44,izb) + r4 * y41 * y42 * y43
-        EndDo
-      EndIf
-    EndDo
-
-    If ( iheat > 0 ) Then
-      Do izb = 1, nzbatchmx
-        If ( mask(izb) ) THen
-          Do i0 = 1, ny
-            la1 = la(1,i0)
-            la2 = la(2,i0)
-            la3 = la(3,i0)
-            la4 = la(4,i0)
-            le1 = le(1,i0)
-            le2 = le(2,i0)
-            le3 = le(3,i0)
-            le4 = le(4,i0)
-            s1 = 0.0
-            Do j1 = la1, le1
-              dr1dt9 = a1(j1)*dcsect1dt9(mu1(j1),izb)
-              i11 = n11(j1)
-              y11 = yt(i11,izb)
-              s1 = s1 + dr1dt9 * y11
-            EndDo
-            s2 = 0.0
-            Do j1 = la2, le2
-              dr2dt9 = a2(j1)*dcsect2dt9(mu2(j1),izb)
-              i21 = n21(j1)
-              i22 = n22(j1)
-              y21 = yt(i21,izb)
-              y22 = yt(i22,izb)
-              s2 = s2 + dr2dt9 * y21 * y22
-            EndDo
-            s3 = 0.0
-            Do j1 = la3, le3
-              dr3dt9 = a3(j1)*dcsect3dt9(mu3(j1),izb)
-              i31 = n31(j1)
-              i32 = n32(j1)
-              i33 = n33(j1)
-              y31 = yt(i31,izb)
-              y32 = yt(i32,izb)
-              y33 = yt(i33,izb)
-              s3 = s3 + dr3dt9 * y31 * y32 * y33
-            EndDo
-            s4 = 0.0
-            Do j1 = la4, le4
-              dr4dt9 = a4(j1)*dcsect4dt9(mu4(j1),izb)
-              i41 = n41(j1)
-              i42 = n42(j1)
-              i43 = n43(j1)
-              i44 = n44(j1)
-              y41 = yt(i41,izb)
-              y42 = yt(i42,izb)
-              y43 = yt(i43,izb)
-              y44 = yt(i44,izb)
-              s4 = s4 + dr4dt9 * y41 * y42 * y43 * y44
-            EndDo
-            dydotdy(lval+i0,izb) = s1 + s2 + s3 + s4
-          EndDo
-
-          dt9dotdy(:) = 0.0
-          Do j1 = 1, lval
-            dt9dotdy(cidx(j1)) = dt9dotdy(cidx(j1)) + mex(ridx(j1))*dydotdy(j1,izb)
-          EndDo
-          dydotdy(lval+ny+1:lval+2*ny,izb) = -dt9dotdy(:) / cv(izb)
-
-          s1 = 0.0
-          Do i0 = 1, ny
-            s1 = s1 + mex(i0)*dydotdy(lval+i0,izb)
-          EndDo
-          dydotdy(nnz,izb) = -s1 / cv(izb)
-        EndIf
-      EndDo
-    EndIf
-
-    ! Apply the externally provided factors
-    If ( present(diag_in) ) Then
-      diag(:) = diag_in(:)
-    Else
-      diag(:) = 0.0
-    EndIf
-    If ( present(mult_in) ) Then
-      mult(:) = mult_in(:)
-    Else
-      mult(:) = 1.0
-    EndIf
-    Call jacobian_scale(diag,mult,mask_in = mask(:))
-
-    If ( idiag >= 6 ) Then
-      Do izb = 1, nzbatchmx
-        If ( mask(izb) ) THen
-          izone = izb + szbatch - 1
-          Write(lun_diag,"(a9,i5,2es14.7)") 'JAC_BUILD',izone,diag(izb),mult(izb)
-          Write(lun_diag,"(14es9.1)") (tvals(i,izb),i=1,nnz)
-        EndIf
-      EndDo
-    EndIf
-
-    Where ( mask(:) )
-      ktot(3,:) = ktot(3,:) + 1
-    EndWhere
-
-    stop_timer = xnet_wtime()
-    timer_jacob = timer_jacob + stop_timer
-
-    Return
-  End Subroutine jacobian_build
-
-  Subroutine jacobian_solve(kstep,yrhs,dy,t9rhs,dt9,mask_in)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine solves the system of equations composed of the Jacobian and RHS vector.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive
-    Use xnet_types, Only: dp
-    Implicit None
-
-    ! Input variables
-    Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(:,:)
-    Real(dp), Intent(in) :: t9rhs(:)
-
-    ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
-
-    ! Output variables
-    Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
-    Real(dp), Intent(out) :: dt9(size(t9rhs))
-
-    ! Local variables
-    Integer :: i, izb, izone
-    Logical, Pointer :: mask(:)
-
-    If ( present(mask_in) ) Then
-      mask => mask_in(:)
-    Else
-      mask => lzactive(:)
-    EndIf
-    If ( .not. any(mask(:)) ) Return
-
-    Call jacobian_decomp(kstep,mask_in = mask(:))
-    Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = mask(:))
-
-    If ( idiag >= 5 ) Then
-      Do izb = 1, nzbatchmx
-        If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
-          Write(lun_diag,"(a)") 'JAC_SOLVE', izone
-          Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
-          If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
-        EndIf
-      EndDo
-    EndIf
-
-    Return
-  End Subroutine jacobian_solve
-
-  Subroutine jacobian_decomp(kstep,mask_in)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine performs the LU matrix decomposition for the Jacobian.
-    !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_diag, nzbatchmx, lzactive
-    Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
-    Use xnet_types, Only: dp
-    Use xnet_util, Only: xnet_terminate
-    Implicit None
-
-    ! Input variables
-    Integer, Intent(in) :: kstep
-
-    ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
-
-    ! Local variables
-    Integer :: i, izb, izone, j, kdecomp, jdecomp
-    Logical, Pointer :: mask(:)
-
-    If ( present(mask_in) ) Then
-      mask => mask_in(:)
-    Else
-      mask => lzactive(:)
-    EndIf
-    If ( .not. any(mask(:)) ) Return
-
-    start_timer = xnet_wtime()
-    timer_solve = timer_solve - start_timer
-    timer_decmp = timer_decmp - start_timer
-
-    Do izb = 1, nzbatchmx
-      If ( mask(izb) ) Then
-
-        ! Check if this is the first step, or if matrix needs to be reanalyzed
-        If ( kstep == 1 .or. jobB(izb) == 1 ) Then
-
-          ! Try to restrict pivoting to the diagonal
-          jobA(izb) = 3
-
-          ! Perform symbolic analysis
-          Do kdecomp = 1, kdecompmx
-            jcn(1:nnz,izb) = cidx(:)
-            irn(1:nnz,izb) = ridx(:)
-            vals(1:nnz,izb) = tvals(:,izb)
-            info(:) = 0
-            rinfo(:) = 0.0
-            Call MA48AD(msize,msize,nnz,jobA(izb),lia,vals(:,izb),irn(:,izb),jcn(:,izb), &
-              & keep(:,izb),cntl,icntl,iwA,info,rinfo)
-            If ( info(1) == 0 .and. info(4) <= lia .and. info(2) <= 10 ) Then
-              jobB(izb) = 1 ! If analysis is successful, proceed to factorization
-              Exit
-            ElseIf ( kdecomp == kdecompmx ) Then
-              Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48AD. kdecomp=',kdecomp,', info(1)=',info(1)
-              Call xnet_terminate('Error during MA48AD',info(1))
-            Else
-              Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48AD. kdecomp=',kdecomp,', info(1)=',info(1)
-
-              ! Address any error codes
-              If ( info(1) >= 4 .and. jobA(izb) == 3 ) Then
-                Write(lun_diag,"(1x,a,i3,a,i7)") 'Not possible to choose all pivots from diagonal'
-                jobA(izb) = 1
-              ElseIf ( info(1) == -3 .or. info(4) > lia ) Then
-                Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',max(info(3),info(4))
-                lia0 = lia
-                lia = int(1.2*max(info(3),info(4)))
-
-                Allocate (jcn0(lia,nzbatchmx))
-                jcn0(1:lia0,:) = jcn(:,:)
-                Call move_alloc(jcn0,jcn)
-                jcn(:,izb) = 0
-
-                Allocate (irn0(lia,nzbatchmx))
-                irn0(1:lia0,:) = irn(:,:)
-                Call move_alloc(irn0,irn)
-                irn(:,izb) = 0
-
-                Allocate (vals0(lia,nzbatchmx))
-                vals0(1:lia0,:) = vals(:,:)
-                Call move_alloc(vals0,vals)
-                vals(:,izb) = 0.0
-              ElseIf ( info(2) > 10 ) Then
-                Write(lun_diag,"(1x,a,i3,a,i7)") 'Reallocating MA48 arrays: info(2)=',info(2),', info(4)=',max(info(3),info(4))
-                lia0 = lia
-                lia = int(2.0*max(info(3),info(4)))
-
-                Allocate (jcn0(lia,nzbatchmx))
-                jcn0(1:lia0,:) = jcn(:,:)
-                Call move_alloc(jcn0,jcn)
-                jcn(:,izb) = 0
-
-                Allocate (irn0(lia,nzbatchmx))
-                irn0(1:lia0,:) = irn(:,:)
-                Call move_alloc(irn0,irn)
-                irn(:,izb) = 0
-
-                Allocate (vals0(lia,nzbatchmx))
-                vals0(1:lia0,:) = vals(:,:)
-                Call move_alloc(vals0,vals)
-                vals(:,izb) = 0.0
-              EndIf
-            EndIf
-          EndDo
-        Else
-          vals(1:nnz,izb) = tvals(:,izb)
-        EndIf
-
-        ! Perform numerical decomposition using previously determined symbolic decomposition
-        Do kdecomp = 1, kdecompmx
-          info(:) = 0
-          rinfo(:) = 0.0
-          Call MA48BD(msize,msize,nnz,jobB(izb),lia,vals(:,izb),irn(:,izb),jcn(:,izb), &
-            & keep(:,izb),cntl,icntl,wB,iwB,info,rinfo)
-          If ( info(1) == 0 .and. info(4) <= lia .and. info(6) == 0 ) Then
-            If ( icntl(8) == 0 ) Then
-              jobB(izb) = 2 ! Unless using special case of icntl(8)/=0, use the "fast" MA48BD call
-            Else
-              jobB(izb) = 3 ! For the case of icntl(8)/=0, use the "intermediate" MA48BD all
-            EndIf
-            If ( kstep /= 0 ) jobC(izb) = 1
-            Exit
-          ElseIf ( kdecomp == kdecompmx ) Then
-            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48BD. kdecomp=',kdecomp,', info(1)=',info(1)
-            Call xnet_terminate('Error during MA48BD',info(1))
-          Else
-            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48BD. kdecomp=',kdecomp,', info(1)=',info(1)
-
-            ! Perform check to see if an error occured in MA48BD.
-            ! Most likely a singularity error caused by incorrect symbolic matrix, so run MA48AD again.
-            ! Also, make sure that workspaces are large enough.
-            If ( info(1) == -3 .or. info(4) > lia ) Then
-              Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',info(4)
-              lia0 = lia
-              lia = int(1.2*max(info(3),info(4)))
-
-              Allocate (jcn0(lia,nzbatchmx))
-              jcn0(1:lia0,:) = jcn(:,:)
-              Call move_alloc(jcn0,jcn)
-              jcn(:,izb) = 0
-
-              Allocate (irn0(lia,nzbatchmx))
-              irn0(1:lia0,:) = irn(:,:)
-              Call move_alloc(irn0,irn)
-              irn(:,izb) = 0
-
-              Allocate (vals0(lia,nzbatchmx))
-              vals0(1:lia0,:) = vals(:,:)
-              Call move_alloc(vals0,vals)
-              vals(:,izb) = 0.0
-            EndIf
-
-            ! Try to restrict pivoting to the diagonal
-            jobA(izb) = 3
-
-            ! Perform symbolic analysis
-            Do jdecomp = 1, kdecompmx
-              jcn(1:nnz,izb) = cidx(:)
-              irn(1:nnz,izb) = ridx(:)
-              vals(1:nnz,izb) = tvals(:,izb)
-              info(:) = 0
-              rinfo(:) = 0.0
-              Call MA48AD(msize,msize,nnz,jobA(izb),lia,vals(:,izb),irn(:,izb),jcn(:,izb), &
-                & keep(:,izb),cntl,icntl,iwA,info,rinfo)
-              If ( info(1) == 0 .and. info(4) <= lia .and. info(2) <= 10 ) Then
-                jobB(izb) = 1 ! If analysis is successful, proceed to factorization
-                Exit
-              ElseIf ( jdecomp == kdecompmx ) Then
-                Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48AD. jdecomp=',jdecomp,', info(1)=',info(1)
-                Call xnet_terminate('Error during MA48AD',info(1))
-              Else
-                Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48AD. jdecomp=',jdecomp,', info(1)=',info(1)
-
-                ! Address any error codes
-                If ( info(1) >= 4 .and. jobA(izb) == 3 ) Then
-                  Write(lun_diag,"(1x,a,i3,a,i7)") 'Not possible to choose all pivots from diagonal'
-                  jobA(izb) = 1
-                ElseIf ( info(1) == -3 .or. info(4) > lia ) Then
-                  Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',max(info(3),info(4))
-                  lia0 = lia
-                  lia = int(1.2*max(info(3),info(4)))
-
-                  Allocate (jcn0(lia,nzbatchmx))
-                  jcn0(1:lia0,:) = jcn(:,:)
-                  Call move_alloc(jcn0,jcn)
-                  jcn(:,izb) = 0
-
-                  Allocate (irn0(lia,nzbatchmx))
-                  irn0(1:lia0,:) = irn(:,:)
-                  Call move_alloc(irn0,irn)
-                  irn(:,izb) = 0
-
-                  Allocate (vals0(lia,nzbatchmx))
-                  vals0(1:lia0,:) = vals(:,:)
-                  Call move_alloc(vals0,vals)
-                  vals(:,izb) = 0.0
-                ElseIf(info(2) > 10) Then
-                  Write(lun_diag,"(1x,a,i3,a,i7)") 'Reallocating MA48 arrays: info(2)=',info(2),', info(4)=',max(info(3),info(4))
-                  lia0 = lia
-                  lia = int(2.0*max(info(3),info(4)))
-
-                  Allocate (jcn0(lia,nzbatchmx))
-                  jcn0(1:lia0,:) = jcn(:,:)
-                  Call move_alloc(jcn0,jcn)
-                  jcn(:,izb) = 0
-
-                  Allocate (irn0(lia,nzbatchmx))
-                  irn0(1:lia0,:) = irn(:,:)
-                  Call move_alloc(irn0,irn)
-                  irn(:,izb) = 0
-
-                  Allocate (vals0(lia,nzbatchmx))
-                  vals0(1:lia0,:) = vals(:,:)
-                  Call move_alloc(vals0,vals)
-                  vals(:,izb) = 0.0
-                EndIf
-              EndIf
-            EndDo
-          EndIf
-        EndDo
-      EndIf
-    EndDo
-
-    stop_timer = xnet_wtime()
-    timer_solve = timer_solve + stop_timer
-    timer_decmp = timer_decmp + stop_timer
-
-    Return
-  End Subroutine jacobian_decomp
-
-  Subroutine jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine performs back-substitution for a LU matrix and the RHS vector.
-    !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, kitmx, kmon, lun_diag, nzbatchmx, szbatch, lzactive
-    Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
-    Use xnet_types, Only: dp
-    Use xnet_util, Only: xnet_terminate
-    Implicit None
-
-    ! Input variables
-    Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(:,:)
-    Real(dp), Intent(in) :: t9rhs(:)
-
-    ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
-
-    ! Output variables
-    Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
-    Real(dp), Intent(out) :: dt9(size(t9rhs))
-
-    ! Local variables
-    Real(dp) :: rhs(msize), dx(msize)
-    Real(dp) :: relerr(3)
-    Integer :: i, izb, izone, kbksub
-    Logical :: mask_1zone(nzbatchmx)
-    Logical, Pointer :: mask(:)
-
-    If ( present(mask_in) ) Then
-      mask => mask_in(:)
-    Else
-      mask => lzactive(:)
-    EndIf
-    If ( .not. any(mask(:)) ) Return
-
-    start_timer = xnet_wtime()
-    timer_solve = timer_solve - start_timer
-    timer_bksub = timer_bksub - start_timer
-
-    mask_1zone(:) = .false.
-    Do izb = 1, nzbatchmx
-      If ( mask(izb) ) Then
-
-        ! Perform back substitution
-        If ( kmon(2,izb) > kitmx ) Then
-          jobC(izb) = 2 ! Previous NR iteration failed, so estimate error for possible recalculation of data structures
-        Else
-          jobC(izb) = 1 ! Do not estimate error
-        EndIf
-
-        ! Solve linear system using existing factorization
-        Do kbksub = 1, kbksubmx
-
-          rhs(1:ny) = yrhs(:,izb)
-          If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
-
-          relerr(:) = 0.0
-          info(:) = 0
-          Call MA48CD(msize,msize,trans,jobC(izb),lia,vals(:,izb),irn(:,izb),keep(:,izb), &
-            & cntl,icntl,rhs,dx,relerr,wC,iwC,info)
-          If ( info(1) == 0 .and. ( jobC(izb) == 1 .or. maxval(relerr) <= maxerr .or. kbksub == kbksubmx ) ) Then
-            dy(:,izb) = dx(1:ny)
-            If ( iheat > 0 ) dt9(izb) = dx(ny+1)
-            Exit
-          ElseIf ( kbksub == kbksubmx .and. info(1) /= 0 ) Then
-            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48CD. kbksub=',kbksub,', info(1)=',info(1)
-            Call xnet_terminate('Error during MA48CD',info(1))
-          Else
-            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48CD. kbksub=',kbksub,', info(1)=',info(1)
-
-            ! If the relative error becomes sufficiently large, redo analysis and factorization
-            If ( jobC(izb) > 1 .and. maxval(relerr) > maxerr ) Then
-              Write(lun_diag,"(1x,a,3es12.5,a)") 'Warning: relerr=',(relerr(i),i=1,3),' > maxerr'
-              jobB(izb) = 1
-              mask_1zone(izb) = .true.
-              Call jacobian_decomp(0,mask_in = mask_1zone)
-              mask_1zone(izb) = .false.
-            EndIf
-          EndIf
-        EndDo
-      EndIf
-    EndDo
-
-    If ( idiag >= 5 ) Then
-      Do izb = 1, nzbatchmx
-        If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
-          Write(lun_diag,"(a,i5)") 'BKSUB', izone
-          Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
-          If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
-        EndIf
-      EndDo
-    EndIf
-
-    stop_timer = xnet_wtime()
-    timer_solve = timer_solve + stop_timer
-    timer_bksub = timer_bksub + stop_timer
-
-    Return
-  End Subroutine jacobian_bksub
-
-End Module xnet_jacobian
+! Diagnostic output
+  If(idiag>=4) Then
+    Write(lun_diag,"(a)") 'BKSUB'
+    Write(lun_diag,"(14es10.3)") dy
+    If(iheat>0) Write(lun_diag,"(es10.3)") dt9
+  EndIf
+
+! Stop timer
+  stop_timer = xnet_wtime()
+  timer_solve = timer_solve + stop_timer
+
+  Return
+End Subroutine jacobian_bksub

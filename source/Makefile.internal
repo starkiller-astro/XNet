@@ -6,34 +6,39 @@
 UNAME_S ?= $(shell uname -s)
 
 ## Define programming envionment if not set or on a Cray machine
-MACHINE=$(shell echo $${HOSTNAME%%.*} | sed 's/\(-[a-zA-Z0-9]*\)\?[0-9]*$$//')
+MACHINE=$(shell echo $(HOSTNAME) | sed 's/\(-[a-zA-Z]*\)\?[0-9]\+$$//')
 CRAY_MACHINE = \
                titan \
+               hopper \
+               darter \
                edison \
                cori \
                chester \
-               beacon
+               beacon \
+               mira
 
-IBM_MACHINE = \
-              summit \
-              summitdev \
-              mira
+ifeq (,$(filter $(MACHINE),$(CRAY_MACHINE)))
+    ## Set flag to not use compiler wrapper
+    USE_CRAY ?= 0
 
-## Use GNU compiler by default, unless PE_ENV environment variable already set
-PE_ENV  ?= GNU
-#PE_ENV  ?= PGI
-#PE_ENV  ?= INTEL
-#PE_ENV  ?= CRAY
+    ## Use GNU compiler by default, unless PE_ENV environment variable already set
+    PE_ENV  ?= GNU
+    #PE_ENV  ?= PGI
+    #PE_ENV  ?= INTEL
+    #PE_ENV  ?= CRAY
+    #PE_ENV  ?= ABSOFT
 
-FC_MPI  = mpif90
-CC_MPI  = mpicc
-CXX_MPI = mpic++
-LDR_MPI = mpif90
+    FC_MPI  = mpif90
+    CC_MPI  = mpicc
+    CXX_MPI = mpic++
+    LDR_MPI = mpif90
 
-ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
     LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
-else ifeq ($(findstring $(MACHINE),$(CRAY_MACHINE)),$(MACHINE))
+    GPU_LAPACK_VER ?= MAGMA
+else
+    ## Set flag to use compiler wrapper
+    USE_CRAY ?= 1
+
     FC      = ftn
     CC      = cc
     CXX     = CC
@@ -44,179 +49,234 @@ else ifeq ($(findstring $(MACHINE),$(CRAY_MACHINE)),$(MACHINE))
     LDR_MPI = ftn
 
     LAPACK_VER     ?= LIBSCI
-    GPU_LAPACK_VER ?= CUBLAS
-else
-    LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
+    GPU_LAPACK_VER ?= LIBSCIACC
 endif
 
 #-------------------------------------------------------------------------------
 # Define compiler specific variables
 #-------------------------------------------------------------------------------
+LC_PE_ENV = $(shell echo $(PE_ENV) | tr A-Z a-z)
+GCC_VER   = 3
+INTEL_VER = 0
+PGI_VER   = 0
+CRAY_VER  = 0
+
+LIBSCI_EXTRA =
 
 ifeq ($(PE_ENV),INTEL)
     
-    ifneq ($(FC),ftn)
+    ifeq ($(USE_CRAY),0)
         FC      = ifort
         CC      = icc
         CXX     = icpc
         LDR     = ifort
 
         ARCHOPT = -xHost
+
+        EXTRA_FFLAGS   =
+        EXTRA_CCFLAGS  =
+        EXTRA_CXXFLAGS =
+        EXTRA_LDRFLAGS =
+        EXTRA_LINK     =
+
+        INTEL_LIBS =
+    else ifeq ($(MACHINE),beacon)
+        ARCHOPT = -xAVX
+    else ifeq ($(MACHINE),darter)
+        ARCHOPT = -xAVX
+    else ifeq ($(MACHINE),edison)
+        ARCHOPT = -xCORE-AVX-I -align array32byte
     else ifeq ($(MACHINE),cori)
-        ARCHOPT = -align array64byte
+        ifeq ($(CRAY_CPU_TARGET),mic-knl)
+            ARCHOPT = -xMIC-AVX512 -align array64byte
+        else ifeq ($(CRAY_CPU_TARGET),haswell)
+            ARCHOPT = -xCORE-AVX2 -align array64byte
+        endif
+    else ifeq ($(MACHINE),titan)
+        ARCHOPT = -msse3
+    else ifeq ($(MACHINE),chester)
+        ARCHOPT = -msse3
+    else ifeq ($(MACHINE),hopper)
+        ARCHOPT = -msse3
     endif
-    INLINE        = -ipo
 
-    # generic flags
-    OPT_FLAGS     = -g -Ofast $(ARCHOPT) $(INLINE)
-    DEBUG_FLAGS   = -g -O0 -traceback
-
-    ifeq ($(OPENMP_MODE),ON)
-        OPENMP    = -qopenmp
+    ifeq ($(MPI_MODE),ON)
+        ifeq ($(OPENMP_MODE),ON)
+            INLINE  = -ip
+        else
+            INLINE  = -ipo
+        endif
     else
-        OPENMP    = -qopenmp-stubs
+        INLINE  = -ipo
     endif
-    ifeq ($(OPENACC_MODE),ON)
-        OPENACC   =
+
+    HIGHOPT = -O3 $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
+
+    DEBUGOPT = $(HIGHOPT) -g -traceback
+    DEBUG    = $(NOOPT) -g -check all,noarg_temp_created -traceback -gen-interfaces -warn interfaces
+
+    R8      = -real-size 64 -integer-size 32
+    FCLIST  = -list
+    CCLIST  = -list
+    CXXLIST = -list
+
+    INTEL_VER = $(shell echo $(INTEL_VERSION)| cut -d. -f1,2 | sed -e "s/\.//g")
+    GCC_VER   = 43
+    PE_VER    = 120
+
+    LIBSCI_VER = $(PE_VER)
+
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG   = -qopenmp-stubs
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP = -liomp5 -lpthread
+        endif
     else
-        OPENACC   =
+        OMP_FLAG   = -qopenmp
     endif
-
-    # Fortran-specific flags
-    OPT_FFLAGS    =
-    DEBUG_FFLAGS  = -check all,noarg_temp_created -fpe0 -gen-interfaces -warn interfaces
-
-    F77FLAGS      = -real-size 64 -integer-size 32
-    F90FLAGS      = -real-size 64 -integer-size 32
-
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  = -check all
-    
-    # Linker flags
-    OPT_LDFLAGS   =
-    DEBUG_LDFLAGS =
 
 else ifeq ($(PE_ENV),PGI)
     
-    ifneq ($(FC),ftn)
-        FC        = pgfortran
-        CC        = pgcc
-        CXX       = pgc++
-        LDR       = pgfortran
+    ifeq ($(USE_CRAY),0)
+        FC      = pgfortran
+        CC      = pgcc
+        CXX     = pgc++
+        LDR     = pgfortran
 
-        ARCHOPT   =
+        ARCHOPT =
+
+        EXTRA_CXXFLAGS = 
+        EXTRA_LDRFLAGS =
+        EXTRA_LIBS     = 
+        EXTRA_LINK     = -pgc++libs
+
+        LIBSCI_EXTRA   =
     endif
-    INLINE        = -Mipa=fast,inline,safe
+    INLINE  =# -Mipa=fast
 
-    # generic flags
-    OPT_FLAGS     = -g -gopt -fast $(ARCHOPT) $(INLINE)
-    DEBUG_FLAGS   = -g -gopt -O0 -traceback
+    HIGHOPT = -fastsse -gopt $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
 
-    ifeq ($(OPENMP_MODE),ON)
-        OPENMP    = -mp
+    DEBUGOPT = $(MEDOPT) -gopt -traceback -C -Ktrap=fp -Mchkptr -Mdclchk -Mchkfpstk
+    DEBUG    = $(NOOPT) -g -traceback -C -Ktrap=fp -Mchkptr -Mdclchk -Mchkfpstk
+
+    R8      = -r8 -i4
+    FCLIST  = -Mlist
+    CCLIST  = -Mlist
+    CXXLIST = -Mlist
+
+    PGI_VER = $(shell echo $(PGI_VERSION) | cut -d. -f1,2 | sed -e "s/\.//g")
+    PE_VER  = 119
+
+    LIBSCI_VER   = $(PE_VER)
+
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG   = -mp -Mnoopenmp
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP = $(OMP_FLAG)
+        endif
     else
-        OPENMP    = -mp -Mnoopenmp
+        OMP_FLAG = -mp
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP = -lpgmp -lpthread
+        endif
     endif
-    ifeq ($(OPENACC_MODE),ON)
-        OPENACC   = -acc -ta=tesla
-    else
-        OPENACC   = -acclibs
-    endif
-
-    # Fortran-specific flags
-    OPT_FFLAGS    =
-    DEBUG_FFLAGS  = -Ktrap=fp -Mbounds -Mchkptr -Mdclchk
-
-    F77FLAGS      = -r8 -i4 -Mfixed
-    F90FLAGS      = -r8 -i4
-
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
-    
-    # Linker flags
-    OPT_LDFLAGS   = -pgc++libs
-    DEBUG_LDFLAGS = -pgc++libs
 
 else ifeq ($(PE_ENV),GNU)
     
-    ifneq ($(FC),ftn)
-        FC        = gfortran
-        CC        = gcc
-        CXX       = g++
-        LDR       = gfortran
+    ifeq ($(USE_CRAY),0)
+        FC  = gfortran
+        CC  = gcc
+        CXX = g++
+        LDR = gfortran
 
-        ARCHOPT   = -march=native
+        ARCHOPT        = -march=native
+
+        EXTRA_FFLAGS   = -fno-second-underscore
+        EXTRA_CCFLAGS  = -fno-second-underscore
+        EXTRA_CXXFLAGS = -fno-second-underscore
+        EXTRA_LDRFLAGS = -fno-second-underscore
+        EXTRA_LIBS     =
+        EXTRA_LINK     = 
+        LIBSCI_OMP     = -lgfortran
     endif
 
-    # generic flags
-    OPT_FLAGS     = -g -Ofast -funroll-loops -fprefetch-loop-arrays $(ARCHOPT) $(INLINE)
-    DEBUG_FLAGS   = -g -Og -ggdb -ftrapv -fexceptions -Wall -Wextra \
-                    -Wno-unused-variable -Wno-unused-parameter
+    HIGHOPT = -O3 $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
 
-    ifeq ($(OPENMP_MODE),ON)
-        OPENMP    = -fopenmp
-    else
-        OPENMP    = -lgomp
-    endif
-    ifeq ($(OPENACC_MODE),ON)
-        OPENACC   = -fopenacc
-    else
-        OPENACC   =
-    endif
+    DEBUG   = -Og -g -fbacktrace -fcheck=all -Wall -Wno-unused -ffpe-trap=invalid,overflow,zero -fimplicit-none
 
-    # Fortran-specific flags
-    OPT_FFLAGS    =
-    DEBUG_FFLAGS  = -fcheck=bounds,do,mem,pointer -ffpe-trap=invalid,zero,overflow -fbacktrace \
-                    -Wno-unused-dummy-argument -Wno-unused-label -Wno-maybe-uninitialized
+    GCC_VERSION ?= $(shell gcc --version | grep ^gcc | sed 's/^.* //g')
+    GCC_VER = $(shell echo $(GCC_VERSION) | cut -d. -f1,2,3 | sed -e "s/\.//g")
+    PE_VER  = $(GCC_VER)
 
-    F77FLAGS      = -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-compare-reals
-    F90FLAGS      = -fdefault-real-8 -fdefault-double-8 -fimplicit-none -ffree-line-length-none
+    R8 = -fdefault-real-8 -fdefault-double-8
 
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
+    LIBSCI_VER = $(PE_VER)
     
-    # Linker flags
-    OPT_LDFLAGS   =
-    DEBUG_LDFLAGS =
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG = -lgomp -lpthread
+        ifneq ($(FC),ftn)
+            LIBSCI_OMP += $(OMP_FLAG)
+        endif
+    else
+        OMP_FLAG = -fopenmp
+    endif
 
 else ifeq ($(PE_ENV),CRAY)
     
-    INLINE_DB     = ./$(EXE)_inline
-    INLINE        = -h wp -h pl=$(INLINE_DB)
+    ifeq ($(USE_CRAY),0)
+        FC  = crayftn
+        CC  = craycc
+        CXX = crayCC
+        LDR = crayftn
 
-    # generic flags
-    OPT_FLAGS     = -O2 $(INLINE)
-    DEBUG_FLAGS   = -O0 -eD
+        ## This will be set on a cray machine based on the craype target module loaded
+        CRAY_CPU_TARGET ?= x86-64
+        ARCHOPT        = -h cpu=$(CRAY_CPU_TARGET)
 
-    ifeq ($(OPENMP_MODE),ON)
-        OPENMP    =
-    else
-        OPENMP    = -h noomp
+        EXTRA_FFLAGS   =
+        EXTRA_CCFLAGS  = -h gnu
+        EXTRA_CXXFLAGS = -h gnu
+        EXTRA_LDRFLAGS = 
+
+        EXTRA_LIBS =
+        EXTRA_LINK =
     endif
-    ifeq ($(OPENACC_MODE),ON)
-        OPENACC   =
-    else
-        OPENACC   = -h noacc
+
+    INLINE_DB = ./$(EXE)_inline
+    INLINE    = -h wp -h pl=$(INLINE_DB)
+
+    HIGHOPT = -O2 $(ARCHOPT) $(INLINE)
+    MEDOPT  = -O2 $(ARCHOPT)
+    LOWOPT  = -O1
+    NOOPT   = -O0
+
+    DEBUGOPT = $(HIGHOPT) -G1
+    DEBUG    = -eD
+
+    R8 = -sreal64 -sinteger32
+
+    FCLIST  = -rm
+    CCLIST  = -h list=a
+    CXXLIST = -h list=a
+
+    CRAY_VER   = $(shell echo $(PE_LEVEL) | cut -d. -f1,2 | sed -e "s/\.//g")
+    PE_VER     = 74
+
+    #LIBSCI_VER = $(CRAY_VER)
+    LIBSCI_VER = $(PE_VER)
+
+    ifneq ($(OPENMP_MODE),ON)
+        OMP_FLAG = -h noomp
     endif
-
-    # Fortran-specific flags
-    OPT_FFLAGS    =
-    DEBUG_FFLAGS  =
-
-    F77FLAGS      = -s real64 -s integer32
-    F90FLAGS      = -s real64 -s integer32
-
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
-    
-    # Linker flags
-    OPT_LDFLAGS   =
-    DEBUG_LDFLAGS =
 
 else
 
@@ -224,17 +284,18 @@ else
 
 endif
 
-## Override compiler for MPI
-ifeq ($(MPI_MODE),ON)
-    FC  = $(FC_MPI)
-    CC  = $(CC_MPI)
-    CXX = $(CXX_MPI)
-    LDR = $(LDR_MPI)
-endif
-
 #-------------------------------------------------------------------------------
 # Library definitions and compile/link flags
 #-------------------------------------------------------------------------------
+
+## Cray LibSci
+ifneq ($(FC),ftn)
+    LIBSCI_EXTRA += -lstdc++ $(LIBSCI_OMP)
+    LIBSCI_DIR    = /opt/cray/libsci/default/$(PE_ENV)/$(PE_VER)/$(CRAY_CPU_TARGET)
+    LIBSCI_INC    = -I$(LIBSCI_DIR)/include
+    LIBSCI_LIBDIR = -L$(LIBSCI_DIR)/lib
+    LIBSCI_LIBS   = -lscicpp_$(LC_PE_ENV) -lsci_$(LC_PE_ENV)_mp $(LIBSCI_EXTRA)
+endif
 
 ## Intel Math Kernel Library (MKL)
 INTEL_PATH ?= /opt/intel/compilers_and_libraries/linux
@@ -271,12 +332,12 @@ ATLAS_LIBDIR   = -L$(ATLAS_DIR)/lib
 ATLAS_LIBS     = -llapack -lf77blas -lcblas -latlas
 
 ## NETLIB
-NETLIB_DIR    ?= ../tools/LAPACK
+NETLIB_DIR     = ../tools/LAPACK
 BLAS_LVL1_SRC  = ddot.f dlamch.f dnrm2.f dscal.f dswap.f idamax.f lsame.f xerbla.f
 BLAS_LVL2_SRC  = dger.f dgemv.f
 BLAS_LVL3_SRC  = dgemm.f dtrsm.f
 LAPACK_UTL_SRC = ieeeck.f iparmq.f
-LAPACK_AUX_SRC = dgetrf2.f dlaswp.f ilaenv.f
+LAPACK_AUX_SRC = dgetf2.f dlaswp.f ilaenv.f
 NETLIB_SRC     = $(addprefix $(NETLIB_DIR)/, \
 		 $(BLAS_LVL1_SRC) $(BLAS_LVL2_SRC) $(BLAS_LVL3_SRC) \
 		 $(LAPACK_UTL_SRC) $(LAPACK_AUX_SRC) \
@@ -295,11 +356,10 @@ LAPACK_OBJ    = $(addsuffix .o,$(basename $(LAPACK_SRC)))
 LAPACK_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.f90 %.F90,$(LAPACK_SRC))))
 LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.f %.F,$(LAPACK_SRC))))
 LAPACK_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(LAPACK_SRC))))
-LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp %.cxx,$(LAPACK_SRC))))
+LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(LAPACK_SRC))))
 
 ## PARDISO
 ifneq ($(LAPACK_VER),MKL)
-    PARDISO        = PARDISO
     PARDISO_DIR   ?= /usr/local/pardiso
     PARDISO_INC    =
     PARDISO_LIBDIR = -L$(PARDISO_DIR)/lib
@@ -309,28 +369,22 @@ ifneq ($(LAPACK_VER),MKL)
         PARDISO_LIBS = -lpardiso600-GNU720-X86-64
     endif
 else
-    PARDISO        = PARDISO_MKL
+    PARDISO_INC    = $(MKL_INC)
+    PARDISO_LIBDIR = $(MKL_LIBDIR)
+    PARDISO_LIBS   = $(MKL_LIBS)
 endif
 
 ## MA48
-MA48           = MA48
 MA48_DIR      ?= .
 MA48_SRC       = $(addprefix $(MA48_DIR)/, \
 		 MA48.f)
 MA48_OBJ       = $(addsuffix .o,$(basename $(MA48_SRC)))
 
 ## MA41
-MA41           = MA41
 MA41_DIR      ?= .
 MA41_SRC       = $(addprefix $(MA41_DIR)/, \
 		 MA41.f)
 MA41_OBJ       = $(addsuffix .o,$(basename $(MA41_SRC)))
-
-SOLVER         = $($(MATRIX_SOLVER))
-ifeq ($(SOLVER),)
-    SOLVER     = $(MATRIX_SOLVER)
-endif
-JAC_OBJ        = jacobian_$(SOLVER).o
 
 SOLVER_INC     = $($(MATRIX_SOLVER)_INC)
 SOLVER_LIBDIR  = $($(MATRIX_SOLVER)_LIBDIR)
@@ -343,9 +397,68 @@ SOLVER_OBJ_F   = $(addsuffix .o,$(basename $(filter %.f %.F,$(SOLVER_SRC))))
 SOLVER_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(SOLVER_SRC))))
 SOLVER_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(SOLVER_SRC))))
 
+EXTRA_LIBDIR = $($(PE_ENV)_LIBDIR)
+EXTRA_LIBS  += $($(PE_ENV)_LIBS)
+EXTRA_SRC    = 
+EXTRA_OBJ    = $(addsuffix .o,$(basename $(EXTRA_SRC)))
+EXTRA_OBJ   += $(LAPACK_OBJ) $(SOLVER_OBJ)
+
+EXTRA_FFLAGS   += 
+EXTRA_CCFLAGS  += 
+EXTRA_CXXFLAGS += 
+EXTRA_LDRFLAGS += 
+EXTRA_LINK     += $(LAPACK_INC) $(SOLVER_INC) $(EXTRA_LIBDIR) $(EXTRA_LIBS)
+
+OPT     = $(HIGHOPT)
+LAPACK  = $(LAPACK_INC)
+PARDISO = $(PARDISO_INC)
+
 ## Define compiler flags
-FLAGS     = $($(CMODE)_FLAGS)
-FFLAGS   += $(FLAGS) $($(CMODE)_FFLAGS) $(OPENMP) $(OPENACC)
-CFLAGS   += $(FLAGS) $($(CMODE)_CFLAGS) $(OPENMP) $(OPENACC)
-CXXFLAGS += $(FLAGS) $($(CMODE)_CXXFLAGS) $(OPENMP) $(OPENACC)
-LDFLAGS  += $(FLAGS) $($(CMODE)_LDFLAGS) $(OPENMP) $(OPENACC)
+FFLAGS   = $(R8) $(OMP_FLAG)
+LDRFLAGS = $(R8) $(OMP_FLAG)
+CCFLAGS  = $(OMP_FLAG)
+CXXFLAGS = $(OMP_FLAG)
+
+ifeq ($(CMODE),OPTIMIZE)
+    FFLAGS   += $(OPT) $(EXTRA_FFLAGS)
+    CCFLAGS  += $(OPT) $(EXTRA_CCFLAGS)
+    CXXFLAGS += $(OPT) $(EXTRA_CXXFLAGS)
+    LDRFLAGS += $(OPT) $(EXTRA_LDRFLAGS)
+else ifeq ($(CMODE),DEBUG)
+    FFLAGS   += $(DEBUG) $(EXTRA_FFLAGS)
+    CCFLAGS  += $(DEBUG) $(EXTRA_CCFLAGS)
+    CXXFLAGS += $(DEBUG) $(EXTRA_CXXFLAGS)
+    LDRFLAGS += $(DEBUG) $(EXTRA_LDRFLAGS)
+else ifeq ($(CMODE),DEBUGOPT)
+    FFLAGS   += $(DEBUGOPT) $(EXTRA_FFLAGS)
+    CCFLAGS  += $(DEBUGOPT) $(EXTRA_CCFLAGS)
+    CXXFLAGS += $(DEBUGOPT) $(EXTRA_CXXFLAGS)
+    LDRFLAGS += $(DEBUGOPT) $(EXTRA_LDRFLAGS)
+else ifeq ($(CMODE),PROFILE)
+    FFLAGS   += $(PROFILE) $(EXTRA_FFLAGS)
+    CCFLAGS  += $(PROFILE) $(EXTRA_CCFLAGS)
+    CXXFLAGS += $(PROFILE) $(EXTRA_CXXFLAGS)
+    LDRFLAGS += $(PROFILE) $(EXTRA_LDRFLAGS)
+endif
+
+## Configure Libraries and files to link appropriate matrix solver
+LIBS = $(LAPACK_LIBDIR) $(LAPACK_LIBS) $(SOLVER_LIBDIR) $(SOLVER_LIBS)
+
+## Choose Driver and Compiler for MPI/nonMPI
+ifeq ($(MPI_MODE),ON)
+    FC     = $(FC_MPI)
+    CC     = $(CC_MPI)
+    CXX    = $(CXX_MPI)
+    LDR    = $(LDR_MPI)
+    DRIVER = $(DRIVER_MPI)
+    FCL    = $(FC_MPI)
+    CCL    = $(CC_MPI)
+    CXXL   = $(CXX_MPI)
+    LDRL   = $(LDR_MPI)
+else
+    DRIVER = $(DRIVER_SM)
+    FCL    = $(FC)
+    CCL    = $(CC)
+    CXXL   = $(CXX)
+    LDRL   = $(LDR)
+endif

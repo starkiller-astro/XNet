@@ -6,38 +6,77 @@
 # Additional library definitions and compile/link flags
 #-------------------------------------------------------------------------------
 
-## CUDA Runtime
+## CUDA
 ifeq (,$(filter $(MACHINE),$(CRAY_MACHINE)))
-    CUDA_DIR ?= /usr/local/cuda
+    CUDA_DIR ?= /usr/nvidia/cuda
 else
-    ifdef CUDATOOLKIT_HOME
-        CUDA_DIR ?= $(CUDATOOLKIT_HOME)
-    else ifdef CRAY_CUDATOOLKIT_DIR
-        CUDA_DIR ?= $(CRAY_CUDATOOLKIT_DIR)
-    else
-        CUDA_DIR ?= /opt/nvidia/cudatoolkit/default
-    endif
+    CUDA_DIR ?= /opt/cray/nvidia/default
 endif
 CUDA_INC    = -I$(CUDA_DIR)/include
 CUDA_LIBDIR = -L$(CUDA_DIR)/lib64
-CUDA_LIBS   = -lcudart -lcuda
+CUDA_LIBS   = -lcuda
 CUDA_SRC    = cudaf.f90
-CUDA_OBJ    = $(addsuffix .o,$(basename $(CUDA_SRC)))
+
+## CUDA Profiling Tools Interfaces (CUPTI)
+CUPTI_DIR   ?= $(CUDA_DIR)/extras/CUPTI
+CUPTI_INC    = -I$(CUPTI_DIR)/include
+CUPTI_LIBDIR = -L$(CUPTI_DIR)/lib64
+CUPTI_LIBS   = -lcupti
+
+## CUDA Toolkit
+ifeq (,$(filter $(MACHINE),$(CRAY_MACHINE)))
+    CUDADIR              ?= /usr/local/cuda
+    CUDATK_DIR           ?= $(CUDADIR)
+else
+    CRAY_CUDATOOLKIT_DIR ?= /opt/nvidia/cudatoolkit/default
+    CUDATK_DIR           ?= $(CRAY_CUDATOOLKIT_DIR)
+endif
+CUDATK_INC    = -I$(CUDATK_DIR)/include
+CUDATK_LIBDIR = -L$(CUDATK_DIR)/lib64 $(CUDA_LIBDIR)
+CUDATK_LIBS   = -lcublas -lcudart $(CUDA_LIBS)
+CUDATK_LINK   = $(CUDATK_LIBDIR) $(CUDATK_LIBS)
+CUDATK_SRC    = cublasf.f90 $(CUDA_SRC)
+CUDATK_OBJ    = $(addsuffix .o,$(basename $(CUDATK_SRC)))
 
 ## cuBLAS
-CUBLAS_INC    = $(CUDA_INC)
-CUBLAS_LIBDIR = $(CUDA_LIBDIR)
-CUBLAS_LIBS   = -lcublas $(CUDA_LIBS)
-CUBLAS_SRC    = cublasf.f90 $(CUDA_SRC)
+CUBLAS_INC    = $(CUDATK_INC)
+CUBLAS_LIBDIR = $(CUDATK_LIBDIR)
+CUBLAS_LIBS   = $(CUDATK_LIBS)
+CUBLAS_LINK   = $(CUBLAS_LIBDIR) $(CUBLAS_LIBS)
+CUBLAS_SRC    = $(CUDATK_SRC)
 CUBLAS_OBJ    = $(addsuffix .o,$(basename $(CUBLAS_SRC)))
+CUBLAS_EXTRA  = -DHAVE_CUBLAS
+
+## CULA
+CULA_ROOT   ?= /sw/xk6/cula-dense/R14/binary
+CULA_DIR     = $(CULA_ROOT)
+CULA_INC     = -I$(CULA_DIR)/include $(CUBLAS_INC)
+CULA_LIBDIR  = -L$(CULA_DIR)/lib64 $(CUBLAS_LIBDIR)
+CULA_LIBS    = -lcula_core -lcula_lapack $(CUBLAS_LIBS)
+CULA_LINK    = $(CULA_LIBDIR) $(CULA_LIBS)
+CULA_SRC     = culaf.f90 $(CUBLAS_SRC)
+CULA_OBJ     = $(addsuffix .o,$(basename $(CULA_SRC)))
 
 ## MAGMA
-MAGMA_DIR   ?= $(HOME)/magma-2.4.0
+MAGMA_DIR   ?= $(HOME)/magma-1.6.0
 MAGMA_INC    = -I$(MAGMA_DIR)/include $(CUBLAS_INC)
 MAGMA_LIBDIR = -L$(MAGMA_DIR)/lib $(CUBLAS_LIBDIR)
 MAGMA_LIBS   = -lmagma $(CUBLAS_LIBS)
+MAGMA_LINK   = $(MAGMA_LIBDIR) $(MAGMA_LIBS)
 MAGMA_SRC    = magmaf.f90 $(CUBLAS_SRC)
 MAGMA_OBJ    = $(addsuffix .o,$(basename $(MAGMA_SRC)))
+MAGMA_EXTRA  = -DADD_
+
+## Cray LibSci ACC
+ifneq ($(FC),ftn)
+    LIBSCIACC_DIR    = /opt/cray/libsci_acc/default/$(PE_ENV)/$(PE_VER)/$(CRAY_CPU_TARGET)
+    LIBSCIACC_INC    = -I$(LIBSCIACC_DIR)/include $(CUBLAS_INC) $(LIBSCI_INC)
+    LIBSCIACC_LIBDIR = -L$(LIBSCIACC_DIR)/lib $(CUBLAS_LIBDIR) $(LIBSCI_LIBDIR)
+    LIBSCIACC_LIBS   = -lsci_acc_$(LC_PE_ENV)_nv35 $(CUBLAS_LIBS) $(LIBSCI_LIBS)
+    LIBSCIACC_LINK   = $(LIBSCIACC_LIBDIR) $(LIBSCIACC_LIBS)
+endif
+LIBSCIACC_SRC = libscif.f90 $(CUBLAS_SRC)
+LIBSCIACC_OBJ = $(addsuffix .o,$(basename $(LIBSCIACC_SRC)))
 
 ## Performance Application Programming Interface (PAPI)
 PAPI_DIR   ?= /opt/cray/papi/default
@@ -51,19 +90,14 @@ GPU_LAPACK_LIBS   = $($(GPU_LAPACK_VER)_LIBS)
 GPU_LAPACK_SRC    = $($(GPU_LAPACK_VER)_SRC)
 GPU_LAPACK_OBJ    = $(addsuffix .o,$(basename $(GPU_LAPACK_SRC)))
 
-GPU_LAPACK_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.f90 %.F90,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.f %.F,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_CU  = $(addsuffix .o,$(basename $(filter %.cu,$(GPU_LAPACK_SRC))))
-
 #-------------------------------------------------------------------------------
 # Additional compiler definitions and flags
 #-------------------------------------------------------------------------------
 
 ## Definitions and flags for compiling CUDA source code
-NVCC      = nvcc
-NVCCFLAGS = -O3 -m64
+NVCC       = nvcc
+NVCCFLAGS  = -O3 -m64# --ptxas-options=-v# -Xcompiler "-fno-strict-aliasing -fPIC"
+NVLDFLAGS  = -m64
 
 ifneq ($(findstring Tesla, $(GPU_TARGET)),)
     GPU_TARGET += sm10 sm13
@@ -73,15 +107,6 @@ ifneq ($(findstring Fermi, $(GPU_TARGET)),)
 endif
 ifneq ($(findstring Kepler, $(GPU_TARGET)),)
     GPU_TARGET += sm30 sm35
-endif
-ifneq ($(findstring Maxwell, $(GPU_TARGET)),)
-    GPU_TARGET += sm50
-endif
-ifneq ($(findstring Pascal, $(GPU_TARGET)),)
-    GPU_TARGET += sm60
-endif
-ifneq ($(findstring Volta, $(GPU_TARGET)),)
-    GPU_TARGET += sm70
 endif
 
 ifneq ($(findstring sm10, $(GPU_TARGET)),)
@@ -99,72 +124,81 @@ endif
 ifneq ($(findstring sm35, $(GPU_TARGET)),)
     NVCCFLAGS += -gencode arch=compute_35,code=sm_35
 endif
-ifneq ($(findstring sm50, $(GPU_TARGET)),)
-    NVCCFLAGS += -gencode arch=compute_50,code=sm_50
-endif
-ifneq ($(findstring sm60, $(GPU_TARGET)),)
-    NVCCFLAGS += -gencode arch=compute_60,code=sm_60
-endif
-ifneq ($(findstring sm70, $(GPU_TARGET)),)
-    NVCCFLAGS += -gencode arch=compute_70,code=sm_70
-endif
 
 ## Flags for compiling with OpenACC
 ifeq ($(GPU_MODE),ON)
-    FLAGS += $(OPENACC)
+    ifeq ($(PE_ENV),PGI)
+        CCFLAGS  += -acc -ta=nvidia
+        CXXFLAGS += -acc -ta=nvidia
+        FFLAGS   += -acc -ta=nvidia
+        LDRFLAGS += -acc -ta=nvidia
+    endif
+else ifeq ($(PE_ENV),CRAY)
+    CCFLAGS  += -h noacc
+    CXXFLAGS += -h noacc
+    FFLAGS   += -h noacc
+    LDRFLAGS += -h noacc
 endif
 
 ## Flags for using a GPU solver package
 ifeq ($(MATRIX_SOLVER),gpu)
-  LAPACK_INC    += $(GPU_LAPACK_INC)
-  LAPACK_LIBDIR += $(GPU_LAPACK_LIBDIR)
-  LAPACK_LIBS   += $(GPU_LAPACK_LIBS)
-  LAPACK_SRC    += $(GPU_LAPACK_SRC)
-  LAPACK_OBJ    += $(GPU_LAPACK_OBJ)
-  BASE          += xnet_gpu.o
+  LIBS       += $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+  EXTRA_OBJ  += $(LAPACK_OBJ)
+  LIBS       += $(GPU_LAPACK_LIBDIR) $(GPU_LAPACK_LIBS)
+  EXTRA_OBJ  += $(GPU_LAPACK_OBJ)
+  LAPACK_INC += $(GPU_LAPACK_INC)
 endif
 
 #-------------------------------------------------------------------------------
 # Additional Makefile targets/rules/dependencies
 #-------------------------------------------------------------------------------
 
-xnet_magma: $(BASE) jacobian_magma.o $(MAGMA_OBJ) $(LAPACK_OBJ) $(DRIVER)
-	$(LDR) $(LDFLAGS) -o xnet_magma$(MPI_SFX) \
-	    $(BASE) jacobian_gpu.o $(notdir $(MAGMA_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
-	    $(MAGMA_LIBDIR) $(MAGMA_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+xnet_MAGMA: $(BASE) jacobian_gpu.o $(DRIVER) $(MAGMA_OBJ) $(EXTRA_OBJ)
+	$(LDR) $(LDRFLAGS) -o xnet_magma \
+	    $(BASE) jacobian_gpu.o $(notdir $(MAGMA_OBJ)) $(DRIVER) \
+	    $(MAGMA_LINK) $(EXTRA_LINK)
 
-xnet_gpu: $(BASE) jacobian_gpu.o $(CUBLAS_OBJ) $(LAPACK_OBJ) $(DRIVER)
-	$(LDR) $(LDFLAGS) -o xnet_gpu$(MPI_SFX) \
-	    $(BASE) jacobian_gpu.o $(notdir $(CUBLAS_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
-	    $(CUBLAS_LIBDIR) $(CUBLAS_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+xnet_CUBLAS: $(BASE) jacobian_gpu.o $(DRIVER) $(MAGMA_OBJ) $(EXTRA_OBJ)
+	$(LDR) $(LDRFLAGS) -o xnet_cula \
+	    $(BASE) jacobian_gpu.o $(notdir $(MAGMA_OBJ)) $(DRIVER) \
+	    $(MAGMA_LINK) $(EXTRA_LINK)
 
-$(GPU_LAPACK_OBJ_F90): %.o: %.f90
-	$(FC) $(FFLAGS) $(F90FLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
-$(GPU_LAPACK_OBJ_F): %.o: %.f
-	$(FC) $(FFLAGS) $(F77FLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
-$(GPU_LAPACK_OBJ_C): %.o: %.c
-	$(CC) $(CFLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
-$(GPU_LAPACK_OBJ_CPP): %.o: %.cpp
+xnet_CULA: $(BASE) jacobian_gpu.o $(DRIVER) $(CULA_OBJ) $(EXTRA_OBJ)
+	$(LDR) $(LDRFLAGS) -o xnet_cula \
+	    $(BASE) jacobian_gpu.o $(notdir $(CULA_OBJ)) $(DRIVER) \
+	    $(CULA_LINK) $(EXTRA_LINK)
+
+xnet_LIBSCIACC: $(BASE) jacobian_gpu.o $(DRIVER) $(LIBSCIACC_OBJ) $(EXTRA_OBJ)
+	$(LDR) $(LDRFLAGS) -o xnet_libsciacc \
+	    $(BASE) jacobian_gpu.o $(notdir $(LIBSCIACC_OBJ)) $(DRIVER) \
+	    $(LIBSCIACC_LINK) $(EXTRA_LINK)
+
+ifeq ($(suffix GPU_LAPACK_SRC),.f90)
+$(GPU_LAPACK_OBJ): %.o: %.f90
+	$(FC) $(FFLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
+else ifeq ($(suffix GPU_LAPACK_SRC),.f)
+$(GPU_LAPACK_OBJ): %.o: %.f
+	$(FC) $(FFLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
+else ifeq ($(suffix GPU_LAPACK_SRC),.c)
+$(GPU_LAPACK_OBJ): %.o: %.c
+	$(CC) $(CCFLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
+else ifeq ($(suffix GPU_LAPACK_SRC),.cpp)
+$(GPU_LAPACK_OBJ): %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
-$(GPU_LAPACK_OBJ_CU): %.o: %.cu
-	$(NVCC) $(NVCCLAGS) $(CUDA_INC) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
+else ifeq ($(suffix GPU_LAPACK_SRC),.cu)
+$(GPU_LAPACK_OBJ): %.o: %.cu
+	$(NVCC) $(NVCCLAGS) $(CUDATK_INC) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
+endif
 
 %.o: %.cu
-	$(NVCC) $(NVCCFLAGS) $(CUDA_INC) -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) $(CUDATK_INC)
+%.o: %.c
+	$(CC) $(CCFLAGS) -c $< -o $@
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 ## Dependencies
-magmaf.o: cudaf.o
+magmaf.o:  cudaf.o
+culaf.o:   cudaf.o
 cublasf.o: cudaf.o
-cudaf.o: cudaf.f90
-cudaf.f90: cudaDeviceProp.fh
-cudaDeviceProp.fh: $(CUDA_DIR)/include/driver_types.h
-	@sed -n '/struct.*cudaDeviceProp/,/}/ p' $(CUDA_DIR)/include/driver_types.h | \
-		sed -e '1 d' \
-		    -e 's/^{$\/type, bind(c) :: cudaDeviceProp/' \
-		    -e 's/^\s*\<char\>\s*/  character(c_char) :: /' \
-		    -e 's/^\s*\<size_t\>\s*/  integer(c_size_t) :: /' \
-		    -e 's/^\s*\<int\>\s*/  integer(c_int)    :: /' \
-		    -e 's/\[\([0-9]\+\)\]/(\1)/' \
-		    -e 's/;\(\s*\)\/\*\(.*\)\*\// \1!\2/' \
-		    -e 's/;.*$\//' \
-		    -e 's/^}$\/end type cudaDeviceProp/' > $@
+libscif.o: cudaf.o

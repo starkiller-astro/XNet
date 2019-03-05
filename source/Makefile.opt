@@ -3,8 +3,10 @@
 ##
 
 ## Select compile mode
-CMODE ?= OPT
+CMODE ?= OPTIMIZE
 #CMODE ?= DEBUG
+#CMODE ?= DEBUGOPT
+#CMODE ?= PROFILE
 
 ## Choose executable name
 EXE = xnet
@@ -30,6 +32,8 @@ EOS ?= BAHCALL
 
 ## Choose matrix solver package 
 #MATRIX_SOLVER = PARDISO
+#MATRIX_SOLVER = MA28
+#MATRIX_SOLVER = MA41
 #MATRIX_SOLVER = MA48
 #MATRIX_SOLVER = gpu
 MATRIX_SOLVER ?= dense
@@ -41,22 +45,25 @@ MATRIX_SOLVER ?= dense
 #LAPACK_VER = LIBSCI
 #LAPACK_VER = ATLAS
 #LAPACK_VER = ACCEL
-LAPACK_VER = NETLIB
+#LAPACK_VER = NETLIB
 #LAPACK_VER = PGIBLAS
 
 ## Define alternative GPU LAPACK/BLAS package (Default is LIBSCIACC for Cray machines, MAGMA otherwise)
 #GPU_LAPACK_VER = MAGMA
+#GPU_LAPACK_VER = CULA
 #GPU_LAPACK_VER = CUBLAS
+#GPU_LAPACK_VER = LIBSCIACC
 
 ## GPU_TARGET specifies for which GPUs you want to compile
-##    Tesla   - NVIDIA compute capability 1.x cards
-##    Fermi   - NVIDIA compute capability 2.x cards
-##    Kepler  - NVIDIA compute capability 3.x cards
-##    Maxwell - NVIDIA compute capability 5.x cards
-##    Pascal  - NVIDIA compute capability 6.x cards
-##    Volta   - NVIDIA compute capability 7.x cards
+##    Tesla  - NVIDIA compute capability 1.x cards
+##    Fermi  - NVIDIA compute capability 2.x cards
+##    Kepler - NVIDIA compute capability 3.x cards
 GPU_TARGET ?= Kepler
 
 # Optional features for XNet, uncomment to enable
+#NSE_OBJ = nse.o 	# Also uncomment lines labeled !NSE or use sed -i 's/^\!\(.*\!NSE\)/ \1/' *.f90
+			#        Comment lines labeled !NSE with   sed -i 's/^[^\!]\(.*\!NSE\)/!\1/' *.f90
+FFN_OBJ = ffn.o 	# Also uncomment lines labeled !FFN or use sed -i 's/^\!\(.*\!FFN\)/ \1/' *.f90
+			#        Comment lines labeled !FFN with   sed -i 's/^[^\!]\(.*\!FFN\)/!\1/' *.f90
 #NNU_OBJ = nu_nucleus.o	# Also uncomment lines labeled !NNU or use sed -i 's/^\!\(.*\!NNU\)/ \1/' *.f90
 			#        Comment lines labeled !NNU with   sed -i 's/^[^\!]\(.*\!NNU\)/!\1/' *.f90
