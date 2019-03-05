@@ -1,0 +1,40 @@
+# 3 Line Problem Description
+2000 timesteps
+diagnostic level 1
+New parameters
+# Control Parameters
+1  	  Initial Zone
+1  	  # of Zones
+1         solver 1 BE 2 BD 3 QSE
+1         adaptive flag 1= run adaptive 0= run one solver only  
+350000 	  Max. number of timesteps before quit
+9 	  Max. iterations per step
+0	  Diagnostic Output Level
+2  	  Per Timestep Output Level
+0         Include Weak Reactions (yes=1,no=0,only=-1)
+1 	  Include Screening (yes=1)
+1	  Convergence Condition (Mass Cons.=0, (dY/Y small)=1)
+5.00E-00  Max. Abundance Change per timestep 
+1.00E-07  Smallest Abundance used in timestep calculation
+1.00E-06  Mass Conservation Limit
+1.00E-05  Convergence Criterion
+1.00E-25  Lower Abundance limit, smaller abundances =0
+1.50E+00  Max. Factor to change dt in a timestep tdelmm dt1=1D-01*min*dt
+# Nuclei to be output in the ev_files
+    n    p  he4  c12  o16 ne20 mg24  s32 si28 ti44 ni56 fe58 cr50 si30 
+# ASCII output filename root, network will append zone number
+ev
+# Binary output filename root, network will append zone number
+tso
+# Nuclear Data Directory
+../../../inputs/Data_test 
+# Initial Abundance and Thermodynamic Trajectory Files
+../../../inputs/Data_test/ab_co
+../../../inputs/th_81e9
+../../../inputs/7948_th_june08                       
+../../inputs/ab_7948
+
+ 
+ 
+
+      

@@ -1,0 +1,26 @@
+#   Macro definaitions for Eagle, the ORNL IBM SP
+.SUFFIXES: $(SUFFIXES) .f90
+#
+#   Packages and libraries
+# HDF libraries
+HDF_LOC= 
+HDF    = 
+#MPI    =               # MPI libraries
+# LAPACK libraries
+LAPACK_LOC =  
+#LAPACK      = -lacml 
+LAPACK = -Wl,-framework veclib
+# OpenMP
+OMP= -mp 
+# Compiler and options
+FC      =  ifort 
+R8      = -r8
+OPT     = -fastsse -fpic # -mp=nonuma 
+TRAP    = 
+DEBUG   = -g   $(TRAP) 
+PROFILE = -pg -ql -Mprof
+MOD     = 
+FFLAGS  = $(OPT) $(R8) $(DEBUG)
+# Loader and options
+LDR     = ifort
+LDRFLAGS= $(OPT) $(R8) $(DEBUG)
