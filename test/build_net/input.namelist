@@ -1,0 +1,58 @@
+&file_input
+
+  raw_data_dir = './raw_data'
+  new_data_dir = './new_data'
+
+/
+
+&net_input
+
+  sunet_fname = 'sunet'
+
+  netsu_data_dir = './reaclib_data'
+  netsu_in_fname = '20180621default'
+  reaclib_ver = 1
+  no910 = .true.
+
+  netsu_out_fname = 'netsu'
+
+/
+
+&ffn_input
+
+  netweak_flag = .false.
+  netweak_data_dir = './ffn_data'
+
+  netweak_in_fname = 'lmpffnoda.data'
+
+  netweak_out_fname = 'netweak'
+
+/
+
+&partf_input
+
+  netwinv_data_dir = './partf_data'
+  netwinv_in_fname = 'winvne_JINAv22'
+
+  mass_data_dir = './mass_data'
+  ame03_fname = 'mass_ame03.dat'
+  ame03extrap_fname = 'mass_ame03extrap.dat'
+  ame11_fname = 'mass_ame11.dat'
+  ame11extrap_fname = 'mass_ame11extrap.dat'
+  reac1_fname = 'mass_reac1.dat'
+  frdm_fname = 'mass_frdm.dat'
+
+  netwinv_out_fname = 'netwinv'
+
+/
+
+&nnu_input
+
+  netneutr_flag = .false.
+  netneutr_data_dir = './neutrino_data'
+
+  netneutr_in_fname = 'neutrino.data'
+
+  netneutr_out_fname = 'netneutr'
+
+/
