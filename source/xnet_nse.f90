@@ -9,26 +9,26 @@ Module xnet_nse
   !-------------------------------------------------------------------------------------------------
   Use nuclear_data, Only: ny, aa, nn, zz, ia, iz, izmax, be, mex, mm, nname, angm, g, ng, t9i, &
     & zseq, zseq53, zseqi
-  Use xnet_constants, Only: avn, bi, bip1, bok, cds, clt, e2, epmev, hbar, kbi, ln_2, m_n, m_p, &
+  Use xnet_constants, Only: avn, bi, bip1, bok, cds, clt, e2, epmev, hbar, kbi, m_n, m_p, &
     & m_e, pi, third
   Use xnet_controls, Only: idiag, itsout, iscrn, lun_diag, lun_stderr, lun_stdout
   Use xnet_types, Only: dp
-  Use xnet_util, Only: xnet_terminate
+  Use xnet_util, Only: xnet_terminate, safe_exp
   Implicit None
   Private
 
   ! NSE solver parameters
   Integer, Parameter  :: lnorm    = 0       ! Which lnorm to use for determining convergence
-  Real(dp), Parameter :: tolu     = 1.0e-14 ! Tolerance for testu convergence test
-  Real(dp), Parameter :: tolf     = 1.0e-8  ! Tolerance for testf convergence test
-  Real(dp), Parameter :: tolmin   = 1.0e-14 ! Tolerance for minimum change per iteration
-  Real(dp), Parameter :: tolbeta  = 3.0e-15 ! Tolerance for minimum allowable "step" length
-  Real(dp), Parameter :: maxstep0 = 2.0     ! Scaling factor for maximum relative "step" length
-  Real(dp), Parameter :: typf     = 1.0
+  Real(dp), Parameter :: tolu     = 1.0e-14_dp ! Tolerance for testu convergence test
+  Real(dp), Parameter :: tolf     = 1.0e-8_dp  ! Tolerance for testf convergence test
+  Real(dp), Parameter :: tolmin   = 1.0e-14_dp ! Tolerance for minimum change per iteration
+  Real(dp), Parameter :: tolbeta  = 3.0e-15_dp ! Tolerance for minimum allowable "step" length
+  Real(dp), Parameter :: maxstep0 = 2.0_dp     ! Scaling factor for maximum relative "step" length
+  Real(dp), Parameter :: typf     = 1.0_dp
 
-  Real(dp), Parameter :: alpha  = 1.0e-8
-  Real(dp), Parameter :: gamma1 = 0.1
-  Real(dp), Parameter :: gamma2 = 0.5
+  Real(dp), Parameter :: alpha  = 1.0e-8_dp
+  Real(dp), Parameter :: gamma1 = 0.1_dp
+  Real(dp), Parameter :: gamma2 = 0.5_dp
 
   Integer, Parameter :: nritmax = 200 ! Maximum number of Newton-Raphson iterations
   Integer, Parameter :: lsitmax = 30  ! Maximum number of line-search iterations
@@ -73,31 +73,11 @@ Module xnet_nse
   Integer :: iye_fe, iye_fe_l, iye_fe_u    ! closest Z/A to Ye from above and below (common Fe/Ni isotopes)
   Integer :: i_nn, i_pp, i_he4, i_si28, i_ni56
   Real(dp) :: zatst, za_min, za_max
+  !$omp threadprivate(iye_za,iye_za_l,iye_za_u,iye_hvy,iye_hvy_l,iye_hvy_u,iye_fe,iye_fe_l,iye_fe_u,zatst)
 
   Public :: nse_initialize, nse_solve
 
 Contains
-
-  Function safe_exp( x ) Result( y )
-    !-----------------------------------------------------------------------------------------------
-    ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
-
-    ! Input variables
-    Real(dp), Intent(in) :: x(:)
-
-    ! Function variable
-    Real(dp) :: y(size(x))
-
-    ! Local variables
-    Real(dp), Parameter :: exp_max = maxexponent(1.0)*ln_2*0.99
-    Real(dp), Parameter :: exp_min = minexponent(1.0)*ln_2*0.99
-
-    y(:) = exp( min( exp_max, max( exp_min, x(:) ) ) )
-
-    Return
-  End Function safe_exp
 
   Function l2norm( x ) Result( y )
     !-----------------------------------------------------------------------------------------------
@@ -169,37 +149,24 @@ Contains
     Allocate (ggnse(ny))
     ! Allocate NSE screening arrays
     Allocate (hnse(izmax))
+
+    ! Typical relative values for u and f(u) (used for scaling)
+    typu(:)    = (/ 1.0_dp, 1.0_dp /)
+    typfvec(:) = (/ 1.0_dp, 1.0_dp /)
+    scaleu(:)    = 1.0_dp / typu(:)
+    scalefvec(:) = 1.0_dp / typfvec(:)
     !$omp end parallel
 
     ! Pre-calculate m_i^{5/2}, which is used throughout the solver
     Allocate (mm52(ny))
     mm52(:) = mm(:) * mm(:) * sqrt(mm(:))
 
-    ! Typical relative values for u and f(u) (used for scaling)
-    typu(:)    = (/ 1.0, 1.0 /)
-    typfvec(:) = (/ 1.0, 1.0 /)
-    scaleu(:)    = 1.0 / typu(:)
-    scalefvec(:) = 1.0 / typfvec(:)
-
     Allocate (intz(ny))
-    Where ( zz(:) > 1.0 )
+    Where ( zz(:) > 1.0_dp )
       intz(:) = nint(zz(:))
     ElseWhere
       intz(:) = 1
     EndWhere
-
-    Return
-  End Subroutine nse_initialize
-
-  Subroutine nse_inuc
-    !-----------------------------------------------------------------------------------------------
-    ! This routine determines the species indiecs for some characteristic nuclei to be used in the
-    ! nse_guess routine.
-    !-----------------------------------------------------------------------------------------------
-    Implicit None
-
-    ! Local variables
-    Integer :: i
 
     ! Find maximally bound nucleus
     ibe = maxloc( be(:)/aa(:), 1 )
@@ -210,79 +177,17 @@ Contains
     za_min = zz(iza_min)/aa(iza_min)
     za_max = zz(iza_max)/aa(iza_max)
 
-    ! Find A>1 nuclei with Z/A closest to Ye from above and below
-    iye_za_u = ny + 1 - minloc( abs(zz(ny:1:-1)/aa(ny:1:-1) - yense), 1, &
-      &                         mask = zz(ny:1:-1)/aa(ny:1:-1) >= yense .and. &
-      &                                ia(ny:1:-1) > 1 )
-    If ( iye_za_u > ny ) Then
-      iye_za_u = iza_max
-    EndIf
-    iye_za_l = minloc( abs(zz(:)/aa(:) - yense), 1, &
-      &                mask = zz(:)/aa(:) <= yense .and. &
-      &                       ia(:) > 1 )
-    If ( iye_za_l < 1 ) Then
-      iye_za_l = iza_min
-    EndIf
-    zatst = zz(iye_za_l)/aa(iye_za_l)
-    If ( abs(zatst - yense) < abs(zz(iye_za_u)/aa(iye_za_u) - yense) ) Then
-      iye_za = iye_za_l
-    Else
-      iye_za = iye_za_u
-    EndIf
-
-    ! Find Z>=20 nuclei with Z/A closest to Ye from above and below
+    ! Find min/max Z/A for Z>=20 nuclei
     ihvy_min = minloc( zz(:)/aa(:), 1, mask = iz(:) >= 20 )
     ihvy_max = ny + 1 - maxloc( zz(ny:1:-1)/aa(ny:1:-1), 1, mask = iz(ny:1:-1) >= 20 )
 
-    iye_hvy_u = ny + 1 - minloc( abs(zz(ny:1:-1)/aa(ny:1:-1) - yense), 1, &
-      &                         mask = zz(ny:1:-1)/aa(ny:1:-1) >= yense .and. &
-      &                                iz(ny:1:-1) >= 20 )
-    If ( iye_hvy_u > ny ) Then
-      iye_hvy_u = ihvy_max
-    EndIf
-    iye_hvy_l = minloc( abs(zz(:)/aa(:) - yense), 1, &
-      &                mask = zz(:)/aa(:) <= yense .and. &
-      &                       iz(:) >= 20 )
-    If ( iye_hvy_l < 1 ) Then
-      iye_hvy_l = ihvy_min
-    EndIf
-    zatst = zz(iye_hvy_l)/aa(iye_hvy_l)
-    If ( abs(zatst - yense) < abs(zz(iye_hvy_u)/aa(iye_hvy_u) - yense) ) Then
-      iye_hvy = iye_hvy_l
-    Else
-      iye_hvy = iye_hvy_u
-    EndIf
-
-    ! Find common Fe/Ni nuclei with Z/A closest to Ye from above and below
+    ! Find min/max Z/A for common Fe/Ni nuclei
     ife_min = minloc( zz(:)/aa(:), 1, ( iz(:) == 26 .or. iz(:) == 28 ) .and. &
       &                               ( ia(:) == 52 .or. ia(:) == 54 .or. &
       &                                 ia(:) == 56 .or. ia(:) == 58 ) )
     ife_max = ny + 1 - maxloc( zz(ny:1:-1)/aa(ny:1:-1), 1, ( iz(ny:1:-1) == 26 .or. iz(ny:1:-1) == 28) .and. &
       &                                                    ( ia(ny:1:-1) == 52 .or. ia(ny:1:-1) == 54 .or. &
       &                                                      ia(ny:1:-1) == 56 .or. ia(ny:1:-1) == 58) )
-
-    iye_fe_u = ny + 1 - minloc( abs(zz(ny:1:-1)/aa(ny:1:-1) - yense), 1, &
-      &                         mask = zz(ny:1:-1)/aa(ny:1:-1) >= yense .and. &
-      &                                ( iz(ny:1:-1) == 26 .or. iz(ny:1:-1) == 28 ) .and. &
-      &                                ( ia(ny:1:-1) == 52 .or. ia(ny:1:-1) == 54 .or. &
-      &                                  ia(ny:1:-1) == 56 .or. ia(ny:1:-1) == 58 ) )
-    If ( iye_fe_u > ny ) Then
-      iye_fe_u = ife_max
-    EndIf
-    iye_fe_l = minloc( abs(zz(:)/aa(:) - yense), 1, &
-    &                  mask = zz(:)/aa(:) <= yense .and. &
-    &                         ( iz(:) == 26 .or. iz(:) == 28 ) .and. &
-    &                         ( ia(:) == 52 .or. ia(:) == 54 .or. &
-    &                           ia(:) == 56 .or. ia(:) == 58 ) )
-    If ( iye_fe_l < 1 ) Then
-      iye_fe_l = ihvy_min
-    EndIf
-    zatst = zz(iye_fe_l)/aa(iye_fe_l)
-    If ( abs(zatst - yense) < abs(zz(iye_fe_u)/aa(iye_fe_u) - yense) ) Then
-      iye_fe = iye_fe_l
-    Else
-      iye_fe = iye_fe_u
-    EndIf
 
     i_nn = 0 ; i_pp = 0 ; i_he4 = 0 ; i_si28 = 0 ; i_ni56 = 0
     Do i = 1, ny
@@ -311,6 +216,83 @@ Contains
     If ( i_ni56 == 0 ) Then
       Write(lun_stdout,'(2(a,a5))') 'Could not find ','ni56','; setting i_ni56 to max B/A: ',nname(ibe)
       i_ni56 = ibe
+    EndIf
+
+    Return
+  End Subroutine nse_initialize
+
+  Subroutine nse_inuc
+    !-----------------------------------------------------------------------------------------------
+    ! This routine determines the species indiecs for some characteristic nuclei to be used in the
+    ! nse_guess routine.
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Local variables
+    Integer :: i
+
+    ! Find A>1 nuclei with Z/A closest to Ye from above and below
+    iye_za_u = ny + 1 - minloc( abs(zz(ny:1:-1)/aa(ny:1:-1) - yense), 1, &
+      &                         mask = zz(ny:1:-1)/aa(ny:1:-1) >= yense .and. &
+      &                                ia(ny:1:-1) > 1 )
+    If ( iye_za_u > ny ) Then
+      iye_za_u = iza_max
+    EndIf
+    iye_za_l = minloc( abs(zz(:)/aa(:) - yense), 1, &
+      &                mask = zz(:)/aa(:) <= yense .and. &
+      &                       ia(:) > 1 )
+    If ( iye_za_l < 1 ) Then
+      iye_za_l = iza_min
+    EndIf
+    zatst = zz(iye_za_l)/aa(iye_za_l)
+    If ( abs(zatst - yense) < abs(zz(iye_za_u)/aa(iye_za_u) - yense) ) Then
+      iye_za = iye_za_l
+    Else
+      iye_za = iye_za_u
+    EndIf
+
+    ! Find Z>=20 nuclei with Z/A closest to Ye from above and below
+    iye_hvy_u = ny + 1 - minloc( abs(zz(ny:1:-1)/aa(ny:1:-1) - yense), 1, &
+      &                         mask = zz(ny:1:-1)/aa(ny:1:-1) >= yense .and. &
+      &                                iz(ny:1:-1) >= 20 )
+    If ( iye_hvy_u > ny ) Then
+      iye_hvy_u = ihvy_max
+    EndIf
+    iye_hvy_l = minloc( abs(zz(:)/aa(:) - yense), 1, &
+      &                mask = zz(:)/aa(:) <= yense .and. &
+      &                       iz(:) >= 20 )
+    If ( iye_hvy_l < 1 ) Then
+      iye_hvy_l = ihvy_min
+    EndIf
+    zatst = zz(iye_hvy_l)/aa(iye_hvy_l)
+    If ( abs(zatst - yense) < abs(zz(iye_hvy_u)/aa(iye_hvy_u) - yense) ) Then
+      iye_hvy = iye_hvy_l
+    Else
+      iye_hvy = iye_hvy_u
+    EndIf
+
+    ! Find common Fe/Ni nuclei with Z/A closest to Ye from above and below
+    iye_fe_u = ny + 1 - minloc( abs(zz(ny:1:-1)/aa(ny:1:-1) - yense), 1, &
+      &                         mask = zz(ny:1:-1)/aa(ny:1:-1) >= yense .and. &
+      &                                ( iz(ny:1:-1) == 26 .or. iz(ny:1:-1) == 28 ) .and. &
+      &                                ( ia(ny:1:-1) == 52 .or. ia(ny:1:-1) == 54 .or. &
+      &                                  ia(ny:1:-1) == 56 .or. ia(ny:1:-1) == 58 ) )
+    If ( iye_fe_u > ny ) Then
+      iye_fe_u = ife_max
+    EndIf
+    iye_fe_l = minloc( abs(zz(:)/aa(:) - yense), 1, &
+    &                  mask = zz(:)/aa(:) <= yense .and. &
+    &                         ( iz(:) == 26 .or. iz(:) == 28 ) .and. &
+    &                         ( ia(:) == 52 .or. ia(:) == 54 .or. &
+    &                           ia(:) == 56 .or. ia(:) == 58 ) )
+    If ( iye_fe_l < 1 ) Then
+      iye_fe_l = ihvy_min
+    EndIf
+    zatst = zz(iye_fe_l)/aa(iye_fe_l)
+    If ( abs(zatst - yense) < abs(zz(iye_fe_u)/aa(iye_fe_u) - yense) ) Then
+      iye_fe = iye_fe_l
+    Else
+      iye_fe = iye_fe_u
     EndIf
 
     Return
@@ -351,9 +333,9 @@ Contains
     use_CP98 = .true.
     Call nse_screen_CP98
     Do iguess = 1, 6
-      unse(:) = 0.0
-      xnse(:) = 0.0
-      ynse(:) = 0.0
+      unse(:) = 0.0_dp
+      xnse(:) = 0.0_dp
+      ynse(:) = 0.0_dp
       Call nse_guess(iguess,uvec)
       Call nse_nr(uvec,check,info)
       If ( info > 0 ) Exit
@@ -384,10 +366,10 @@ Contains
       ! Try different guesses if both screening approaches fail
       If ( info <= 0 ) Then
         Do iguess = 1, 6
-          unse(:) = 0.0
-          xnse(:) = 0.0
-          ynse(:) = 0.0
-          hnse(:) = 0.0
+          unse(:) = 0.0_dp
+          xnse(:) = 0.0_dp
+          ynse(:) = 0.0_dp
+          hnse(:) = 0.0_dp
           Call nse_guess(iguess,uvec)
           Call nse_screen
           Call nse_nr(uvec,check,info)
@@ -506,16 +488,16 @@ Contains
     Real(dp), Intent(out) :: uvec(2)
 
     ! Local variables
-    Real(dp), Parameter :: xmax = 1.0, xmin = 0.0
+    Real(dp), Parameter :: xmax = 1.0_dp, xmin = 0.0_dp
     Real(dp) :: bkt, c1, c2, det, lhs(2,2), rhs(2)
     Real(dp) :: za_ye(2)
     Integer :: i, ii, iye(2)
 
-    If ( iguess <= 1 .and. ( (rhonse <= 1.0e5 .and. t9nse >= 7.0) .or. &
-      &                      (rhonse <= 1.0e6 .and. t9nse >= 8.0) .or. &
-      &                      (rhonse <= 1.0e7 .and. t9nse >= 9.0) .or. &
-      &                      (rhonse <= 1.0e8 .and. t9nse >= 11.0) .or. &
-      &                      (rhonse <= 1.0e9 .and. t9nse >= 14.0) ) ) Then
+    If ( iguess <= 1 .and. ( (rhonse <= 1.0e5_dp .and. t9nse >= 7.0_dp) .or. &
+      &                      (rhonse <= 1.0e6_dp .and. t9nse >= 8.0_dp) .or. &
+      &                      (rhonse <= 1.0e7_dp .and. t9nse >= 9.0_dp) .or. &
+      &                      (rhonse <= 1.0e8_dp .and. t9nse >= 11.0_dp) .or. &
+      &                      (rhonse <= 1.0e9_dp .and. t9nse >= 14.0_dp) ) ) Then
       iye(1) = i_nn
       iye(2) = i_pp
     ElseIf ( yense < za_min ) Then
@@ -538,7 +520,7 @@ Contains
         iye(1) = i_nn
         iye(2) = i_pp
       EndIf
-    ElseIf ( yense >= za_min .and. yense < 0.5 ) Then
+    ElseIf ( yense >= za_min .and. yense < 0.5_dp ) Then
       If ( iguess <= 1 ) Then
         iye(1) = iye_fe_l
         iye(2) = iye_fe_u
@@ -559,7 +541,7 @@ Contains
         iye(1) = i_nn
         iye(2) = i_pp
       EndIf
-    ElseIf ( yense >= 0.501 ) Then
+    ElseIf ( yense >= 0.501_dp ) Then
       If ( iguess <= 1 ) Then
         iye(1) = i_ni56
         iye(2) = i_pp
@@ -604,19 +586,19 @@ Contains
     If ( iguess /= 0 ) Then
       If ( iye(1) == iye(2) ) Then
         xnse(iye(1)) = xmax
-      ElseIf ( abs(za_ye(1) - za_ye(2)) < tiny(0.0) ) Then
+      ElseIf ( abs(za_ye(1) - za_ye(2)) < tiny(0.0_dp) ) Then
         xnse(iye(1)) = xmax
         xnse(iye(2)) = xmin
       Else
         xnse(iye(1)) = max( min( ( yense - za_ye(2) ) / ( za_ye(1) - za_ye(2) ), xmax ), xmin )
-        xnse(iye(2)) = max( min( 1.0 - xnse(iye(1)), xmax ), xmin )
+        xnse(iye(2)) = max( min( 1.0_dp - xnse(iye(1)), xmax ), xmin )
       EndIf
       ynse(iye) = xnse(iye) / (mm(iye)*avn)
 
     ! If iguess = 0, assume we have a full composition, so update the guess by picking the
     ! most abundant species with Z/A closest to Ye (i.e. the least wrong nuclei)
     Else
-      iye(:) = minloc( (zz(:)*xnse(:)/aa(:) - yense)**2 + (xnse(:)-1.0)**2, 1 )
+      iye(:) = minloc( (zz(:)*xnse(:)/aa(:) - yense)**2 + (xnse(:)-1.0_dp)**2, 1 )
 !     iye(1) = i_nn
 !     iye(2) = i_pp
     EndIf
@@ -626,10 +608,10 @@ Contains
 
     ! Calculate the initial guess (un and up)
     bkt = t9nse*bok*epmev
-    c1 = bkt / (2.0*pi*hbar*hbar*epmev*epmev)
+    c1 = bkt / (2.0_dp*pi*hbar*hbar*epmev*epmev)
 
     ! Assume un = up if only using 1 species
-    If ( iye(1) == iye(2) .or. any( xnse(iye(:)) <= 0.0 ) ) Then
+    If ( iye(1) == iye(2) .or. any( xnse(iye(:)) <= 0.0_dp ) ) Then
 
       ii = maxloc( xnse(iye(:)), 1 )
       i = iye(ii)
@@ -683,9 +665,9 @@ Contains
 
     ! Useful scalars
     bkt = t9nse*bok*epmev
-    bktinv = 1.0 / bkt
-    rhoinv = 1.0 / rhonse
-    c1 = bkt / (2.0*pi*hbar*hbar*epmev*epmev)
+    bktinv = 1.0_dp / bkt
+    rhoinv = 1.0_dp / rhonse
+    c1 = bkt / (2.0_dp*pi*hbar*hbar*epmev*epmev)
     c1 = c1*sqrt(c1)
 
     ! Evaluate chemical potentials and mass fractions
@@ -701,7 +683,7 @@ Contains
         & nname(jj), temp(jj), unse(jj)*bktinv, be(jj)*epmev*bktinv, hnse(intz(jj))
     EndIf
     xnse(:) = xnse(:) * safe_exp( temp(:) )
-    xnse(:) = max( 0.0, min( 1.0, xnse(:) ) )
+    xnse(:) = max( 0.0_dp, min( 1.0_dp, xnse(:) ) )
     ynse(:) = xnse(:) / (mm(:)*avn)
 
     Return
@@ -723,7 +705,7 @@ Contains
     Call nse_composition(uvec)
 
     ! Mass and charge conservation
-    fvec(1) = sum(xnse(:)) - 1.0
+    fvec(1) = sum(xnse(:)) - 1.0_dp
 
     temp(:) = (zz(:)-aa(:)*yense)/(avn*mm(:))
     fvec(2) = sum( temp(:)*xnse(:) )
@@ -752,7 +734,7 @@ Contains
 
     ! Useful scalars
     bkt = t9nse*bok*epmev
-    bktinv = 1.0 / bkt
+    bktinv = 1.0_dp / bkt
 
     If ( feval ) Then
       ! Update RHS
@@ -808,14 +790,14 @@ Contains
     knr(:) = 0
 
     n = size(uvec)
-    testu = 0.0
-    testg = 0.0
+    testu = 0.0_dp
+    testg = 0.0_dp
 
     ! Check for initial guess being correct, but with stricter tolerance
     f = nse_func(uvec)
     knrtot(:) = knrtot(:) + knr(:)
     testf = maxval( abs(scalefvec(:)*fvec(:)), 1 )
-    If ( testf < 0.01*tolf ) Then
+    If ( testf < 0.01_dp*tolf ) Then
       check = .false.
       info = 1
       Return
@@ -840,7 +822,7 @@ Contains
 
       ! Get estimate of condition number
       det = fjac(1,1)*fjac(2,2) - fjac(1,2)*fjac(2,1)
-      If ( det > 2.0*epsilon(det) ) Then
+      If ( det > 2.0_dp*epsilon(det) ) Then
         fjaci(1,1) = fjac(2,2)
         fjaci(2,1) = -fjac(2,1)
         fjaci(1,2) = -fjac(1,2)
@@ -848,11 +830,11 @@ Contains
         fjaci(:,:) = fjaci(:,:) / det
         jcond = maxval( sum( abs(fjac(:,:)), 1 ) ) * maxval( sum( abs(fjaci(:,:)), 1 ) )
       Else
-        jcond = 0.0
+        jcond = 0.0_dp
       EndIf
 
       ! Check for singular matrix
-      If ( det <= 2.0*epsilon(det) .or. jcond*tolmin > 1.0 ) Then
+      If ( det <= 2.0_dp*epsilon(det) .or. jcond*tolmin > 1.0_dp ) Then
         If ( itsout >=1 ) Write(lun_stdout,'(a,2es23.15)') 'Singular Matrix: det,jcond = ',det,jcond
         info = -7
         Exit
@@ -863,7 +845,7 @@ Contains
       pvec(2) = -fvec(1)*fjaci(2,1) - fvec(2)*fjaci(2,2)
 
       ! Calculate gradient of fvec, gvec
-      Call dgemv('T',n,n,1.0,fjac,n,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0,gvec,1)
+      Call dgemv('T',n,n,1.0_dp,fjac,n,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0_dp,gvec,1)
 
 !     pvec(:) = -fvec(:)
 !     Call dgesv(n,1,fjac,n,ipiv,pvec,n,info)
@@ -881,15 +863,15 @@ Contains
       If ( lnorm == 0 ) Then
         testf = maxval( abs(scalefvec(:)*fvec(:)), 1 )
         testu = maxval( abs(uvec(:)-uvec0(:)) / merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ), 1 )
-        testg = maxval( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5*n), 1 )
+        testg = maxval( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5_dp*n), 1 )
       ElseIf ( lnorm == 1 ) Then
         testf = sum( abs(scalefvec(:)*fvec(:)) )
         testu = sum( abs(uvec(:)-uvec0(:)) / merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) )
-        testg = sum( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5*n) )
+        testg = sum( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5_dp*n) )
       ElseIf ( lnorm == 2 ) Then
         testf = l2norm( abs(scalefvec(:)*fvec(:)) )
         testu = l2norm( abs(uvec(:)-uvec0(:)) / merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) )
-        testg = l2norm( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5*n) )
+        testg = l2norm( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5_dp*n) )
       EndIf
 
       If ( itsout >= 2 ) Write(lun_stdout,'(3i3,8es23.15)') &
@@ -966,7 +948,7 @@ Contains
     ! Calculate "slope" of step direction
     slope = dot_prod( gvec(:), pvec(:) )
 !   slope = -dot_prod( fvec(:), fvec(:) )
-    If ( slope >= 0.0 ) Then
+    If ( slope >= 0.0_dp ) Then
       info = -4
       Return
     EndIf
@@ -977,8 +959,8 @@ Contains
 
     ! Start with full step length
     fk(:) = f0
-    betak(0) = 0.0
-    betak(1) = 1.0
+    betak(0) = 0.0_dp
+    betak(1) = 1.0_dp
     slopek(:) = slope
     If ( itsout >= 4 ) Write(lun_stdout,'(3x,i3,3x,4es23.15)') 0, beta_min, f0, f0+alpha*betak(1)*slope, slope
 
@@ -1005,26 +987,26 @@ Contains
         f = f0
         Exit
       ElseIf ( lsit > 200 ) Then
-        Call dgemv('T',2,2,1.0,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0,gveck,1)
+        Call dgemv('T',2,2,1.0_dp,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0_dp,gveck,1)
         slopek(lsit) = dot_prod( gveck(:), pvec(:) )
         rhs(:) = fk(lsit-3:lsit)
         vmat(:,1) = betak(lsit-3:lsit)**3
         vmat(:,2) = betak(lsit-3:lsit)**2
         vmat(:,3) = betak(lsit-3:lsit)
-        vmat(:,4) = 1.0
+        vmat(:,4) = 1.0_dp
       ElseIf ( lsit > 100 ) Then
-        Call dgemv('T',2,2,1.0,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0,gveck,1)
+        Call dgemv('T',2,2,1.0_dp,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0_dp,gveck,1)
         slopek(lsit) = dot_prod( gveck(:), pvec(:) )
         rhs(1:2) = fk(lsit-1:lsit)
         rhs(3:4) = slopek(lsit-1:lsit)
         vmat(1:2,1) = betak(lsit-1:lsit)**3
-        vmat(3:4,1) = 3.0*betak(lsit-1:lsit)**2
+        vmat(3:4,1) = 3.0_dp*betak(lsit-1:lsit)**2
         vmat(1:2,2) = betak(lsit-1:lsit)**2
-        vmat(3:4,2) = 2.0*betak(lsit-1:lsit)
+        vmat(3:4,2) = 2.0_dp*betak(lsit-1:lsit)
         vmat(1:2,3) = betak(lsit-1:lsit)
-        vmat(3:4,3) = 1.0
-        vmat(1:2,4) = 1.0
-        vmat(3:4,4) = 0.0
+        vmat(3:4,3) = 1.0_dp
+        vmat(1:2,4) = 1.0_dp
+        vmat(3:4,4) = 0.0_dp
       ElseIf ( lsit >= 1 ) Then
 !       ! Choose next step length that minimizes the quadratic interpolating polynomial:
 !       !     P = c1*beta(k+1)^2 + c2*beta(k+1) + c3
@@ -1036,50 +1018,50 @@ Contains
         ! Find betak(k+1) that minimizes the cubic interpolating polynomial:
         !     P = c1*beta(k+1)^3 + c2*beta(k+1)^2 + c3*beta(k+1) + c4
         !     Get the coefficients from cn = V^-1 * y_n, for Vandermonde matrix V
-        Call dgemv('T',2,2,1.0,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0,gveck,1)
+        Call dgemv('T',2,2,1.0_dp,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0_dp,gveck,1)
         slopek(lsit) = dot_prod( gveck(:), pvec(:) )
         rhs(1:2) = fk(lsit-1:lsit)
         rhs(3:4) = slopek(lsit-1:lsit)
         vmat(1:2,1) = betak(lsit-1:lsit)**3
-        vmat(3:4,1) = 3.0*betak(lsit-1:lsit)**2
+        vmat(3:4,1) = 3.0_dp*betak(lsit-1:lsit)**2
         vmat(1:2,2) = betak(lsit-1:lsit)**2
-        vmat(3:4,2) = 2.0*betak(lsit-1:lsit)
+        vmat(3:4,2) = 2.0_dp*betak(lsit-1:lsit)
         vmat(1:2,3) = betak(lsit-1:lsit)
-        vmat(3:4,3) = 1.0
-        vmat(1:2,4) = 1.0
-        vmat(3:4,4) = 0.0
+        vmat(3:4,3) = 1.0_dp
+        vmat(1:2,4) = 1.0_dp
+        vmat(3:4,4) = 0.0_dp
       Else
-        Call dgemv('T',2,2,1.0,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0,gveck,1)
+        Call dgemv('T',2,2,1.0_dp,fjac,2,scalefvec(:)*scalefvec(:)*fvec(:),1,0.0_dp,gveck,1)
         slopek(lsit) = dot_prod( gveck(:), pvec(:) )
 
         ! We know fk(0), slope(0), fk(k-1), and fk(k), so...
         rhs(1:3) = fk(lsit-2:lsit)
         rhs(4) = slopek(lsit-2)
         vmat(1:3,1) = betak(lsit-2:lsit)**3
-        vmat(4,1) = 3.0*betak(lsit-2)**2
+        vmat(4,1) = 3.0_dp*betak(lsit-2)**2
         vmat(1:3,2) = betak(lsit-2:lsit)**2
-        vmat(4,2) = 2.0*betak(lsit-2)
+        vmat(4,2) = 2.0_dp*betak(lsit-2)
         vmat(1:3,3) = betak(lsit-2:lsit)
-        vmat(4,3) = 1.0
-        vmat(1:3,4) = 1.0
-        vmat(4,4) = 0.0
+        vmat(4,3) = 1.0_dp
+        vmat(1:3,4) = 1.0_dp
+        vmat(4,4) = 0.0_dp
       EndIf
 
       Call dgesv(4,1,vmat,4,ipiv,rhs,4,ierr)
       c1 = rhs(1)
       c2 = rhs(2)
       c3 = rhs(3)
-      If ( abs(c1) < tiny(0.0) ) Then
+      If ( abs(c1) < tiny(0.0_dp) ) Then
         ! Minimum of quadratic interpolating polynomial
-        betak(lsit+1) = -0.5*c3/c2
+        betak(lsit+1) = -0.5_dp*c3/c2
       Else
         ! Choose the root which corresponds to the local minimum
-        disc = c2*c2 - 3.0*c1*c3
-        If ( disc < 0.0 ) Then
+        disc = c2*c2 - 3.0_dp*c1*c3
+        If ( disc < 0.0_dp ) Then
           ! No roots exist, so set next step length to its upper-bound
           betak(lsit+1) = gamma2*betak(lsit)
-        ElseIf ( c2 < 0.0 ) Then
-          betak(lsit+1) = (-c2 + sqrt(disc)) / (3.0*c1)
+        ElseIf ( c2 < 0.0_dp ) Then
+          betak(lsit+1) = (-c2 + sqrt(disc)) / (3.0_dp*c1)
         Else
           betak(lsit+1) = -c3 / (c2 + sqrt(disc))
         EndIf
@@ -1113,7 +1095,7 @@ Contains
 
     Call nse_jac(uvec,.true.)
 
-    nse_func = 0.5 * dot_prod( scalefvec(:)*fvec(:), scalefvec(:)*fvec(:) )
+    nse_func = 0.5_dp * dot_prod( scalefvec(:)*fvec(:), scalefvec(:)*fvec(:) )
 
     Return
   End Function nse_func
@@ -1140,7 +1122,7 @@ Contains
       ggnse(1:ny) = g(ng,1:ny)
     Case Default
       rdt9 = (t9nse-t9i(ii-1)) / (t9i(ii)-t9i(ii-1))
-      ggnse(1:ny) = exp( rdt9*log(g(ii,1:ny)) + (1-rdt9)*log(g(ii-1,1:ny)) )
+      ggnse(1:ny) = safe_exp( rdt9*log(g(ii,1:ny)) + (1-rdt9)*log(g(ii-1,1:ny)) )
     End Select
 
     Return
@@ -1156,7 +1138,7 @@ Contains
 
     ! Local variables
     Integer, Parameter :: iz1 = 1
-    Real(dp), Parameter :: z1 = 1.0
+    Real(dp), Parameter :: z1 = 1.0_dp
 
     Integer :: i, j, iz2(izmax-1), izc(izmax-1)
     Real(dp) :: z2(izmax-1), zetaw(izmax-1), zetai(izmax-1)
@@ -1165,7 +1147,7 @@ Contains
     Real(dp) :: cv, etae, detaedt9, ztot, ztilde, zinter, lambda0, gammae, dztildedt9, s0
 
     If ( iscrn <= 0 ) Then
-      hnse = 0.0
+      hnse = 0.0_dp
     ElseIf ( .not. use_CP98 ) Then
 
       ! Call EOS to get plasma quantities
@@ -1175,11 +1157,11 @@ Contains
       !---------------------------------------------------------------------------------------------
       ! Calculate screening energies as a function of Z, for prescriptions that follow this approach
       !---------------------------------------------------------------------------------------------
-      gammaz(0) = 0.0
+      gammaz(0) = 0.0_dp
       gammaz(1:izmax+1) = gammae * zseq53(1:izmax+1)
-      fhi(0) = 0.0
+      fhi(0) = 0.0_dp
       fhi(1:izmax+1) = kbi * zinter * lambda0**bi * zseqi(1:izmax+1)
-      fhs(0) = 0.0
+      fhs(0) = 0.0_dp
       fhs(1:izmax+1) = + cds(1) * gammaz(1:izmax+1) &
         &              + cds(2) * gammaz(1:izmax+1)**cds(5) / cds(5) &
         &              + cds(3) * log(gammaz(1:izmax+1)) &
@@ -1202,12 +1184,12 @@ Contains
 
       ! Select screening factor
       Where ( iz2 == 0 )
-        h0 = 0.0
-      ElseWhere ( lambda12 < 0.1 )
+        h0 = 0.0_dp
+      ElseWhere ( lambda12 < 0.1_dp )
         h0 = hw
-      ElseWhere ( lambda12 < 2.0 )
+      ElseWhere ( lambda12 < 2.0_dp )
         h0 = hi
-      ElseWhere ( lambda12 > 5.0 )
+      ElseWhere ( lambda12 > 5.0_dp )
         h0 = hs
       ElseWhere ( hi < hs )
         h0 = hi
@@ -1216,8 +1198,8 @@ Contains
       EndWhere
 
       ! Add succeeding screening factors
-      hnse(1) = 0.0
-      s0 = 0.0
+      hnse(1) = 0.0_dp
+      s0 = 0.0_dp
       Do j = 2, izmax
         s0 = s0 + h0(j-1)
         hnse(j) = s0
@@ -1239,10 +1221,10 @@ Contains
 
     ! Local variables
     Integer, Parameter :: iz1 = 1
-    Real(dp), Parameter :: z1 = 1.0
-    Real(dp), Parameter :: a1 = -0.9052, a2 = 0.6322
-    Real(dp), Parameter :: a2inv = 1.0 / a2
-    Real(dp), Parameter :: a3 = -sqrt(3.0)*2.0 - a1*sqrt(a2inv)
+    Real(dp), Parameter :: z1 = 1.0_dp
+    Real(dp), Parameter :: a1 = -0.9052_dp, a2 = 0.6322_dp
+    Real(dp), Parameter :: a2inv = 1.0_dp / a2
+    Real(dp), Parameter :: a3 = -sqrt(3.0_dp)*2.0_dp - a1*sqrt(a2inv)
 
     Integer :: j, iz2(izmax), izc(izmax)
     Real(dp) :: z2(izmax), h0(izmax)
@@ -1251,9 +1233,9 @@ Contains
     Real(dp) :: gz, z, sqrtgz, ae
 
     If ( iscrn <= 0 ) Then
-      hnse = 0.0
+      hnse = 0.0_dp
     Else
-      ae = (3.0 / (4.0*pi*avn*rhonse*yense))**third ! electron-sphere radius
+      ae = (3.0_dp / (4.0_dp*pi*avn*rhonse*yense))**third ! electron-sphere radius
       gammae = e2 / (ae*t9nse*bok) ! electron Coulomb coupling parameter
 
       !---------------------------------------------------------------------------------------------
@@ -1262,8 +1244,8 @@ Contains
       Do j = 1, izmax+1
         gz = gammae * zseq53(j)
         sqrtgz = sqrt(gz)
-        fh0(j) = a1*( sqrt(gz*(a2 + gz)) - a2*log(sqrt(gz*a2inv) + sqrt(1.0+gz*a2inv)) ) &
-          &      + 2.0*a3*( sqrtgz - atan(sqrtgz) )
+        fh0(j) = a1*( sqrt(gz*(a2 + gz)) - a2*log(sqrt(gz*a2inv) + sqrt(1.0_dp+gz*a2inv)) ) &
+          &      + 2.0_dp*a3*( sqrtgz - atan(sqrtgz) )
       EndDo
 
       z2 = zseq(1:izmax)
@@ -1273,7 +1255,7 @@ Contains
 !     h0 = z2*fh0(1) - fh0
       h0 = fh0(iz1) + fh0(iz2) - fh0(iz1+iz2)
 
-      hnse(1) = 0.0
+      hnse(1) = 0.0_dp
       hnse(2:izmax) = z2(2:izmax)*fh0(1) - fh0(2:izmax)
 
       If ( idiag >= 5 ) Write(lun_diag,"(a5,3i6,23x,es23.15,69x,es23.15)") &
