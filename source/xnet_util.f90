@@ -39,6 +39,29 @@ Contains
     Return
   End Function ifactorial
 
+  Function safe_exp( x ) Result( y )
+    !-----------------------------------------------------------------------------------------------
+    ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_constants, Only: ln_2
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: x(:)
+
+    ! Function variable
+    Real(dp) :: y(size(x))
+
+    ! Local variables
+    Real(dp), Parameter :: exp_max = maxexponent(1.0_dp)*ln_2*0.99_dp
+    Real(dp), Parameter :: exp_min = minexponent(1.0_dp)*ln_2*0.99_dp
+
+    y(:) = exp( min( exp_max, max( exp_min, x(:) ) ) )
+
+    Return
+  End Function safe_exp
+
   Integer Function getNewUnit(unit)
     !-----------------------------------------------------------------------------------------------
     ! Get a free unit number within range 7-999.
