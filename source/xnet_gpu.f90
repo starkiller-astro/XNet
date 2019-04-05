@@ -24,7 +24,7 @@ Contains
 
     ! Local variables
     Integer :: istat
-    Type(cudaDeviceProp) :: deviceProp
+    !Type(cudaDeviceProp) :: deviceProp
 
     ! Initialize GPU
     istat = cudaGetDeviceCount(deviceCount)
@@ -36,8 +36,8 @@ Contains
       Write(lun_stdout,*) 'No CUDA capable device found'
     EndIf
 
-    istat = cudaGetDeviceProperties(deviceProp,mydevice)
-    If ( istat /= cudaSuccess ) Write(lun_stdout,*) "cudaGetDeviceProperties, istat", istat
+    !istat = cudaGetDeviceProperties(deviceProp,mydevice)
+    !If ( istat /= cudaSuccess ) Write(lun_stdout,*) "cudaGetDeviceProperties, istat", istat
 
      !Write(lun_stdout,'(3(a,i2),3(a,i1))') "Rank: ",myid,", Device: ",mydevice+1," (of ",deviceCount, &
      !  "), CC: ",deviceProp%major,".",deviceProp%minor,", ComputeMode: ",deviceProp%computeMode

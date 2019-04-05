@@ -8,7 +8,11 @@
 
 ## CUDA Runtime
 ifeq (,$(filter $(MACHINE),$(CRAY_MACHINE)))
-    CUDA_DIR ?= /usr/local/cuda
+    ifdef OLCF_CUDA_ROOT
+        CUDA_DIR ?= $(OLCF_CUDA_ROOT)
+    else
+        CUDA_DIR ?= /usr/local/cuda
+    endif
 else
     ifdef CUDATOOLKIT_HOME
         CUDA_DIR ?= $(CUDATOOLKIT_HOME)
@@ -119,7 +123,6 @@ ifeq ($(MATRIX_SOLVER),gpu)
   LAPACK_INC    += $(GPU_LAPACK_INC)
   LAPACK_LIBDIR += $(GPU_LAPACK_LIBDIR)
   LAPACK_LIBS   += $(GPU_LAPACK_LIBS)
-  LAPACK_SRC    += $(GPU_LAPACK_SRC)
   LAPACK_OBJ    += $(GPU_LAPACK_OBJ)
   BASE          += xnet_gpu.o
 endif
@@ -156,9 +159,9 @@ $(GPU_LAPACK_OBJ_CU): %.o: %.cu
 magmaf.o: cudaf.o
 cublasf.o: cudaf.o
 cudaf.o: cudaf.f90
-cudaf.f90: cudaDeviceProp.fh
-cudaDeviceProp.fh: $(CUDA_DIR)/include/driver_types.h
-	@sed -n '/struct.*cudaDeviceProp/,/}/ p' $(CUDA_DIR)/include/driver_types.h | \
+#cudaf.f90: cudaDeviceProp.fh
+#cudaDeviceProp.fh: $(CUDA_DIR)/include/driver_types.h
+#	@sed -n '/struct.*cudaDeviceProp/,/}/ p' $(CUDA_DIR)/include/driver_types.h | \
 		sed -e '1 d' \
 		    -e 's/^{$\/type, bind(c) :: cudaDeviceProp/' \
 		    -e 's/^\s*\<char\>\s*/  character(c_char) :: /' \

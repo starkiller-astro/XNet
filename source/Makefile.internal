@@ -6,7 +6,11 @@
 UNAME_S ?= $(shell uname -s)
 
 ## Define programming envionment if not set or on a Cray machine
-MACHINE=$(shell echo $${HOSTNAME%%.*} | sed 's/\(-[a-zA-Z0-9]*\)\?[0-9]*$$//')
+ifdef LMOD_SYSTEM_NAME
+    MACHINE=$(LMOD_SYSTEM_NAME)
+else
+    MACHINE=$(shell echo $${HOSTNAME%%.*} | sed 's/\(-[a-zA-Z0-9]*\)\?[0-9]*$$//')
+endif
 CRAY_MACHINE = \
                titan \
                edison \
@@ -19,16 +23,25 @@ IBM_MACHINE = \
               summitdev \
               mira
 
+## Get PE_ENV from LMOD if being used
+ifdef LMOD_FAMILY_COMPILER
+    PE_ENV = $(shell echo $${LMOD_FAMILY_COMPILER} | tr a-z A-Z)
+    ifeq ($(PE_ENV),GCC)
+        PE_ENV = GNU
+    endif
+endif
+
 ## Use GNU compiler by default, unless PE_ENV environment variable already set
 PE_ENV  ?= GNU
 #PE_ENV  ?= PGI
 #PE_ENV  ?= INTEL
 #PE_ENV  ?= CRAY
+#PE_ENV  ?= XL
 
-FC_MPI  = mpif90
+FC_MPI  = mpifort
 CC_MPI  = mpicc
 CXX_MPI = mpic++
-LDR_MPI = mpif90
+LDR_MPI = mpifort
 
 ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
     LAPACK_VER     ?= NETLIB
@@ -55,7 +68,7 @@ endif
 #-------------------------------------------------------------------------------
 
 ifeq ($(PE_ENV),INTEL)
-    
+
     ifneq ($(FC),ftn)
         FC      = ifort
         CC      = icc
@@ -93,13 +106,13 @@ ifeq ($(PE_ENV),INTEL)
     # C-specific flags
     OPT_CFLAGS    =
     DEBUG_CFLAGS  = -check all
-    
+
     # Linker flags
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
 
 else ifeq ($(PE_ENV),PGI)
-    
+
     ifneq ($(FC),ftn)
         FC        = pgfortran
         CC        = pgcc
@@ -108,7 +121,11 @@ else ifeq ($(PE_ENV),PGI)
 
         ARCHOPT   =
     endif
-    INLINE        = -Mipa=fast,inline,safe
+    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+        INLINE    = -Mipa=fast,inline,safe
+    else
+        INLINE    =
+    endif
 
     # generic flags
     OPT_FLAGS     = -g -gopt -fast $(ARCHOPT) $(INLINE)
@@ -135,13 +152,13 @@ else ifeq ($(PE_ENV),PGI)
     # C-specific flags
     OPT_CFLAGS    =
     DEBUG_CFLAGS  =
-    
+
     # Linker flags
     OPT_LDFLAGS   = -pgc++libs
     DEBUG_LDFLAGS = -pgc++libs
 
 else ifeq ($(PE_ENV),GNU)
-    
+
     ifneq ($(FC),ftn)
         FC        = gfortran
         CC        = gcc
@@ -178,13 +195,13 @@ else ifeq ($(PE_ENV),GNU)
     # C-specific flags
     OPT_CFLAGS    =
     DEBUG_CFLAGS  =
-    
+
     # Linker flags
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
 
 else ifeq ($(PE_ENV),CRAY)
-    
+
     INLINE_DB     = ./$(EXE)_inline
     INLINE        = -h wp -h pl=$(INLINE_DB)
 
@@ -213,7 +230,49 @@ else ifeq ($(PE_ENV),CRAY)
     # C-specific flags
     OPT_CFLAGS    =
     DEBUG_CFLAGS  =
-    
+
+    # Linker flags
+    OPT_LDFLAGS   =
+    DEBUG_LDFLAGS =
+
+else ifeq ($(PE_ENV),XL)
+
+    ifneq ($(FC),ftn)
+        FC        = xlf2008_r
+        CC        = xlc_r
+        CXX       = xlc++_r
+        LDR       = xlf90_r
+
+        ARCHOPT   = -qarch=pwr9 -qtune=pwr9
+    endif
+
+    # generic flags
+    OPT_FLAGS     = -g -O3 -w $(ARCHOPT) $(INLINE)
+    DEBUG_FLAGS   = -g -O0 -qnosmp -qstrict=all -qfloat=rngchk -qcheck=all:nounset \
+                    -qflttrap=enable:invalid:nanq:overflow:zerodivide -qsigtrap=xl__trcedump
+
+    ifeq ($(OPENMP_MODE),ON)
+        OPENMP    = -qsmp=omp:noauto
+    else
+        OPENMP    =
+    endif
+    ifeq ($(OPENACC_MODE),ON)
+        OPENACC   =
+    else
+        OPENACC   =
+    endif
+
+    # Fortran-specific flags
+    OPT_FFLAGS    =
+    DEBUG_FFLAGS  = -qflag=i:w
+
+    F77FLAGS      = -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg -qfixed
+    F90FLAGS      = -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg
+
+    # C-specific flags
+    OPT_CFLAGS    =
+    DEBUG_CFLAGS  =
+
     # Linker flags
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
@@ -282,6 +341,12 @@ NETLIB_SRC     = $(addprefix $(NETLIB_DIR)/, \
 		 $(LAPACK_UTL_SRC) $(LAPACK_AUX_SRC) \
 		 dgetrf.f dgetrs.f dgesv.f)
 NETLIB_OBJ     = $(addsuffix .o,$(basename $(NETLIB_SRC)))
+
+## ESSL
+ESSL_DIR    ?= $(OLCF_ESSL_ROOT)
+ESSL_INC     = -I$(ESSL_DIR)/include
+ESSL_LIBDIR  = -L$(ESSL_DIR)/lib64
+ESSL_LIBS    = -lessl
 
 ## PGI
 PGIBLAS_LIBS = -llapack -lblas
