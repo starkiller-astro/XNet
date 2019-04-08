@@ -782,14 +782,11 @@ Contains
           Where ( yt(1:ny,izb) < ymin )
             yt(1:ny,izb) = 0.0_dp
             dy(1:ny,izb) = -zt0(1:ny,0,izb) - acor(1:ny,izb)
-            acor(1:ny,izb) = -zt0(1:ny,0,izb)
           ElseWhere ( yt(1:ny,izb) * aa(1:ny) > 1.0_dp )
             yt(1:ny,izb) = 1.0_dp / aa(1:ny)
             dy(1:ny,izb) = 1.0_dp / aa(1:ny) - zt0(1:ny,0,izb) - acor(1:ny,izb)
-            acor(1:ny,izb) = 1.0_dp / aa(1:ny) - zt0(1:ny,0,izb)
-          ElseWhere
-            acor(1:ny,izb) = acor(1:ny,izb) + dy(:,izb)
           EndWhere
+          acor(1:ny,izb) = acor(1:ny,izb) + dy(:,izb)
           dvec(1:ny) = dy(:,izb)
           If ( iheat > 0 ) Then
             dvec(neq) = dt9(izb)
@@ -834,6 +831,10 @@ Contains
               acnrm(izb) = del(izb)
             EndIf
 
+          ElseIf ( nit_nrslv(izb) == max_it_nrslv ) Then
+            iterate(izb) = .false.
+            nit_nr(izb) = max_it_nr + 1
+
           ! If at max number of NR iterations or if diverging....
           ElseIf ( nit_nr(izb) == max_it_nr .or. &
               ( nit_nr(izb) > 1 .and. del(izb) > delp(izb) * cr_diverge ) ) Then
@@ -866,11 +867,11 @@ Contains
       Do izb = 1, nzbatchmx
         izone = izb + szbatch - 1
         If ( converged(izb) ) Then
-          Write(lun_diag,"(a,2i5,i3,3es12.4,2i3)") &
-            'BDF NR Conv',kstep,izone,nit_nr(izb),dcon(izb),gamratio(izb),crate(izb),j_age(izb),p_age(izb)
-        ElseIf ( nit_nr(izb) > max_it_nr ) Then
-          Write(lun_diag,"(a,2i5,i3,3es12.4,2i3)") &
-            'BDF NR Failure',kstep,izone,nit_nr(izb),dcon(izb),gamratio(izb),crate(izb),j_age(izb),p_age(izb)
+          Write(lun_diag,"(a,2i5,2i3,3es12.4,2i3)") &
+            'BDF NR Conv',kstep,izone,nit_nr(izb),nit_nrslv(izb),dcon(izb),gamratio(izb),crate(izb),j_age(izb),p_age(izb)
+        ElseIf ( bdf_active(izb) ) Then
+          Write(lun_diag,"(a,2i5,2i3,3es12.4,2i3)") &
+            'BDF NR Failure',kstep,izone,nit_nr(izb),nit_nrslv(izb),dcon(izb),gamratio(izb),crate(izb),j_age(izb),p_age(izb)
         EndIf
       EndDo
     EndIf
