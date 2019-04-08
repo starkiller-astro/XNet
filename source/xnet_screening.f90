@@ -27,6 +27,13 @@ Module xnet_screening
   ! Screening factors from Table 4 of Graboske+ (1973)
   Real(dp), Allocatable :: zeta2w(:), zeta2i(:), zeta3w(:), zeta3i(:), zeta4w(:), zeta4i(:) ! Reaction charge parameter
 
+  Real(dp), Parameter :: lam_1 = 0.1_dp
+  Real(dp), Parameter :: lam_2 = 0.125_dp
+  Real(dp), Parameter :: lam_3 = 2.0_dp
+  Real(dp), Parameter :: lam_4 = 2.15_dp
+  Real(dp), Parameter :: lam_5 = 4.85_dp
+  Real(dp), Parameter :: lam_6 = 5.0_dp
+
 Contains
 
   Subroutine screening_init
@@ -152,10 +159,13 @@ Contains
     Integer :: j, mu, izb, izone
     Real(dp), Dimension(nreac(2)) :: h2w, h2i, h2s, lambda12
     Real(dp), Dimension(nreac(2)) :: dh2wdt9, dh2idt9, dh2sdt9
+    Real(dp), Dimension(nreac(2)) :: theta12iw, theta12is, theta12si
     Real(dp), Dimension(nreac(3)) :: h3w, h3i, h3s, lambda123
     Real(dp), Dimension(nreac(3)) :: dh3wdt9, dh3idt9, dh3sdt9
+    Real(dp), Dimension(nreac(3)) :: theta123iw, theta123is, theta123si
     Real(dp), Dimension(nreac(4)) :: h4w, h4i, h4s, lambda1234
     Real(dp), Dimension(nreac(4)) :: dh4wdt9, dh4idt9, dh4sdt9
+    Real(dp), Dimension(nreac(4)) :: theta1234iw, theta1234is, theta1234si
     Real(dp), Dimension(0:izmax+2) :: gammaz, fhs, fhi, dfhsdt9
     Real(dp) :: ztilde, zinter, lambda0, gammae, dztildedt9
     Logical, Pointer :: mask(:)
@@ -203,19 +213,24 @@ Contains
         ! Strong screening from Dewitt & Slattery (2003) using linear mixing.
         h2s = fhs(iz21) + fhs(iz22) - fhs(iz2c)
 
+        ! Blending factors
+        theta12iw = max( 0.0, min( 1.0, (lambda12 - lam_1) / (lam_2 - lam_1) ) )
+        theta12is = max( 0.0, min( 1.0, (lambda12 - lam_5) / (lam_6 - lam_5) ) )
+        theta12si = max( 0.0, min( 1.0, (lambda12 - lam_3) / (lam_4 - lam_3) ) )
+
         ! Select Screening factor for 2 reactant reactions
         Where ( iz2c == 0 )
           h2(:,izb) = 0.0
-        ElseWhere ( lambda12 < 0.1 )
+        ElseWhere ( lambda12 < lam_1 )
           h2(:,izb) = h2w
-        ElseWhere ( lambda12 < 2.0 )
-          h2(:,izb) = h2i
-        ElseWhere ( lambda12 > 5.0 )
+        ElseWhere ( lambda12 < lam_3 )
+          h2(:,izb) = theta12iw*h2i + (1.0 - theta12iw)*h2w
+        ElseWhere ( lambda12 > lam_6 )
           h2(:,izb) = h2s
         ElseWhere ( h2i < h2s )
-          h2(:,izb) = h2i
+          h2(:,izb) = theta12is*h2i + (1.0 - theta12is)*h2s
         ElseWhere
-          h2(:,izb) = h2s
+          h2(:,izb) = theta12si*h2s + (1.0 - theta12si)*h2i
         EndWhere
         If ( iheat > 0 ) Then
           dh2wdt9 = +h2w * (dztildedt9/ztilde - 1.5/t9t(izb))
@@ -223,16 +238,17 @@ Contains
           dh2sdt9 = dfhsdt9(iz21) + dfhsdt9(iz22) - dfhsdt9(iz2c)
           Where ( iz2c == 0 )
             dh2dt9(:,izb) = 0.0
-          ElseWhere ( lambda12 < 0.1 )
-            dh2dt9(:,izb) = dh2wdt9
-          ElseWhere ( lambda12 < 2.0 )
+          ElseWhere ( lambda12 < lam_1 )
+            dh2dt9(:,izb) = theta12iw*dh2idt9 + (1.0 - theta12iw)*dh2wdt9
+          ElseWhere ( lambda12 < lam_3 )
             dh2dt9(:,izb) = dh2idt9
-          ElseWhere ( lambda12 > 5.0 )
+          ElseWhere ( lambda12 > lam_6 )
             dh2dt9(:,izb) = dh2sdt9
           ElseWhere ( h2i < h2s )
-            dh2dt9(:,izb) = dh2idt9
+            dh2dt9(:,izb) = theta12is*dh2idt9 + (1.0 - theta12is)*dh2sdt9
           ElseWhere
             dh2dt9(:,izb) = dh2sdt9
+            dh2dt9(:,izb) = theta12si*dh2sdt9 + (1.0 - theta12si)*dh2idt9
           EndWhere
         EndIf
 
@@ -245,19 +261,24 @@ Contains
         ! Strong screening from Dewitt & Slattery (2003) using linear mixing.
         h3s = fhs(iz31) + fhs(iz32) + fhs(iz33) - fhs(iz3c)
 
+        ! Blending factors
+        theta123iw = max( 0.0, min( 1.0, (lambda123 - lam_1) / (lam_2 - lam_1) ) )
+        theta123is = max( 0.0, min( 1.0, (lambda123 - lam_5) / (lam_6 - lam_5) ) )
+        theta123si = max( 0.0, min( 1.0, (lambda123 - lam_3) / (lam_4 - lam_3) ) )
+
         ! Select screening factor for 3 reactant reactions
         Where ( iz3c == 0 )
           h3(:,izb) = 0.0
-        ElseWhere ( lambda123 < 0.1 )
-          h3(:,izb) = h3w
-        ElseWhere ( lambda123 < 2.0 )
+        ElseWhere ( lambda123 < lam_1 )
+          h3(:,izb) = theta123iw*h3i + (1.0 - theta123iw)*h3w
+        ElseWhere ( lambda123 < lam_3 )
           h3(:,izb) = h3i
-        ElseWhere ( lambda123 > 5.0 )
+        ElseWhere ( lambda123 > lam_6 )
           h3(:,izb) = h3s
         ElseWhere ( h3i < h3s )
-          h3(:,izb) = h3i
+          h3(:,izb) = theta123is*h3i + (1.0 - theta123is)*h3s
         ElseWhere
-          h3(:,izb) = h3s
+          h3(:,izb) = theta123si*h3s + (1.0 - theta123si)*h3i
         EndWhere
 
         If ( iheat > 0 ) Then
@@ -266,16 +287,16 @@ Contains
           dh3sdt9 = dfhsdt9(iz31) + dfhsdt9(iz32) + dfhsdt9(iz33) - dfhsdt9(iz3c)
           Where ( iz3c == 0 )
             dh3dt9(:,izb) = 0.0
-          ElseWhere ( lambda123 < 0.1 )
-            dh3dt9(:,izb) = dh3wdt9
-          ElseWhere ( lambda123 < 2.0 )
+          ElseWhere ( lambda123 < lam_1 )
+            dh3dt9(:,izb) = theta123iw*dh3idt9 + (1.0 - theta123iw)*dh3wdt9
+          ElseWhere ( lambda123 < lam_3 )
             dh3dt9(:,izb) = dh3idt9
-          ElseWhere ( lambda123 > 5.0 )
+          ElseWhere ( lambda123 > lam_6 )
             dh3dt9(:,izb) = dh3sdt9
           ElseWhere ( h3i < h3s )
-            dh3dt9(:,izb) = dh3idt9
+            dh3dt9(:,izb) = theta123is*dh3idt9 + (1.0 - theta123is)*dh3sdt9
           ElseWhere
-            dh3dt9(:,izb) = dh3sdt9
+            dh3dt9(:,izb) = theta123si*dh3sdt9 + (1.0 - theta123si)*dh3idt9
           EndWhere
         EndIf
 
@@ -288,19 +309,24 @@ Contains
         ! Strong screening from Dewitt & Slattery (2003) using linear mixing.
         h4s = fhs(iz41) + fhs(iz42) + fhs(iz43) + fhs(iz44) - fhs(iz4c)
 
+        ! Blending factors
+        theta1234iw = max( 0.0, min( 1.0, (lambda1234 - lam_1) / (lam_2 - lam_1) ) )
+        theta1234is = max( 0.0, min( 1.0, (lambda1234 - lam_5) / (lam_6 - lam_5) ) )
+        theta1234si = max( 0.0, min( 1.0, (lambda1234 - lam_3) / (lam_4 - lam_3) ) )
+
         ! Select screening factor for 4 reactant reactions
         Where ( iz4c == 0 )
           h4(:,izb) = 0.0
-        ElseWhere ( lambda1234 < 0.1 )
-          h4(:,izb) = h4w
-        ElseWhere ( lambda1234 < 2.0 )
+        ElseWhere ( lambda1234 < lam_1 )
+          h4(:,izb) = theta1234iw*h4i + (1.0 - theta1234iw)*h4w
+        ElseWhere ( lambda1234 < lam_3 )
           h4(:,izb) = h4i
-        ElseWhere ( lambda1234 > 5.0 )
+        ElseWhere ( lambda1234 > lam_6 )
           h4(:,izb) = h4s
         ElseWhere ( h4i < h4s )
-          h4(:,izb) = h4i
+          h4(:,izb) = theta1234is*h4i + (1.0 - theta1234is)*h4s
         ElseWhere
-          h4(:,izb) = h4s
+          h4(:,izb) = theta1234si*h4s + (1.0 - theta1234si)*h4i
         EndWhere
 
         If ( iheat > 0 ) Then
@@ -309,16 +335,16 @@ Contains
           dh4sdt9 = dfhsdt9(iz41) + dfhsdt9(iz42) + dfhsdt9(iz43) + dfhsdt9(iz44) - dfhsdt9(iz4c)
           Where ( iz4c == 0 )
             dh4dt9(:,izb) = 0.0
-          ElseWhere ( lambda1234 < 0.1 )
-            dh4dt9(:,izb) = dh4wdt9
-          ElseWhere ( lambda1234 < 2.0 )
+          ElseWhere ( lambda1234 < lam_1 )
+            dh4dt9(:,izb) = theta1234iw*dh4idt9 + (1.0 - theta1234iw)*dh4wdt9
+          ElseWhere ( lambda1234 < lam_3 )
             dh4dt9(:,izb) = dh4idt9
-          ElseWhere ( lambda1234 > 5.0 )
+          ElseWhere ( lambda1234 > lam_6 )
             dh4dt9(:,izb) = dh4sdt9
           ElseWhere ( h4i < h4s )
-            dh4dt9(:,izb) = dh4idt9
+            dh4dt9(:,izb) = theta1234is*dh4idt9 + (1.0 - theta1234is)*dh4sdt9
           ElseWhere
-            dh4dt9(:,izb) = dh4sdt9
+            dh4dt9(:,izb) = theta1234si*dh4sdt9 + (1.0 - theta1234si)*dh4idt9
           EndWhere
         EndIf
 
