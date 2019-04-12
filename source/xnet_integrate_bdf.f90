@@ -466,7 +466,7 @@ Contains
     ! See if stepsize has changed from last step
     rescale(:) = .false.
     Where ( ierr_ts(:) == BDF_STATUS_SUCCESS )
-      Where ( abs(tdel(:) - tdel_old(:)) > epsilon(0.0_dp) )
+      Where ( abs(tdel(:)/tdel_old(:) - 1.0_dp) > epsilon(0.0_dp) )
         eta(:) = tdel(:) / tdel_old(:)
         rescale(:) = .true.
       EndWhere
