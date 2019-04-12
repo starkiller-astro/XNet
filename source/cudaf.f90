@@ -142,7 +142,7 @@ module cudaf
     enumerator :: cudaErrorApiFailureBase               = 10000
   end enum !cudaError
 
-  include "cudaDeviceProp.fh"
+  !include "cudaDeviceProp.fh"
 
   interface
 
@@ -259,14 +259,14 @@ module cudaf
       integer(c_int) :: deviceCount
     end function cudaGetDeviceCount
 
-    integer(c_int) function &
-        & cudaGetDeviceProperties(prop, device) &
-        & bind(c, name="cudaGetDeviceProperties")
-      use, intrinsic :: iso_c_binding
-      import cudaDeviceProp
-      type(cudaDeviceProp) :: prop
-      integer(c_int), value :: device
-    end function cudaGetDeviceProperties
+    !integer(c_int) function &
+    !    & cudaGetDeviceProperties(prop, device) &
+    !    & bind(c, name="cudaGetDeviceProperties")
+    !  use, intrinsic :: iso_c_binding
+    !  import cudaDeviceProp
+    !  type(cudaDeviceProp) :: prop
+    !  integer(c_int), value :: device
+    !end function cudaGetDeviceProperties
 
     integer(c_int) function &
         & cudaSetDevice(device) &
