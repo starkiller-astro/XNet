@@ -1140,9 +1140,17 @@ Contains
     Integer, Parameter :: iz1 = 1
     Real(dp), Parameter :: z1 = 1.0_dp
 
+    Real(dp), Parameter :: lam_1 = 0.1_dp
+    Real(dp), Parameter :: lam_2 = 0.125_dp
+    Real(dp), Parameter :: lam_3 = 2.0_dp
+    Real(dp), Parameter :: lam_4 = 2.15_dp
+    Real(dp), Parameter :: lam_5 = 4.85_dp
+    Real(dp), Parameter :: lam_6 = 5.0_dp
+
     Integer :: i, j, iz2(izmax-1), izc(izmax-1)
     Real(dp) :: z2(izmax-1), zetaw(izmax-1), zetai(izmax-1)
     Real(dp) :: h0(izmax-1), hw(izmax-1), hi(izmax-1), hs(izmax-1), lambda12(izmax-1)
+    Real(dp) :: theta12iw(izmax-1), theta12is(izmax-1), theta12si(izmax-1)
     Real(dp) :: fhs(0:izmax+1), fhi(0:izmax+1), gammaz(0:izmax+1)
     Real(dp) :: cv, etae, detaedt9, ztot, ztilde, zinter, lambda0, gammae, dztildedt9, s0
 
@@ -1183,18 +1191,21 @@ Contains
       hs = fhs(iz1) + fhs(iz2) - fhs(izc)
 
       ! Select screening factor
+      theta12iw = max( 0.0, min( 1.0, (lambda12 - lam_1) / (lam_2 - lam_1) ) )
+      theta12is = max( 0.0, min( 1.0, (lambda12 - lam_5) / (lam_6 - lam_5) ) )
+      theta12si = max( 0.0, min( 1.0, (lambda12 - lam_3) / (lam_4 - lam_3) ) )
       Where ( iz2 == 0 )
         h0 = 0.0_dp
-      ElseWhere ( lambda12 < 0.1_dp )
+      ElseWhere ( lambda12 < lam_1 )
         h0 = hw
-      ElseWhere ( lambda12 < 2.0_dp )
-        h0 = hi
-      ElseWhere ( lambda12 > 5.0_dp )
+      ElseWhere ( lambda12 < lam_3 )
+        h0 = theta12iw*hi + (1.0_dp - theta12iw)*hw
+      ElseWhere ( lambda12 > lam_6 )
         h0 = hs
       ElseWhere ( hi < hs )
-        h0 = hi
+        h0 = theta12is*hi + (1.0_dp - theta12is)*hs
       ElseWhere
-        h0 = hs
+        h0 = theta12si*hs + (1.0_dp - theta12si)*hi
       EndWhere
 
       ! Add succeeding screening factors
