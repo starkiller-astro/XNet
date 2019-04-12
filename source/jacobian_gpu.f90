@@ -13,7 +13,7 @@ Module xnet_jacobian
   !-----------------------------------------------------------------------------------------------
   ! The Jacobian matrix for the solver.
   !-----------------------------------------------------------------------------------------------
-  Use, Intrinsic :: iso_c_binding, Only: C_DOUBLE, C_INT, C_INTPTR_T, C_PTR, C_SIZE_T
+  Use, Intrinsic :: iso_c_binding, Only: C_DOUBLE, C_INT, C_INTPTR_T, C_PTR, C_SIZE_T, C_SIZEOF
   Use xnet_types, Only: dp
   Implicit None
 
@@ -45,10 +45,10 @@ Module xnet_jacobian
   Real(C_DOUBLE), Parameter :: ddummy = 0.0
   Integer(C_INT), Parameter :: idummy = 0
   Integer(C_INTPTR_T), Parameter :: cptr_dummy = 0
-  Integer(C_SIZE_T), Parameter :: sizeof_double = sizeof(ddummy)
-  Integer(C_SIZE_T), Parameter :: sizeof_int = sizeof(idummy)
-  Integer(C_SIZE_T), Parameter :: sizeof_cptr = sizeof(cptr_dummy)
-  Integer(C_SIZE_T) :: sizeof_jac, sizeof_rhs, sizeof_indx, sizeof_info
+  Integer(C_SIZE_T), Parameter :: sizeof_double = C_SIZEOF(ddummy)
+  Integer(C_SIZE_T), Parameter :: sizeof_int = C_SIZEOF(idummy)
+  Integer(C_SIZE_T), Parameter :: sizeof_cptr = C_SIZEOF(cptr_dummy)
+  Integer(C_SIZE_T) :: sizeof_jac, sizeof_rhs, sizeof_indx, sizeof_info, sizeof_batch
 
   ! Parameters for GPU array dimensions
   Integer :: msize ! Size of linear system to be solved
@@ -85,6 +85,7 @@ Contains
     sizeof_rhs = msize*nzbatchmx*sizeof_double
     sizeof_indx = msize*nzbatchmx*sizeof_int
     sizeof_info = nzbatchmx*sizeof_int
+    sizeof_batch = nzbatchmx*sizeof_cptr
 
     !$omp parallel default(shared) private(istat,i)
 
@@ -98,12 +99,15 @@ Contains
     Call c_f_pointer(hrhs, rhs, (/msize,nzbatchmx/))
     Call c_f_pointer(hindx, indx, (/msize,nzbatchmx/))
     Call c_f_pointer(hinfo, info, (/nzbatchmx/))
+    dydotdy(:,:,:) = 0.0
+    jac(:,:,:) = 0.0
+    indx(:,:) = 0
 
     ! Allocate GPU memory for arrays
-    istat = cudaMalloc(djac, msize*msize*nzbatchmx*sizeof_double)
-    istat = cudaMalloc(drhs, msize*nzbatchmx*sizeof_double)
-    istat = cudaMalloc(dindx, msize*nzbatchmx*sizeof_int)
-    istat = cudaMalloc(dinfo, nzbatchmx*sizeof_int)
+    istat = cudaMalloc(djac, sizeof_jac)
+    istat = cudaMalloc(drhs, sizeof_rhs)
+    istat = cudaMalloc(dindx, sizeof_indx)
+    istat = cudaMalloc(dinfo, sizeof_info)
 
     ! Setup fortran pointers to device-addresses of device arrays
     Call c_f_pointer(djac, djacf, (/msize,msize,nzbatchmx/))
@@ -123,8 +127,8 @@ Contains
     hdrhs_array = c_loc(drhsi(1))
 
     ! Allocate GPU memory for batched GPU operations and copy array of pointers to device
-    istat = cudaMalloc(djac_array, nzbatchmx*sizeof_cptr)
-    istat = cudaMalloc(drhs_array, nzbatchmx*sizeof_cptr)
+    istat = cudaMalloc(djac_array, sizeof_batch)
+    istat = cudaMalloc(drhs_array, sizeof_batch)
     istat = cublasSetVector(nzbatchmx, sizeof_cptr, hdjac_array, 1, djac_array, 1)
     istat = cublasSetVector(nzbatchmx, sizeof_cptr, hdrhs_array, 1, drhs_array, 1)
 
@@ -138,7 +142,6 @@ Contains
     ! Free the page-locked and device memory used in the dense solver.
     !-----------------------------------------------------------------------------------------------
     Use cudaf
-    Use xnet_gpu, Only: gpu_finalize
 
     ! Local variables
     Integer :: istat
@@ -161,8 +164,6 @@ Contains
     Deallocate (dydotdy)
 
     !$omp end parallel
-
-    Call gpu_finalize
 
   End Subroutine jacobian_finalize
 
@@ -207,12 +208,12 @@ Contains
 
   Subroutine jacobian_build(diag_in,mult_in,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the reaction Jacobian matrix, dYdot/dY, and augments by multiplying all
-    ! elements by mult and adding diag to the diagonal elements.
+    ! This routine calculates the reaction Jacobian matrix, dYdot/dY, and augments by multiplying
+    ! all elements by mult and adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, mex
-    Use reaction_data, Only: a1, a2, a3, b1, b2, b3, la, le, mu1, mu2, mu3, &
-      & n11, n21, n22, n31, n32, n33, dcsect1dt9, dcsect2dt9, dcsect3dt9
+    Use reaction_data, Only: a1, a2, a3, a4, b1, b2, b3, b4, la, le, mu1, mu2, mu3, mu4, n11, n21, &
+      & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
     Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, lzactive
@@ -225,9 +226,12 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(:)
 
     ! Local variables
-    Integer :: i, j, i0, i11, i21, i22, i31, i32, i33, j1, la1, le1, la2, le2, la3, le3, izb, izone
-    Real(dp) :: dt9dotdy(msize), s1, s2, s3, r1, r2, r3, y11, y21, y22, y31, y32, y33
-    Real(dp) :: dr1dt9, dr2dt9, dr3dt9
+    Integer :: i, j, i0, j1, izb, izone
+    Integer :: la1, le1, la2, le2, la3, le3, la4, le4
+    Integer :: i11, i21, i22, i31, i32, i33, i41, i42, i43, i44
+    Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
+    Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
+    Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
     Real(dp) :: diag(nzbatchmx), mult(nzbatchmx)
     Logical, Pointer :: mask(:)
 
@@ -249,9 +253,11 @@ Contains
           la1 = la(1,i0)
           la2 = la(2,i0)
           la3 = la(3,i0)
+          la4 = la(4,i0)
           le1 = le(1,i0)
           le2 = le(2,i0)
           le3 = le(3,i0)
+          le4 = le(4,i0)
           Do j1 = la1, le1
             r1 = b1(j1,izb)
             i11 = n11(j1)
@@ -278,6 +284,21 @@ Contains
             dydotdy(i0,i32,izb) = dydotdy(i0,i32,izb) + r3 * y33 * y31
             dydotdy(i0,i33,izb) = dydotdy(i0,i33,izb) + r3 * y31 * y32
           EndDo
+          Do j1 = la4, le4
+            r4 = b4(j1,izb)
+            i41 = n41(j1)
+            i42 = n42(j1)
+            i43 = n43(j1)
+            i44 = n44(j1)
+            y41 = yt(i41,izb)
+            y42 = yt(i42,izb)
+            y43 = yt(i43,izb)
+            y44 = yt(i44,izb)
+            dydotdy(i0,i41,izb) = dydotdy(i0,i41,izb) + r4 * y42 * y43 * y44
+            dydotdy(i0,i42,izb) = dydotdy(i0,i42,izb) + r4 * y43 * y44 * y41
+            dydotdy(i0,i43,izb) = dydotdy(i0,i43,izb) + r4 * y44 * y41 * y42
+            dydotdy(i0,i44,izb) = dydotdy(i0,i44,izb) + r4 * y41 * y42 * y43
+          EndDo
         EndDo
       EndIf
     EndDo
@@ -289,9 +310,11 @@ Contains
             la1 = la(1,i0)
             la2 = la(2,i0)
             la3 = la(3,i0)
+            la4 = la(4,i0)
             le1 = le(1,i0)
             le2 = le(2,i0)
             le3 = le(3,i0)
+            le4 = le(4,i0)
             s1 = 0.0
             Do j1 = la1, le1
               dr1dt9 = a1(j1)*dcsect1dt9(mu1(j1),izb)
@@ -319,7 +342,20 @@ Contains
               y33 = yt(i33,izb)
               s3 = s3 + dr3dt9 * y31 * y32 * y33
             EndDo
-            dydotdy(i0,ny+1,izb)= s1 + s2 + s3
+            s4 = 0.0
+            Do j1 = la4, le4
+              dr4dt9 = a4(j1)*dcsect4dt9(mu4(j1),izb)
+              i41 = n41(j1)
+              i42 = n42(j1)
+              i43 = n43(j1)
+              i44 = n44(j1)
+              y41 = yt(i41,izb)
+              y42 = yt(i42,izb)
+              y43 = yt(i43,izb)
+              y44 = yt(i44,izb)
+              s4 = s4 + dr4dt9 * y41 * y42 * y43 * y44
+            EndDo
+            dydotdy(i0,ny+1,izb)= s1 + s2 + s3 + s4
           EndDo
 
           ! The BLAS version of dydotdy(ny+1,i,izb) = -sum(mex*dydotdy(1:ny,i,izb))/cv(izb)
@@ -375,7 +411,7 @@ Contains
     Use cublasf
     Use cudaf
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive, nzbatch
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
@@ -398,9 +434,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in
+      mask => mask_in(:)
     Else
-      mask => lzactive
+      mask => lzactive(:)
     EndIf
     If ( .not. any(mask(:)) ) Return
 
@@ -415,15 +451,15 @@ Contains
     EndDo
 
     ! Copy the system to the GPU
-    istat = cublasSetMatrixAsync(msize, msize*nzbatchmx, sizeof_double, hjac, msize, djac, msize, stream)
-    istat = cublasSetVectorAsync(msize*nzbatchmx, sizeof_double, hrhs, 1, drhs, 1, stream)
+    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac, msize, djac, msize, stream)
+    istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs, 1, drhs, 1, stream)
 
     ! Solve the linear system
-    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatchmx)
-    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatchmx)
+    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
+    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
 
     ! Copy the solution back to the CPU
-    istat = cublasGetVectorAsync(msize*nzbatchmx, sizeof_double, drhs, 1, hrhs, 1, stream)
+    istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs, 1, hrhs, 1, stream)
     istat = cudaStreamSynchronize(stream)
     Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
@@ -454,7 +490,7 @@ Contains
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
     Use cublasf
-    Use xnet_controls, Only: idiag, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, nzbatchmx, szbatch, lzactive, nzbatch
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -470,9 +506,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in
+      mask => mask_in(:)
     Else
-      mask => lzactive
+      mask => lzactive(:)
     EndIf
     If ( .not. any(mask(:)) ) Return
 
@@ -481,10 +517,10 @@ Contains
     timer_decmp = timer_decmp - start_timer
 
     ! Copy the Jacobian to the GPU
-    istat = cublasSetMatrixAsync(msize, msize*nzbatchmx, sizeof_double, hjac, msize, djac, msize, stream)
+    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac, msize, djac, msize, stream)
 
     ! Calculate the LU decomposition
-    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatchmx)
+    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
 
     If ( idiag >= 6 ) Then
       Do izb = 1, nzbatchmx
@@ -510,7 +546,7 @@ Contains
     Use cublasf
     Use cudaf
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive, nzbatch
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
@@ -533,14 +569,15 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in
+      mask => mask_in(:)
     Else
-      mask => lzactive
+      mask => lzactive(:)
     EndIf
     If ( .not. any(mask(:)) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
+    timer_bksub = timer_bksub - start_timer
 
     Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
@@ -550,13 +587,13 @@ Contains
     EndDo
 
     ! Copy the RHS to the GPU
-    istat = cublasSetVectorAsync(msize*nzbatchmx, sizeof_double, hrhs, 1, drhs, 1, stream)
+    istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs, 1, drhs, 1, stream)
 
     ! Solve the LU-decomposed triangular system via back-substitution
-    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatchmx)
+    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
 
     ! Copy the solution back to the CPU
-    istat = cublasGetVectorAsync(msize*nzbatchmx, sizeof_double, drhs, 1, hrhs, 1, stream)
+    istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs, 1, hrhs, 1, stream)
 
     istat = cudaStreamSynchronize(stream)
     Do izb = 1, nzbatchmx
@@ -579,6 +616,7 @@ Contains
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
+    timer_bksub = timer_bksub + stop_timer
 
     Return
   End Subroutine jacobian_bksub
