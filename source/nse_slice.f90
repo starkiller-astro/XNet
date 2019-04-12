@@ -7,10 +7,11 @@
 
 Program nse_slice
   Use nuclear_data, Only: ny, aa, zz, benuc, read_nuclear_data
+  Use parallel, Only: parallel_initialize, parallel_myproc, parallel_nprocs
   Use reaction_data, Only: read_reaction_data
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, iprocess, iscrn, isolv, itsout, iweak0, &
     & changemx, tolm, tolc, yacc, ymin, tdel_maxmult, kstmx, kitmx, bin_file_base, lun_diag, &
-    & lun_stdin, lun_stdout, read_controls
+    & lun_stdin, lun_stdout, read_controls, myid, nproc
   Use xnet_eos, Only: eos_initialize
   Use xnet_nse, Only: ynse, nse_initialize, nse_solve
   Use xnet_preprocess, Only: net_preprocess
@@ -24,6 +25,11 @@ Program nse_slice
   Character(80) :: diag_file, bin_file, inab_file, thermo_file
   Real(dp) :: rho, ye, t9, t, tdel, flx, edot, enb, enm, ytot, ztot, atot
   Integer :: i, kstep, mflx, ifl_orig, ifl_term, lun_ts
+
+  ! Identify number of MPI nodes and ID number for this PE
+  Call parallel_initialize()
+  myid = parallel_myproc()
+  nproc = parallel_nprocs()
 
   Write(lun_stdout,"(a)") 'Rho? Ye? T9?'
   Read(lun_stdin,*) rho, ye, t9
