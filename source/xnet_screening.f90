@@ -239,15 +239,14 @@ Contains
           Where ( iz2c == 0 )
             dh2dt9(:,izb) = 0.0
           ElseWhere ( lambda12 < lam_1 )
-            dh2dt9(:,izb) = theta12iw*dh2idt9 + (1.0 - theta12iw)*dh2wdt9
+            dh2dt9(:,izb) = dh2wdt9
           ElseWhere ( lambda12 < lam_3 )
-            dh2dt9(:,izb) = dh2idt9
+            dh2dt9(:,izb) = theta12iw*dh2idt9 + (1.0 - theta12iw)*dh2wdt9
           ElseWhere ( lambda12 > lam_6 )
             dh2dt9(:,izb) = dh2sdt9
           ElseWhere ( h2i < h2s )
             dh2dt9(:,izb) = theta12is*dh2idt9 + (1.0 - theta12is)*dh2sdt9
           ElseWhere
-            dh2dt9(:,izb) = dh2sdt9
             dh2dt9(:,izb) = theta12si*dh2sdt9 + (1.0 - theta12si)*dh2idt9
           EndWhere
         EndIf
@@ -270,9 +269,9 @@ Contains
         Where ( iz3c == 0 )
           h3(:,izb) = 0.0
         ElseWhere ( lambda123 < lam_1 )
-          h3(:,izb) = theta123iw*h3i + (1.0 - theta123iw)*h3w
+          h3(:,izb) = h3w
         ElseWhere ( lambda123 < lam_3 )
-          h3(:,izb) = h3i
+          h3(:,izb) = theta123iw*h3i + (1.0 - theta123iw)*h3w
         ElseWhere ( lambda123 > lam_6 )
           h3(:,izb) = h3s
         ElseWhere ( h3i < h3s )
@@ -288,9 +287,9 @@ Contains
           Where ( iz3c == 0 )
             dh3dt9(:,izb) = 0.0
           ElseWhere ( lambda123 < lam_1 )
-            dh3dt9(:,izb) = theta123iw*dh3idt9 + (1.0 - theta123iw)*dh3wdt9
+            dh3dt9(:,izb) = dh3wdt9
           ElseWhere ( lambda123 < lam_3 )
-            dh3dt9(:,izb) = dh3idt9
+            dh3dt9(:,izb) = theta123iw*dh3idt9 + (1.0 - theta123iw)*dh3wdt9
           ElseWhere ( lambda123 > lam_6 )
             dh3dt9(:,izb) = dh3sdt9
           ElseWhere ( h3i < h3s )
@@ -318,9 +317,9 @@ Contains
         Where ( iz4c == 0 )
           h4(:,izb) = 0.0
         ElseWhere ( lambda1234 < lam_1 )
-          h4(:,izb) = theta1234iw*h4i + (1.0 - theta1234iw)*h4w
+          h4(:,izb) = h4w
         ElseWhere ( lambda1234 < lam_3 )
-          h4(:,izb) = h4i
+          h4(:,izb) = theta1234iw*h4i + (1.0 - theta1234iw)*h4w
         ElseWhere ( lambda1234 > lam_6 )
           h4(:,izb) = h4s
         ElseWhere ( h4i < h4s )
@@ -336,9 +335,9 @@ Contains
           Where ( iz4c == 0 )
             dh4dt9(:,izb) = 0.0
           ElseWhere ( lambda1234 < lam_1 )
-            dh4dt9(:,izb) = theta1234iw*dh4idt9 + (1.0 - theta1234iw)*dh4wdt9
+            dh4dt9(:,izb) = dh4wdt9
           ElseWhere ( lambda1234 < lam_3 )
-            dh4dt9(:,izb) = dh4idt9
+            dh4dt9(:,izb) = theta1234iw*dh4idt9 + (1.0 - theta1234iw)*dh4wdt9
           ElseWhere ( lambda1234 > lam_6 )
             dh4dt9(:,izb) = dh4sdt9
           ElseWhere ( h4i < h4s )

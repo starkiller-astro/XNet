@@ -112,6 +112,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, lzactive
     Use xnet_types, Only: dp
+    Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
@@ -147,7 +148,7 @@ Contains
           gg(1:ny,izb) = g(ng,1:ny)
         Case Default
           rdt9 = (t9(izb)-t9i(ii-1)) / (t9i(ii)-t9i(ii-1))
-          gg(1:ny,izb) = exp( rdt9*log(g(ii,1:ny)) + (1.0-rdt9)*log(g(ii-1,1:ny)) )
+          gg(1:ny,izb) = safe_exp( rdt9*log(g(ii,1:ny)) + (1.0-rdt9)*log(g(ii-1,1:ny)) )
         End Select
         gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
 
