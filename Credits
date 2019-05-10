@@ -1,0 +1,23 @@
+XNet has existed as a shared source code going back to 1996.  In fact,
+it's timeline can be traced further back to the nuclear reaction network
+codes of Friedel Thielemann.  In that time, XNet has had a number of
+collaborators. Below we include a non-authorative list of those who have
+contributed generally to each version. In addition, some specific
+developments are credited in those source files.
+
+Version 6 & 7  : J. Austin Harris
+                 W. Raphael Hix
+
+Version 5      : Luke F. Roberts
+                 Suzanne Parete-Koon
+                 W. Raphael Hix
+
+Version 1 to 4 : W. Raphael Hix
+
+Version 0      : Friedrich-Karl Thielemann
+
+Analysis Tools : Eva Viktoria Ohstrom
+                 Taylor Stevenson
+         	 Rachel Margulies
+        	 J. Austin Harris
+        	 W. Raphael Hix
