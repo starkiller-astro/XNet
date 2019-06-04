@@ -42,10 +42,10 @@ BASE = \
 ## Choose Driver
 DRIVER = net.o
 ifeq ($(MPI_MODE),ON)
-  MPI_OBJ = parallel.o
+  MPI_OBJ = xnet_parallel.o
   MPI_SFX = _mpi
 else
-  MPI_OBJ = parallel_stubs.o
+  MPI_OBJ = xnet_parallel_stubs.o
   MPI_SFX =
 endif
 BASE += $(MPI_OBJ)
@@ -69,9 +69,9 @@ BASE += $(EOS_OBJ)
 include $(XNET_DIR)/Makefile.internal
 -include $(XNET_DIR)/Makefile.dev
 
-$(EXE): $(BASE) jacobian_$(SOLVER).o $(SOLVER_OBJ) $(LAPACK_OBJ) $(DRIVER)
+$(EXE): $(BASE) xnet_jacobian_$(SOLVER).o $(SOLVER_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o $(EXE) \
-	    $(BASE) jacobian_$(SOLVER).o $(notdir $(SOLVER_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_$(SOLVER).o $(notdir $(SOLVER_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(SOLVER_LIBDIR) $(SOLVER_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 all: xnet_dense xnet_MA48 xnet_PARDISO net_setup
@@ -97,23 +97,23 @@ ifndef update-prereq
 xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO:
 	$(MAKE) $(MAKECMDGOALS) MATRIX_SOLVER=$* update-prereq=y --no-print-directory
 else
-xnet_dense: $(BASE) jacobian_dense.o $(LAPACK_OBJ) $(DRIVER)
+xnet_dense: $(BASE) xnet_jacobian_dense.o $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnetd$(MPI_SFX) \
-	    $(BASE) jacobian_dense.o $(notdir $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_dense.o $(notdir $(LAPACK_OBJ)) $(DRIVER) \
 	    $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
-xnet_MA41: $(BASE) jacobian_MA41.o $(MA41_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_MA41: $(BASE) xnet_jacobian_MA41.o $(MA41_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnetm$(MPI_SFX) \
-	    $(BASE) jacobian_MA41.o $(notdir $(MA41_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_MA41.o $(notdir $(MA41_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(MA41_LIBDIR) $(MA41_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
-xnet_MA48: $(BASE) jacobian_MA48.o $(MA48_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_MA48: $(BASE) xnet_jacobian_MA48.o $(MA48_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnetm$(MPI_SFX) \
-	    $(BASE) jacobian_MA48.o $(notdir $(MA48_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_MA48.o $(notdir $(MA48_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(MA48_LIBDIR) $(MA48_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
-xnet_PARDISO: $(BASE) jacobian_$(PARDISO).o $(PARDISO_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_PARDISO: $(BASE) xnet_jacobian_$(PARDISO).o $(PARDISO_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnetp$(MPI_SFX) \
-	    $(BASE) jacobian_$(PARDISO).o $(notdir $(PARDISO_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_$(PARDISO).o $(notdir $(PARDISO_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(PARDISO_LIBDIR) $(PARDISO_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 endif
 
@@ -143,7 +143,7 @@ xnet_integrate.o: xnet_integrate.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $@
 xnet_integrate_bdf.o: xnet_integrate_bdf.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $@
-jacobian_$(SOLVER).o: jacobian_$(SOLVER).f90
+xnet_jacobian_$(SOLVER).o: xnet_jacobian_$(SOLVER).f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $@
 
 $(LAPACK_OBJ_F90): %.o: %.f90
@@ -177,7 +177,7 @@ print-%:
 #
 #
 
-xnet_controls.o: xnet_types.o xnet_util.o $(MPI_OBJ)
+xnet_controls.o: xnet_constants.o xnet_types.o xnet_util.o $(MPI_OBJ)
 xnet_data.o: xnet_constants.o xnet_controls.o xnet_ffn.o xnet_types.o xnet_util.o $(MPI_OBJ)
 xnet_ffn.o: xnet_constants.o xnet_controls.o xnet_types.o
 xnet_flux.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_match.o xnet_timers.o xnet_types.o
@@ -203,12 +203,12 @@ eos_helm.o: fd.o helmholtz.o xnet_constants.o xnet_controls.o xnet_data.o xnet_t
 eos_bahcall.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o
 eos_starkiller.o: actual_eos.o eos_type.o fd.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o
 
-jacobian_dense.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ)
-jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(MA41_OBJ) $(MPI_OBJ)
-jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(MA48_OBJ) $(MPI_OBJ)
-jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
-jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
-jacobian_gpu.o: cublasf.o cudaf.o xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_gpu.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(GPU_OBJ)
+xnet_jacobian_dense.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ)
+xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(MA41_OBJ) $(MPI_OBJ)
+xnet_jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(MA48_OBJ) $(MPI_OBJ)
+xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
+xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
+xnet_jacobian_gpu.o: cublasf.o cudaf.o xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_gpu.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(GPU_OBJ)
 
 parallel_stubs.o: xnet_types.o
 parallel.o: xnet_types.o

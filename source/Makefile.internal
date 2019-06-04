@@ -395,7 +395,7 @@ SOLVER         = $($(MATRIX_SOLVER))
 ifeq ($(SOLVER),)
     SOLVER     = $(MATRIX_SOLVER)
 endif
-JAC_OBJ        = jacobian_$(SOLVER).o
+JAC_OBJ        = xnet_jacobian_$(SOLVER).o
 
 SOLVER_INC     = $($(MATRIX_SOLVER)_INC)
 SOLVER_LIBDIR  = $($(MATRIX_SOLVER)_LIBDIR)

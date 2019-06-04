@@ -131,14 +131,14 @@ endif
 # Additional Makefile targets/rules/dependencies
 #-------------------------------------------------------------------------------
 
-xnet_magma: $(BASE) jacobian_magma.o $(MAGMA_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_magma: $(BASE) xnet_jacobian_magma.o $(MAGMA_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnet_magma$(MPI_SFX) \
-	    $(BASE) jacobian_gpu.o $(notdir $(MAGMA_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_gpu.o $(notdir $(MAGMA_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(MAGMA_LIBDIR) $(MAGMA_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
-xnet_gpu: $(BASE) jacobian_gpu.o $(CUBLAS_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_gpu: $(BASE) xnet_jacobian_gpu.o $(CUBLAS_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnet_gpu$(MPI_SFX) \
-	    $(BASE) jacobian_gpu.o $(notdir $(CUBLAS_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_gpu.o $(notdir $(CUBLAS_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(CUBLAS_LIBDIR) $(CUBLAS_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 $(GPU_LAPACK_OBJ_F90): %.o: %.f90
