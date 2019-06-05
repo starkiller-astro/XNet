@@ -20,10 +20,10 @@ Program net
   Use parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, parallel_nprocs, &
     & parallel_IOProcessor
   Use reaction_data, Only: read_reaction_data
-  Use xnet_abundances, Only: load_initial_abundances, ystart, yo, y, yt, ydot
+  Use xnet_abundances, Only: ystart, yo, y, yt, ydot
   Use xnet_conditions, Only: t, tt, to, tdel, tdel_next, tdel_old, t9t, rhot, yet, t9, rho, ye, &
     & t9o, rhoo, yeo, t9dot, cv, etae, detaedt9, nt, ntt, nto, ints, intso, nstart, tstart, tstop, &
-    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind, read_thermo_file
+    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
@@ -41,6 +41,7 @@ Program net
   Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_setup
   Use xnet_types, Only: dp
   Use xnet_util, Only: name_ordered
+  Use model_input_ascii
   Implicit None
 
   ! Local variables
@@ -296,3 +297,5 @@ Program net
   Call parallel_finalize()
 
 End Program net
+
+

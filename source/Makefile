@@ -8,9 +8,10 @@ VPATH = .
 ## Define XNet's source directory
 XNET_DIR = .
 
-## Inlcude options for build configurations defined in Makefile.opt
+## Include options for build configurations defined in Makefile.opt
 include $(XNET_DIR)/Makefile.opt
 
+HELMHOLTZ_PATH = ../../../EOS/Helmholtz
 #-------------------------------------------------------------------------------------------------
 # The rules below are used by make to build a range of executables
 # Users should not need to modify this portion of the Makefile
@@ -40,7 +41,7 @@ BASE = \
        $(NNU_OBJ)
 
 ## Choose Driver
-DRIVER = net.o
+DRIVER = model_input_ascii.o net.o
 ifeq ($(MPI_MODE),ON)
   MPI_OBJ = xnet_parallel.o
   MPI_SFX = _mpi
@@ -52,12 +53,12 @@ BASE += $(MPI_OBJ)
 
 ## Configure Libraries and files to link appropriate EOS
 ifeq ($(EOS),BAHCALL)
-  EOS_OBJ = eos_bahcall.o
+  EOS_OBJ = xnet_eos_bahcall.o
 else ifeq ($(EOS),HELMHOLTZ)
-  EOS_OBJ = eos_helm.o fd.o helmholtz.o
+  EOS_OBJ = xnet_eos_helm.o xnet_fd.o helmholtz.o
   VPATH += $(HELMHOLTZ_PATH)
 else ifeq ($(EOS),STARKILLER)
-  EOS_OBJ = actual_eos.o eos_type.o fd.o eos_starkiller.o
+  EOS_OBJ = actual_eos.o eos_type.o xnet_fd.o xnet_eos_starkiller.o
   VPATH += $(STARKILLER_ROOT)/Microphysics/EOS/helmholtz
   VPATH += $(STARKILLER_ROOT)/Microphysics/interfaces
 endif
@@ -65,7 +66,7 @@ BASE += $(EOS_OBJ)
 
 .DEFAULT_GOAL := $(EXE)
 
-## Inlcude system configurations and architecture/installation specific MACROS
+## Include system configurations and architecture/installation specific MACROS
 include $(XNET_DIR)/Makefile.internal
 -include $(XNET_DIR)/Makefile.dev
 
@@ -135,7 +136,7 @@ xnse: xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_ffn.o 
 #
 parallel.o: parallel.f90
 	$(FC_MPI) $(FFLAGS) $(F90FLAGS) -c $< -o $@
-eos_helm.o: eos_helm.f90
+xnet_eos_helm.o: xnet_eos_helm.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) -I$(HELMHOLTZ_PATH) -c $< -o $@
 xnet_nse.o: xnet_nse.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $@
@@ -182,7 +183,7 @@ xnet_data.o: xnet_constants.o xnet_controls.o xnet_ffn.o xnet_types.o xnet_util.
 xnet_ffn.o: xnet_constants.o xnet_controls.o xnet_types.o
 xnet_flux.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_match.o xnet_timers.o xnet_types.o
 xnet_match.o: xnet_controls.o xnet_data.o xnet_types.o
-xnet_abundances.o: xnet_conditions.o xnet_controls.o xnet_data.o xnet_nse.o xnet_types.o xnet_util.o $(EOS_OBJ)
+xnet_abundances.o: xnet_controls.o xnet_data.o xnet_types.o
 xnet_conditions.o: xnet_controls.o xnet_types.o xnet_util.o $(NNU_OBJ)
 xnet_constants.o: xnet_types.o
 xnet_evolve.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_integrate_bdf.o xnet_integrate_be.o xnet_output.o xnet_timers.o xnet_types.o xnet_util.o
@@ -198,10 +199,10 @@ xnet_screening.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_cont
 xnet_timers.o: xnet_types.o
 xnet_util.o: xnet_types.o $(MPI_OBJ)
 
-fd.o: xnet_types.o
-eos_helm.o: fd.o helmholtz.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o
-eos_bahcall.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o
-eos_starkiller.o: actual_eos.o eos_type.o fd.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o
+xnet_fd.o: xnet_types.o
+xnet_eos_helm.o: xnet_fd.o helmholtz.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
+xnet_eos_bahcall.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
+xnet_eos_starkiller.o: actual_eos.o eos_type.o xnet_fd.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
 
 xnet_jacobian_dense.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ)
 xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(MA41_OBJ) $(MPI_OBJ)
@@ -210,9 +211,10 @@ xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xne
 xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
 xnet_jacobian_gpu.o: cublasf.o cudaf.o xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_gpu.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(GPU_OBJ)
 
-parallel_stubs.o: xnet_types.o
-parallel.o: xnet_types.o
+xnet_parallel_stubs.o: xnet_types.o
+xnet_parallel.o: xnet_types.o
 
+model_input_ascii.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_nse.o xnet_types.o xnet_util.o 
 net.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_evolve.o xnet_flux.o xnet_match.o xnet_nse.o xnet_preprocess.o xnet_screening.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(JAC_OBJ) $(MPI_OBJ)
 net_setup.o: xnet_controls.o xnet_preprocess.o
 
