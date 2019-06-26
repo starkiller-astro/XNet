@@ -59,6 +59,8 @@ def read_ts_file(file_name, debug=False, last = False, print_positions=False):
         yacc           =np.fromfile(file_id,dtype='float64',count=1)
         ymin           =np.fromfile(file_id,dtype='float64',count=1)
         tdel_mm        =np.fromfile(file_id,dtype='float64',count=1)
+        iheat          =np.fromfile(file_id,dtype='int32',count=1)
+        isolv          =np.fromfile(file_id,dtype='int32',count=1)
         record_length2 =np.fromfile(file_id,dtype='uint32',count=1)
         if print_positions:
             print("Position after reading run settings")
