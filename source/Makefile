@@ -197,7 +197,7 @@ xnet_output.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o x
 xnet_preprocess.o: xnet_constants.o xnet_data.o xnet_types.o xnet_util.o $(MPI_OBJ)
 xnet_screening.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o $(EOS_OBJ)
 xnet_timers.o: xnet_types.o
-xnet_util.o: xnet_types.o $(MPI_OBJ)
+xnet_util.o: xnet_constants.o xnet_types.o $(MPI_OBJ)
 
 xnet_fd.o: xnet_types.o
 xnet_eos_helm.o: xnet_fd.o helmholtz.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
