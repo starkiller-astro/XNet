@@ -2,7 +2,7 @@ Welcome to XNet
 ======
 
 XNet is a thermonuclear reaction network for astrophysical applications,
-using a variety of temporal integration techniques. It is written in portable FORTRAN 90 and makes use of a variety of matrix solving packages to obtain excellent speed (as much as 50% of peak) on as many platforms as possible.
+using a variety of temporal integration techniques. It is written in portable modern Fortran and makes use of a variety of matrix solving packages to obtain excellent speed (as much as 50% of peak) on as many platforms as possible.
 
 The version contained in the repository is targeted at standalone
 execution (post-processing nucleosynthesis). However, with the appropriate
