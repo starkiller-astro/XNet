@@ -475,9 +475,10 @@ Contains
     Use nuclear_data, Only: nname, gg, dlngdt9, partf
     Use reaction_data
     Use xnet_abundances, Only: yt
-    Use xnet_conditions, Only: t, rhot, t9t, yet
+    Use xnet_conditions, Only: tt, rhot, t9t, yet
     Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, lzactive
     Use xnet_ffn, Only: ffn_rate
+    Use xnet_nnu, Only: nnu_rate, nnuspec
     Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9, screening
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_scrn, timer_csect
     Use xnet_types, Only: dp
@@ -490,9 +491,9 @@ Contains
     Integer, Parameter :: dgemm_nzbatch = 2 ! Min number of zones to use dgemm, otherwise use dgemv
     Real(dp) :: t09(7,nzbatchmx), dt09(7,nzbatchmx)
     Real(dp) :: ene(nzbatchmx), ytot, abar, zbar, z2bar, zibar
-    Real(dp) :: rffn(max(nffn,1),nzbatchmx)        ! FFN reaction rates
-    Real(dp) :: dlnrffndt9(max(nffn,1),nzbatchmx)  ! log FFN reaction rates derivatives
-!   Real(dp) :: rnnu(nnnu,4,nzbatchmx)      ! Neutrino reaction rates                           !NNU
+    Real(dp) :: rffn(max(nffn,1),nzbatchmx)          ! FFN reaction rates
+    Real(dp) :: dlnrffndt9(max(nffn,1),nzbatchmx)    ! log FFN reaction rates derivatives
+    Real(dp) :: rnnu(max(nnnu,1),nnuspec,nzbatchmx)  ! Neutrino reaction rates
     Real(dp) :: rhot2, rhot3
     Integer :: j, k, izb, izone, nzmask
     Logical, Pointer :: mask(:)
@@ -574,7 +575,7 @@ Contains
     If ( nffn > 0 ) Call ffn_rate(nffn,t9t,ene,rffn,dlnrffndt9,mask_in = mask(:))
 
     ! If there are any neutrino-nucleus reactions, calculate their rates
-!   If ( nnnu > 0 ) Call nnu_rate(t,rnnu,mask_in = mask(:))                                     !NNU
+    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt,rnnu,mask_in = mask(:))
 
     ! Calculate the csect for reactions with 1 reactant
     Do izb = 1, nzbatchmx
@@ -592,10 +593,10 @@ Contains
             csect1(:,izb) = rpf1(:) * exp(h1(:,izb)) * ene(izb)
           ElseWhere ( iwk1(:) == 2 .or. iwk1(:) == 3 )  ! FFN reaction
             csect1(:,izb) = rffn(iffn,izb)
-!         ElseWhere ( iwk1(:) == 7 )             ! Electron neutrino capture                    !NNU
-!           csect1(:,izb) = rpf1(:) * rnnu(innu,1,izb)                                          !NNU
-!         ElseWhere ( iwk1(:) == 8 )             ! Electron anti-neutrino capture               !NNU
-!           csect1(:,izb) = rpf1(:) * rnnu(innu,2,izb)                                          !NNU
+          ElseWhere ( iwk1(:) == 7 )  ! Electron neutrino capture
+            csect1(:,izb) = rpf1(:) * rnnu(innu,1,izb)
+          ElseWhere ( iwk1(:) == 8 )  ! Electron anti-neutrino capture
+            csect1(:,izb) = rpf1(:) * rnnu(innu,2,izb)
           EndWhere
         ElseIf ( iweak(izb) < 0 ) Then
           Where ( iwk1(:) == 0 )
@@ -606,10 +607,10 @@ Contains
             csect1(:,izb) = rpf1(:) * exp(h1(:,izb))
           ElseWhere ( iwk1(:) == 2 .or. iwk1(:) == 3 )  ! FFN reaction
             csect1(:,izb) = rffn(iffn,izb)
-!         ElseWhere ( iwk1(:) == 7 )             ! Electron neutrino capture                    !NNU
-!           csect1(:,izb) = rpf1(:) * rnnu(innu,1,izb)                                          !NNU
-!         ElseWhere ( iwk1(:) == 8 )             ! Electron anti-neutrino capture               !NNU
-!           csect1(:,izb) = rpf1(:) * rnnu(innu,2,izb)                                          !NNU
+          ElseWhere ( iwk1(:) == 7 )  ! Electron neutrino capture
+            csect1(:,izb) = rpf1(:) * rnnu(innu,1,izb)
+          ElseWhere ( iwk1(:) == 8 )  ! Electron anti-neutrino capture
+            csect1(:,izb) = rpf1(:) * rnnu(innu,2,izb)
           EndWhere
         Else
           Where ( iwk1(:) == 0 )
@@ -767,10 +768,10 @@ Contains
           EndWhere
           Where ( iwk1(:) == 2 .or. iwk1(:) == 3 )  ! FFN reaction
             dcsect1dt9(:,izb) = rffn(iffn,izb)*dlnrffndt9(iffn,izb)
-!         ElseWhere ( iwk1(:) == 7 )             ! Electron neutrino capture                    !NNU
-!           dcsect1dt9(:,izb) = rnnu(innu,1,izb)*dlnrpf1dt9(:)                                  !NNU
-!         ElseWhere ( iwk1(:) == 8 )             ! Electron anti-neutrino capture               !NNU
-!           dcsect1dt9(:,izb) = rnnu(innu,2,izb)*dlnrpf1dt9(:)                                  !NNU
+          ElseWhere ( iwk1(:) == 7 )  ! Electron neutrino capture
+            dcsect1dt9(:,izb) = rnnu(innu,1,izb)*dlnrpf1dt9(:)
+          ElseWhere ( iwk1(:) == 8 )  ! Electron anti-neutrino capture
+            dcsect1dt9(:,izb) = rnnu(innu,2,izb)*dlnrpf1dt9(:)
           ElseWhere
             dcsect1dt9(:,izb) = csect1(:,izb)*(dh1dt9(:,izb)+dlnrpf1dt9(:))
           EndWhere

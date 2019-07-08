@@ -7,8 +7,8 @@ Module model_input_ascii
     ! Read the thermdynamic trajectory
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: iostat_end
-!   Use neutrino_data, Only: fluxcms, tmevnu                                                    !NNU
     Use xnet_controls, Only: idiag, lun_diag, lun_th, nzone, szbatch, nzbatchmx, lzactive
+    Use xnet_nnu, Only: nnuspec, fluxcms, tmevnu
     Use xnet_util, Only: replace_tabs, readnext, xnet_terminate
     Use xnet_conditions, Only: nhmx,nh,tstart,tstop,tdelstart,th,t9h,rhoh,yeh
     Implicit None
@@ -44,8 +44,8 @@ Module model_input_ascii
     t9h = 0.0
     rhoh = 0.0
     yeh = 0.0
-!   fluxcms = 0.0                                                                               !NNU
-!   tmevnu = 0.0                                                                                !NNU
+    fluxcms = 0.0
+    tmevnu = 0.0
     ierr = 0
 
     !$omp critical(th_read)
@@ -86,13 +86,13 @@ Module model_input_ascii
             If ( pos == 0 ) Cycle
 
             ! See if neutrino data is in file, otherwise continue to next line
-!           Do i = 1, 4                                                                         !NNU
-!             Call readnext(line,pos,fluxcms(n,i,izb))                                          !NNU
-!           EndDo                                                                               !NNU
-!           If ( pos == 0 ) Cycle                                                               !NNU
-!           Do i = 1, 4                                                                         !NNU
-!             Call readnext(line,pos,tmevnu(n,i,izb))                                           !NNU
-!           EndDo                                                                               !NNU
+            Do i = 1, nnuspec
+              Call readnext(line,pos,fluxcms(n,i,izb))
+            EndDo
+            If ( pos == 0 ) Cycle
+            Do i = 1, nnuspec
+              Call readnext(line,pos,tmevnu(n,i,izb))
+            EndDo
           EndIf
         EndDo
         nh(izb) = n - 1
@@ -109,7 +109,7 @@ Module model_input_ascii
 
     ! Convert to appropriate units (CGS, except temperature (GK) and neutrino flux)
 !   t9h = t9h * 1.0e-9
-!   fluxcms = 1.0e-42 * fluxcms                                                                 !NNU
+    fluxcms = 1.0e-42 * fluxcms
 
     Return
   End Subroutine read_thermo_file

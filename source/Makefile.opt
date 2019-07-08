@@ -10,7 +10,7 @@ CMODE ?= OPT
 EXE = xnet
 
 ## SELECT MPI MODE, Default=OFF
- MPI_MODE = ON
+#MPI_MODE = ON
 
 ## SELECT OPENMP MODE, Default=OFF
 #OPENMP_MODE = ON
@@ -25,8 +25,8 @@ GPU_MODE    ?= OFF
 
 ## Choose EOS for screening; HELMHOLTZ (requires separate download) or BAHCALL
 #EOS = STARKILLER
- EOS = HELMHOLTZ
-#EOS ?= BAHCALL
+#EOS = HELMHOLTZ
+EOS ?= BAHCALL
 
 ## Choose matrix solver package 
 #MATRIX_SOLVER = PARDISO
@@ -41,7 +41,7 @@ MATRIX_SOLVER ?= dense
 #LAPACK_VER = LIBSCI
 #LAPACK_VER = ATLAS
 #LAPACK_VER = ACCEL
-LAPACK_VER = NETLIB
+#LAPACK_VER = NETLIB
 #LAPACK_VER = PGIBLAS
 
 ## Define alternative GPU LAPACK/BLAS package (Default is LIBSCIACC for Cray machines, MAGMA otherwise)
@@ -55,8 +55,4 @@ LAPACK_VER = NETLIB
 ##    Maxwell - NVIDIA compute capability 5.x cards
 ##    Pascal  - NVIDIA compute capability 6.x cards
 ##    Volta   - NVIDIA compute capability 7.x cards
-GPU_TARGET ?= Kepler
-
-# Optional features for XNet, uncomment to enable
-#NNU_OBJ = nu_nucleus.o	# Also uncomment lines labeled !NNU or use sed -i 's/^\!\(.*\!NNU\)/ \1/' *.f90
-			#        Comment lines labeled !NNU with   sed -i 's/^[^\!]\(.*\!NNU\)/!\1/' *.f90
+GPU_TARGET ?= Volta

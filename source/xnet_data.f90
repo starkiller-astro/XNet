@@ -537,12 +537,12 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine reads in the necessary reaction data.
     !-----------------------------------------------------------------------------------------------
-!   Use nnu_data, Only: rcsnu, sigmanu                                                          !NNU
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_constants, Only: five3rd
     Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzbatchmx
     Use xnet_ffn, Only: ffnsum, ffnenu, ngrid, read_ffn_data
+    Use xnet_nnu, Only: read_nnu_data, ntnu, nnuspec, sigmanu
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -592,20 +592,16 @@ Contains
     Endif
 
     ! If there are NNU rates, read in the NNU data and set NNU array sizes
-!   If ( nnnu > 0 ) Then                                                                        !NNU
-!     If ( parallel_IOProcessor() ) Then                                                        !NNU
-!       Call read_nnu_data(nnnu,data_dir)                                                       !NNU
-!     Else                                                                                      !NNU
-!       Allocate (sigmanu(nnnu,7))                                                              !NNU
-!       !$omp parallel default(shared)                                                          !NNU
-!       Allocate (rcsnu(nnnu,4))                                                                !NNU
-!       !$omp end parallel                                                                      !NNU
-!     EndIf                                                                                     !NNU
-!     Call parallel_bcast(sigmanu)                                                              !NNU
-!   Else                                                                                        !NNU
-!     Allocate (sigmanu(1,7))                                                                   !NNU
-!     Allocate (rcsnu(1,4))                                                                     !NNU
-!   EndIf                                                                                       !NNU
+    If ( nnnu > 0 ) Then
+      If ( parallel_IOProcessor() ) Then
+        Call read_nnu_data(nnnu,data_dir)
+      Else
+        Allocate (sigmanu(nnnu,ntnu))
+      EndIf
+      Call parallel_bcast(sigmanu)
+    Else
+      Allocate (sigmanu(1,ntnu))
+    EndIf
 
     ! Read in reaction arrays for 1 reactant reactions
     nr1 = nreac(1)

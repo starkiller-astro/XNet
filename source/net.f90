@@ -35,6 +35,7 @@ Program net
   Use xnet_integrate_bdf, Only: bdf_init
   Use xnet_jacobian, Only: read_jacobian_data
   Use xnet_match, Only: mflx, nflx, read_match_data
+  Use xnet_nnu, Only: nnuspec, tmevnu, fluxcms
   Use xnet_nse, Only: nse_initialize
   Use xnet_preprocess, Only: net_preprocess
   Use xnet_screening, Only: screening_init
@@ -170,7 +171,8 @@ Program net
   Allocate (nh(nzbatchmx),nstart(nzbatchmx), &
     &       tstart(nzbatchmx),tstop(nzbatchmx),tdelstart(nzbatchmx), &
     &       t9start(nzbatchmx),rhostart(nzbatchmx),yestart(nzbatchmx), &
-    &       th(nhmx,nzbatchmx),t9h(nhmx,nzbatchmx),rhoh(nhmx,nzbatchmx),yeh(nhmx,nzbatchmx))
+    &       th(nhmx,nzbatchmx),t9h(nhmx,nzbatchmx),rhoh(nhmx,nzbatchmx),yeh(nhmx,nzbatchmx), &
+    &       tmevnu(nhmx,nnuspec,nzbatchmx),fluxcms(nhmx,nnuspec,nzbatchmx))
 
   ! Allocate zone description arrays
   Allocate (abund_desc(nzbatchmx),thermo_desc(nzbatchmx))
