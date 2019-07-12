@@ -17,7 +17,7 @@ Program net
   !-------------------------------------------------------------------------------------------------
   Use nuclear_data, Only: ny, aa, zz, nname, index_from_name, read_nuclear_data
 !$ Use omp_lib
-  Use parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, parallel_nprocs, &
+  Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, parallel_nprocs, &
     & parallel_IOProcessor
   Use reaction_data, Only: read_reaction_data
   Use xnet_abundances, Only: ystart, yo, y, yt, ydot
