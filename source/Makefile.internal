@@ -296,13 +296,14 @@ endif
 #-------------------------------------------------------------------------------
 
 ## Intel Math Kernel Library (MKL)
-INTEL_PATH ?= /opt/intel/compilers_and_libraries/linux
-MKLROOT    ?= $(INTEL_PATH)/mkl
 ifeq ($(UNAME_S),Darwin)
+    INTEL_PATH ?= /opt/intel/compilers_and_libraries/mac
     MKL_OS = mac
 else
+    INTEL_PATH ?= /opt/intel/compilers_and_libraries/linux
     MKL_OS = lnx
 endif
+MKLROOT    ?= $(INTEL_PATH)/mkl
 ifneq ("$(wildcard ${MKLROOT}/tools/mkl_link_tool)","")
     ifeq ($(PE_ENV),INTEL)
         MKL_INC  != ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static
