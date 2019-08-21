@@ -98,7 +98,7 @@ test_simple: xnet_PARDISO
 ## This is the only sensible way to update the object file prerequisites based on the target.
 ifndef update-prereq
 xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO:
-	$(MAKE) $(MAKECMDGOALS) MATRIX_SOLVER=$* update-prereq=y --no-print-directory
+	$(MAKE) $(MAKECMDGOALS) MATRIX_SOLVER=$(@:xnet_%=%) update-prereq=y --no-print-directory
 else
 xnet_dense: $(BASE) xnet_jacobian_dense.o $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnetd$(MPI_SFX) \
