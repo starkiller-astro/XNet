@@ -125,8 +125,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use reaction_data, Only: la, le, n11, n21, n22, n31, n32, n33, n41, n42, n43, n44
-    Use parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx
+    Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Implicit None
 
     ! Input variables

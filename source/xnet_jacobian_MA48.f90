@@ -71,8 +71,8 @@ Contains
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx
+    Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Implicit None
 
     ! Input variables

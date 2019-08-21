@@ -150,7 +150,7 @@ Contains
     ! The control file contains the parameters which determine the actions of XNet.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: iostat_end
-    Use parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_util, Only: name_ordered, xnet_terminate
     Implicit None
 

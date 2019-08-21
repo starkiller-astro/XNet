@@ -342,7 +342,7 @@ Contains
     ! This routine gracefully exits XNet with a diagnostic statement in the event of an error.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
-    Use parallel, Only: parallel_abort
+    Use xnet_parallel, Only: parallel_abort
     Implicit None
 
     ! Input variables

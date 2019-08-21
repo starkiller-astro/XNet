@@ -10,7 +10,7 @@ module xnet_mpi
   !use mpi
 end module xnet_mpi
 
-module parallel
+module xnet_parallel
 
   use xnet_types, only: i8, sp, dp
   use xnet_mpi
@@ -2432,4 +2432,4 @@ contains
     tag = ctag
   end function parallel_tag
 
-end module parallel
+end module xnet_parallel

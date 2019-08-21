@@ -4,7 +4,7 @@
 ! Ported from https://github.com/AMReX-Codes/amrex/blob/master/Src/F_BaseLib/parallel_stubs.f90 
 !***************************************************************************************************
 
-module parallel
+module xnet_parallel
 
   use xnet_types, only: i8, sp, dp
 
@@ -299,7 +299,7 @@ contains
        print*, 'parallel_abort() !!!'
     end if
     if ( present(errorcode) ) then
-       stop errorcode
+       stop
     else
        stop
     end if
@@ -2003,4 +2003,4 @@ contains
     tag = 1000
   end function parallel_tag
 
-end module parallel
+end module xnet_parallel

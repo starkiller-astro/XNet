@@ -7,13 +7,13 @@
 
 Program nse_slice
   Use nuclear_data, Only: ny, aa, zz, benuc, read_nuclear_data
-  Use parallel, Only: parallel_initialize, parallel_myproc, parallel_nprocs
   Use reaction_data, Only: read_reaction_data
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, iprocess, iscrn, isolv, itsout, iweak0, &
     & changemx, tolm, tolc, yacc, ymin, tdel_maxmult, kstmx, kitmx, bin_file_base, lun_diag, &
     & lun_stdin, lun_stdout, read_controls, myid, nproc
   Use xnet_eos, Only: eos_initialize
   Use xnet_nse, Only: ynse, nse_initialize, nse_solve
+  Use xnet_parallel, Only: parallel_initialize, parallel_myproc, parallel_nprocs
   Use xnet_preprocess, Only: net_preprocess
   Use xnet_types, Only: dp
   Use xnet_util, Only: name_ordered

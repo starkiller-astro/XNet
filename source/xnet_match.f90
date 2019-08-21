@@ -23,9 +23,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine reads in the reaction matching data and allocates the necessary arrays.
     !-----------------------------------------------------------------------------------------------
-    Use parallel, Only: parallel_bcast, parallel_IOProcessor
     Use reaction_data, Only: nreac
     Use xnet_controls, Only: idiag, lun_diag, lun_stdout
+    Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Implicit None
 
     ! Input variables

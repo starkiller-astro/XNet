@@ -290,9 +290,9 @@ Contains
     ! Also the tabulations of the partition functions, g, are read in for later interpolation. Once
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
-    Use parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
     Use xnet_controls, Only: iheat, nzbatchmx
+    Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
 
@@ -538,11 +538,11 @@ Contains
     ! This routine reads in the necessary reaction data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
-    Use parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_constants, Only: five3rd
     Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzbatchmx
     Use xnet_ffn, Only: ffnsum, ffnenu, ngrid, read_ffn_data
     Use xnet_nnu, Only: read_nnu_data, ntnu, nnuspec, sigmanu
+    Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
     Implicit None

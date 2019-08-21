@@ -136,7 +136,7 @@ xnse: xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_ffn.o 
 #
 # Rules for compiling individual files.
 #
-parallel.o: parallel.f90
+xnet_parallel.o: xnet_parallel.f90
 	$(FC_MPI) $(FFLAGS) $(F90FLAGS) -c $< -o $@
 xnet_eos_helm.o: xnet_eos_helm.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) -I$(HELMHOLTZ_PATH) -c $< -o $@
