@@ -137,7 +137,7 @@ else ifeq ($(PE_ENV),PGI)
         OPENMP    = -mp -Mnoopenmp
     endif
     ifeq ($(OPENACC_MODE),ON)
-        OPENACC   = -acc -ta=tesla
+        OPENACC   = -acc -ta=tesla:cc70,cuda10.1,ptxinfo -Minfo=accel
     else
         OPENACC   = -acclibs
     endif
@@ -165,7 +165,11 @@ else ifeq ($(PE_ENV),GNU)
         CXX       = g++
         LDR       = gfortran
 
-        ARCHOPT   = -march=native
+        ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+          ARCHOPT   = -mcpu=native
+        else
+          ARCHOPT   = -march=native
+        endif
     endif
 
     # generic flags
