@@ -88,10 +88,12 @@ Module model_input_ascii
             ! See if neutrino data is in file, otherwise continue to next line
             Do i = 1, nnuspec
               Call readnext(line,pos,fluxcms(n,i,izb))
+              If ( pos == 0 ) Exit
             EndDo
             If ( pos == 0 ) Cycle
             Do i = 1, nnuspec
               Call readnext(line,pos,tmevnu(n,i,izb))
+              If ( pos == 0 ) Exit
             EndDo
           EndIf
         EndDo
