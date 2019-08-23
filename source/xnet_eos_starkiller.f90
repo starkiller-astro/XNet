@@ -54,6 +54,7 @@ Contains
       ! Load input variables for the eos
       eos_state%rho = rho
       eos_state%T = t9*1e9
+      eos_state%y_e = ye
       eos_state%abar = abar
       eos_state%zbar = ye*abar
 
