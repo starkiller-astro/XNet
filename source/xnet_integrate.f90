@@ -488,7 +488,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(:)
 
     ! Local variables
-    Integer, Parameter :: dgemm_nzbatch = 2 ! Min number of zones to use dgemm, otherwise use dgemv
+    Integer, Parameter :: dgemm_nzbatch = 200 ! Min number of zones to use dgemm, otherwise use dgemv
     Real(dp) :: t09(7,nzbatchmx), dt09(7,nzbatchmx)
     Real(dp) :: ene(nzbatchmx), ytot, abar, zbar, z2bar, zibar
     Real(dp) :: rffn(max(nffn,1),nzbatchmx)          ! FFN reaction rates
