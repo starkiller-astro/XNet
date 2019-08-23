@@ -61,8 +61,8 @@ else ifeq ($(EOS),HELMHOLTZ)
   VPATH += $(HELMHOLTZ_PATH)
 else ifeq ($(EOS),STARKILLER)
   EOS_OBJ = actual_eos.o eos_type.o xnet_fd.o xnet_eos_starkiller.o
-  VPATH += $(STARKILLER_ROOT)/Microphysics/EOS/helmholtz
-  VPATH += $(STARKILLER_ROOT)/Microphysics/interfaces
+  STARKILLER_HELMHOLTZ_PATH ?= ../tools/starkiller-helmholtz
+  VPATH += $(STARKILLER_HELMHOLTZ_PATH)
 endif
 BASE += $(EOS_OBJ)
 
@@ -159,6 +159,8 @@ $(SOLVER_OBJ_F90): %.o: %.f90
 $(SOLVER_OBJ_F): %.o: %.f
 	$(FC) $(FFLAGS) $(F77FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $(notdir $@)
 
+%.o: %.F90
+	$(FC) $(FFLAGS) $(F90FLAGS) -c $< -o $@
 %.o: %.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) -c $< -o $@
 %.o: %.f
@@ -206,6 +208,9 @@ xnet_fd.o: xnet_types.o
 xnet_eos_helm.o: xnet_fd.o helmholtz.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
 xnet_eos_bahcall.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
 xnet_eos_starkiller.o: actual_eos.o eos_type.o xnet_fd.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
+
+actual_eos.o: eos_type.o xnet_util.o $(MPI_OBJ)
+eos_type.o: xnet_types.o xnet_util.o
 
 xnet_jacobian_dense.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ)
 xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(LAPACK_OBJ) $(MA41_OBJ) $(MPI_OBJ)

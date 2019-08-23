@@ -1,0 +1,2 @@
+These are the Helmholtz EOS routines and table from starkiller-astro/Microphysics (https://github.com/starkiller-astro/Microphysics).
+The routines have been slightly tweaked to interface with standalone-XNet with minimal dependencies.
