@@ -70,7 +70,7 @@ Program net
   ! Identify threads
   !$omp parallel default(shared)
   mythread = 1
-  !$ mythread = omp_get_thread_num()
+  !$ mythread = omp_get_thread_num() + 1
   !$omp single
   nthread = 1
   !$ nthread = omp_get_num_threads()
