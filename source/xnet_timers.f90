@@ -22,6 +22,7 @@ Module xnet_timers
   Real(dp) :: timer_solve  = 0.0  ! Solution time
   Real(dp) :: timer_scrn   = 0.0  ! Screening and EOS time
   Real(dp) :: timer_eos    = 0.0  ! Screening and EOS time
+  Real(dp) :: timer_nse    = 0.0  ! NSE timer
   Real(dp) :: timer_output = 0.0  ! Output time
   Real(dp) :: start_timer  = 0.0  ! cpu time at the beginning of the timer block
   Real(dp) :: stop_timer   = 0.0  ! cpu time at the end of the timer block

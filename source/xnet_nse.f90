@@ -12,6 +12,7 @@ Module xnet_nse
   Use xnet_constants, Only: avn, bi, bip1, bok, cds, clt, e2, epmev, hbar, kbi, m_n, m_p, &
     & m_e, pi, third
   Use xnet_controls, Only: idiag, itsout, iscrn, lun_diag, lun_stderr, lun_stdout
+  Use xnet_timers
   Use xnet_types, Only: dp
   Use xnet_util, Only: xnet_terminate, safe_exp
   Implicit None
@@ -142,6 +143,9 @@ Contains
     ! Local variables
     Integer :: i
 
+    start_timer = xnet_wtime()
+    timer_nse = timer_nse - start_timer
+
     !$omp parallel default(shared)
     ! Allocate NSE composition arrays
     Allocate (xnse(ny),ynse(ny),unse(ny))
@@ -217,6 +221,9 @@ Contains
       Write(lun_stdout,'(2(a,a5))') 'Could not find ','ni56','; setting i_ni56 to max B/A: ',nname(ibe)
       i_ni56 = ibe
     EndIf
+
+    stop_timer = xnet_wtime()
+    timer_nse = timer_nse + stop_timer
 
     Return
   End Subroutine nse_initialize
@@ -317,6 +324,9 @@ Contains
     Logical :: check
     Integer :: info, info0, iguess, iguess0
 
+    start_timer = xnet_wtime()
+    timer_nse = timer_nse - start_timer
+
     ! Reset counters
     knrtot(:) = 0
 
@@ -340,7 +350,7 @@ Contains
       Call nse_nr(uvec,check,info)
       If ( info > 0 ) Exit
     EndDo
-    If ( itsout >= 2 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'CP98:', &
+    If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'CP98:', &
     & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
 
     ! Save the CP98 result
@@ -358,7 +368,7 @@ Contains
         Do i = 1, 3
           Call nse_screen
           Call nse_nr(uvec,check,info)
-          If ( itsout >= 2 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
+          If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
           & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
         EndDo
       EndIf
@@ -375,13 +385,13 @@ Contains
           Call nse_nr(uvec,check,info)
           If ( info > 0 ) Exit
         EndDo
-        If ( itsout >= 2 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
+        If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
         & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
       EndIf
     EndIf
 
     If ( info <= 0 ) Then
-      If ( itsout >= 2 ) Then
+      If ( itsout >= 3 ) Then
         If ( info == 0 ) Then
           Write(lun_stdout,'(a)') 'Exceeded max NR iterations'
         ElseIf ( info == -1 ) Then
@@ -399,7 +409,7 @@ Contains
         EndIf
       EndIf
       If ( info0 > 0 ) Then
-        If ( itsout >= 2 ) Write(lun_stdout,'(a)') 'XNet screening failed; using CP98 screening result'
+        If ( itsout >= 3 ) Write(lun_stdout,'(a)') 'XNet screening failed; using CP98 screening result'
       Else
         Write(lun_stdout,'(a,i2,a,3es23.15)') &
           & 'Check convergence of root finder (',info,'), rho,T,Ye= ',rhonse,t9nse,yense
@@ -422,7 +432,7 @@ Contains
       knrtot(3) = knrtot(3) + 1
     EndIf
 
-    If ( itsout >= 1 ) Then
+    If ( itsout >= 2 ) Then
       Write(lun_stdout,'(a)') 'NSE solved'
       Write(lun_stdout,'(a,1x,3i15)')     'NR iters, LS iters, F evals =',knrtot(1),knrtot(2),knrtot(3)
       Write(lun_stdout,'(a,2es23.15)')    'roots                       =',uvec(1),uvec(2)
@@ -431,6 +441,9 @@ Contains
       ii = maxloc(xnse,1)
       Write(lun_stdout,'(a,a23,es23.15)') 'largest mass fraction       =',nname(ii),xnse(ii)
     EndIf
+
+    stop_timer = xnet_wtime()
+    timer_nse = timer_nse + stop_timer
 
     Return
   End Subroutine nse_solve
@@ -634,12 +647,12 @@ Contains
       uvec(:) = uvec(:) / det
     EndIf
 
-    If ( itsout >= 1 ) Then
+    If ( itsout >= 2 ) Then
       Write(lun_stdout,'(a,2es23.15)') 'Initial guess               =', uvec(1), uvec(2)
       Write(lun_stdout,'(a5,f11.7,es23.15)') nname(iye(1)), za_ye(1), xnse(iye(1))
       Write(lun_stdout,'(a5,f11.7,es23.15)') nname(iye(2)), za_ye(2), xnse(iye(2))
     EndIf
-    If ( itsout >= 2 ) Then
+    If ( itsout >= 3 ) Then
       Write(lun_stdout,'(a,2a5)') 'iza_min,   iza_max   =', nname(iza_min),   nname(iza_max)
       Write(lun_stdout,'(a,2a5)') 'iye_za_l,  iye_za_u  =', nname(iye_za_l),  nname(iye_za_u)
       Write(lun_stdout,'(a,2a5)') 'iye_hvy_l, iye_hvy_u =', nname(iye_hvy_l), nname(iye_hvy_u)
@@ -807,9 +820,9 @@ Contains
     unorm = l2norm( scaleu(:)*uvec(:) )
     maxstep = maxstep0 * max( unorm, l2norm( scaleu(:) ) )
 
-    If ( itsout >= 2 ) Write(lun_stdout,'(3i3,7es23.15)') &
+    If ( itsout >= 3 ) Write(lun_stdout,'(3i3,7es23.15)') &
       & 0, knr(2), knr(3), uvec(1), uvec(2), fvec(1), fvec(2), f, testf, testu
-    If ( itsout >= 3 ) Write(lun_stdout,'(9x,2es23.15)') xnse(i_nn), xnse(i_pp)
+    If ( itsout >= 4 ) Write(lun_stdout,'(9x,2es23.15)') xnse(i_nn), xnse(i_pp)
 
     ! Do the NR iterations
     Do nrit = 1, nritmax
@@ -874,9 +887,9 @@ Contains
         testg = l2norm( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5_dp*n) )
       EndIf
 
-      If ( itsout >= 2 ) Write(lun_stdout,'(3i3,8es23.15)') &
+      If ( itsout >= 3 ) Write(lun_stdout,'(3i3,8es23.15)') &
         & nrit, knr(2), knr(3), uvec(1), uvec(2), fvec(1), fvec(2), f, testf, testu, testg
-      If ( itsout >= 3 ) Write(lun_stdout,'(7x,i2,6es23.15)') &
+      If ( itsout >= 4 ) Write(lun_stdout,'(7x,i2,6es23.15)') &
         & info2, xnse(1), xnse(2), pvec(1), pvec(2), gvec(1), gvec(2)
 
       If ( info2 < 0 ) Then
