@@ -381,7 +381,6 @@ Contains
     mm = aa / avn! + mex(:)*epmev/(clt*clt)
     !mm(:) = zz(:)*(m_p+m_e) + nn(:)*m_n - be(:)*epmev/(clt*clt)
 
-    ! Allocate threadprivate arrays
     Allocate (gg(0:ny,nzevolve))
     If ( iheat > 0 ) Allocate (dlngdt9(0:ny,nzevolve))
 
@@ -740,7 +739,6 @@ Contains
       EndDo
     EndDo
 
-    ! Allocate threadprivate arrays
     Allocate (csect1(nr1,nzevolve))
     Allocate (csect2(nr2,nzevolve))
     Allocate (csect3(nr3,nzevolve))
