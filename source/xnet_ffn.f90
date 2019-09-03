@@ -50,36 +50,37 @@ Contains
     ! This routine calculates the reaction rates for FFN weak rates
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: ln_10
-    Use xnet_controls, Only: iheat, nzbatchmx, lzactive
+    Use xnet_controls, Only: iheat, nzevolve, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Integer, Intent(in)  :: nffn    ! Number of FFN rates
-    Real(dp), Intent(in) :: t9(:)   ! Temperature [GK]
-    Real(dp), Intent(in) :: ene(:)  ! Electron Density [g cm^{-3}]
+    Integer, Intent(in)  :: nffn              ! Number of FFN rates
+    Real(dp), Intent(in) :: t9(nzevolve)      ! Temperature [GK]
+    Real(dp), Intent(in) :: ene(zb_lo:zb_hi)  ! Electron Density [g cm^{-3}]
 
     ! Output variables
-    Real(dp), Intent(out) :: rf(nffn,nzbatchmx)       ! Temperature and density dependent FFN rates
-    Real(dp), Intent(out) :: dlnrfdt9(nffn,nzbatchmx) ! Temperature and density dependent log FFN rate derivatives
+    Real(dp), Intent(out) :: rf(nffn,zb_lo:zb_hi)       ! Temperature and density dependent FFN rates
+    Real(dp), Intent(out) :: dlnrfdt9(nffn,zb_lo:zb_hi) ! Temperature and density dependent log FFN rate derivatives
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp) :: r1(nffn), r2(nffn), dr1(nffn), dr2(nffn) ! temporary interpolation variables
+    Real(dp), Parameter :: lrfmin = -30.0
+    Real(dp) :: r1, r2, dr1, dr2
     Real(dp) :: enel, dt9, dene, rdt9, rdene
-    Integer :: i, izb, le1, lt1, i1, i2, i3, i4
+    Integer :: i,izb, k, le1, lt1, i1, i2, i3, i4
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Find the temperature grid point
@@ -101,23 +102,20 @@ Contains
         i2 = i1 + 1
         i3 = nt9grid*le1 + lt1
         i4 = i3 + 1
-        dr1(:) = ffnsum(:,i2) - ffnsum(:,i1)
-        dr2(:) = ffnsum(:,i4) - ffnsum(:,i3)
-        r1(:) = ffnsum(:,i1) + rdt9*dr1(:)
-        r2(:) = ffnsum(:,i3) + rdt9*dr2(:)
-        rf(:,izb) = r1(:) + rdene*(r2(:) - r1(:))
-        Where ( rf(:,izb) < -30.0 )
-          rf(:,izb) = 0.0
-        ElseWhere
-          rf(:,izb) = 10.0**rf(:,izb)
-        EndWhere
-        If ( iheat > 0 ) Then
-          Where ( rf(:,izb) < -30.0 )
-            dlnrfdt9(:,izb) = 0.0
-          ElseWhere
-            dlnrfdt9(:,izb) = ln_10 * ( rdene*dr2(:) + (1.0-rdene)*dr1(:) ) / dt9
-          EndWhere
-        EndIf
+        Do k = 1, nffn
+          dr1 = ffnsum(k,i2) - ffnsum(k,i1)
+          dr2 = ffnsum(k,i4) - ffnsum(k,i3)
+          r1 = ffnsum(k,i1) + rdt9*dr1
+          r2 = ffnsum(k,i3) + rdt9*dr2
+          rf(k,izb) = r1 + rdene*(r2 - r1)
+          If ( rf(k,izb) < lrfmin ) Then
+            rf(k,izb) = 0.0
+            dlnrfdt9(k,izb) = 0.0
+          Else
+            rf(k,izb) = 10.0**rf(k,izb)
+            dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+          EndIf
+        EndDo
       EndIf
     EndDo
 

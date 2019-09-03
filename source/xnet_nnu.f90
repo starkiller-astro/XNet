@@ -26,7 +26,6 @@ Module xnet_nnu
 
   Real(dp), Allocatable :: tmevnu(:,:,:)  ! Neutrino temperature [MeV]
   Real(dp), Allocatable :: fluxcms(:,:,:) ! Neutrino fluxes [cm^-2 s^-1]
-  !$omp threadprivate(tmevnu,fluxcms)
 
   Real(dp), Dimension(:,:), Allocatable :: sigmanu ! dim(nnnu,ntnu)
 
@@ -52,7 +51,7 @@ Contains
       Read(lun_nnu,*) (sigmanu(i,j), j=1,ntnu)
     EndDo
     Close(lun_nnu)
-    sigmanu(:,:) = max( sigmamin, sigmanu(:,:) )
+    sigmanu = max( sigmamin, sigmanu )
 
     Return
   End Subroutine read_nnu_data
@@ -67,45 +66,45 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: nzbatchmx, lzactive, ineutrino
+    Use xnet_controls, Only: nzevolve, zb_lo, zb_hi, lzactive, ineutrino
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: nnnu
-    Real(dp), Intent(in) :: time(nzbatchmx)
+    Real(dp), Intent(in) :: time(nzevolve)
 
     ! Output variables
-    Real(dp), Intent(out), Dimension(nnnu,nnuspec,nzbatchmx) :: rate
+    Real(dp), Intent(out), Dimension(nnnu,nnuspec,zb_lo:zb_hi) :: rate
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp) :: ltnu(nnuspec), flux(nnuspec)
-    Real(dp) :: lsigmanu1(nnnu), lsigmanu2(nnnu)
-    Real(dp) :: rcsnu(nnnu,nnuspec)
+    Real(dp) :: ltnu, flux
+    Real(dp) :: lsigmanu1, lsigmanu2
+    Real(dp) :: rcsnu
     Real(dp) :: rdt, rdltnu, ltnu1, ltnu2
-    Integer :: izb, it, i, j, n
+    Integer :: izb, it, i, j, k, n
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     ! Only interpolate if neutrino reactions are on
     If ( ineutrino == 0 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           rate(:,:,izb) = 0.0
         EndIf
       EndDo
     Else
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
 
           ! For constant conditions (nh = 1), do not interpolate in time
@@ -120,40 +119,43 @@ Contains
             n = i
           EndIf
 
-          ! Linear interpolation in log-space
-          If ( n == 1 ) Then
-            ltnu(:) = log(tmevnu(1,:,izb))
-            flux(:) = fluxcms(1,:,izb)
-          ElseIf ( n > nh(izb) ) Then
-            ltnu(:) = log(tmevnu(nh(izb),:,izb))
-            flux(:) = fluxcms(nh(izb),:,izb)
-          Else
-            rdt = (time(izb)-th(n-1,izb)) / (th(n,izb)-th(n-1,izb))
-            ltnu(:) = rdt*log(tmevnu(n,:,izb)) + (1.0-rdt)*log(tmevnu(n-1,:,izb))
-            flux(:) = safe_exp( rdt*log(fluxcms(n,:,izb)) + (1.0-rdt)*log(fluxcms(n-1,:,izb)) )
-          EndIf
-
           ! Compute neutrino cross sections
           Do j = 1, nnuspec
+
+            ! Linear interpolation in log-space
+            If ( n == 1 ) Then
+              ltnu = log(tmevnu(1,j,izb))
+              flux = fluxcms(1,j,izb)
+            ElseIf ( n > nh(izb) ) Then
+              ltnu = log(tmevnu(nh(izb),j,izb))
+              flux = fluxcms(nh(izb),j,izb)
+            Else
+              rdt = (time(izb)-th(n-1,izb)) / (th(n,izb)-th(n-1,izb))
+              ltnu = rdt*log(tmevnu(n,j,izb)) + (1.0-rdt)*log(tmevnu(n-1,j,izb))
+              flux = safe_exp( rdt*log(fluxcms(n,j,izb)) + (1.0-rdt)*log(fluxcms(n-1,j,izb)) )
+            EndIf
             Do i = 1, ntnu
-              If ( ltnu(j) <= ltnugrid(i) ) Exit
+              If ( ltnu <= ltnugrid(i) ) Exit
             EndDo
             it = i
 
-            ! Log interpolation
-            If ( it == 1 ) Then
-              rcsnu(:,j) = sigmanu(:,1)
-            ElseIf ( it > ntnu ) Then
-              rcsnu(:,j) = sigmanu(:,ntnu)
-            Else
-              ltnu1 = ltnugrid(it-1)
-              ltnu2 = ltnugrid(it)
-              lsigmanu1(:) = log(sigmanu(:,it-1))
-              lsigmanu2(:) = log(sigmanu(:,it))
-              rdltnu = (ltnu(j)-ltnu1) / (ltnu2-ltnu1)
-              rcsnu(:,j) = safe_exp( rdltnu*lsigmanu2 + (1.0-rdltnu)*lsigmanu1 )
-            EndIf
-            rate(:,j,izb) = flux(j)*rcsnu(:,j)
+            Do k = 1, nnnu
+
+              ! Log interpolation
+              If ( it == 1 ) Then
+                rcsnu = sigmanu(k,1)
+              ElseIf ( it > ntnu ) Then
+                rcsnu = sigmanu(k,ntnu)
+              Else
+                ltnu1 = ltnugrid(it-1)
+                ltnu2 = ltnugrid(it)
+                lsigmanu1 = log(sigmanu(k,it-1))
+                lsigmanu2 = log(sigmanu(k,it))
+                rdltnu = (ltnu-ltnu1) / (ltnu2-ltnu1)
+                rcsnu = safe_exp( rdltnu*lsigmanu2 + (1.0-rdltnu)*lsigmanu1 )
+              EndIf
+              rate(k,j,izb) = flux*rcsnu
+            EndDo
           EndDo
         EndIf
       EndDo

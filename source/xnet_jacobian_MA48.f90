@@ -242,7 +242,7 @@ Contains
     Real(dp), Intent(in) :: diag(:), mult(:)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, i0, izb
@@ -253,7 +253,7 @@ Contains
     Else
       mask => lzactive(:)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     Do izb = 1, nzbatchmx
       If ( mask(izb) ) Then
@@ -281,7 +281,7 @@ Contains
 
     ! Optional variables
     Real(dp), Optional, Intent(in) :: diag_in(:), mult_in(:)
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -299,7 +299,7 @@ Contains
     Else
       mask => lzactive(:)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
@@ -479,7 +479,7 @@ Contains
     Real(dp), Intent(in) :: t9rhs(:)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Output variables
     Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
@@ -494,7 +494,7 @@ Contains
     Else
       mask => lzactive(:)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     Call jacobian_decomp(kstep,mask_in = mask(:))
     Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = mask(:))
@@ -527,7 +527,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, izb, izone, j, kdecomp, jdecomp
@@ -538,7 +538,7 @@ Contains
     Else
       mask => lzactive(:)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
@@ -759,7 +759,7 @@ Contains
     Real(dp), Intent(in) :: t9rhs(:)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Output variables
     Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
@@ -777,7 +777,7 @@ Contains
     Else
       mask => lzactive(:)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer

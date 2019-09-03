@@ -33,15 +33,15 @@ Contains
     ! subroutine interface are stored in XNet's conditions module as etae and detaedt9.  For more
     ! general EoS, etae and detaedt9 are their proper selves.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: zz53
+    Use nuclear_data, Only: ny, zz53
+    Use xnet_abundances, Only: y_moment
     Use xnet_constants, Only: asig, avn, bok, e2, pi, pi2, third, emass, clt, ele_en, hbar
     Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag
     Use xnet_types, Only: dp
-    Use xnet_abundances, Only: y_moment
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(:)
+    Real(dp), Intent(in) :: t9, rho, y(ny)
 
     ! Output variables
     Real(dp), Intent(out) :: ye, cv, efermkt, defermktdt9
@@ -105,15 +105,16 @@ Contains
     ! Note: the efermkt and defermktdt9 in the subroutine interface are stored in XNet's conditions
     ! module as etae and detaedt9.  For more general EoS, etae and detaedt9 are their proper selves.
     !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_abundances, Only: y_moment
     Use xnet_constants, Only: avn, bok, clt, e2, ele_en, emass, hbar, pi, pi2, third, two3rd, &
       & thbim2, twm2bi
     Use xnet_controls, Only: idiag, iheat, lun_diag
     Use xnet_types, Only: dp
-    Use xnet_abundances, Only: y_moment
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(:), efermkt, defermktdt9
+    Real(dp), Intent(in) :: t9, rho, y(ny), efermkt, defermktdt9
 
     ! Output variables
     Real(dp), Intent(out) :: ztilde, zinter, lambda0, gammae, dztildedt9

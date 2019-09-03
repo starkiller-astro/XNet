@@ -8,8 +8,8 @@ Module xnet_gpu
   Implicit None
 
   ! CUDA/CUBLAS management
-  Type(C_PTR) :: handle, stream, event
-  !$omp threadprivate(handle,stream,event)
+  Type(C_PTR) :: handle, stream
+  !$omp threadprivate(handle,stream)
 
   Integer(C_INT) :: deviceCount
   Integer :: mydevice
@@ -17,14 +17,14 @@ Module xnet_gpu
 Contains
 
   Subroutine gpu_init
-    Use xnet_controls, Only: lun_stdout, myid
+    Use xnet_controls, Only: lun_stdout, myid, mythread
     Use cublasf
     Use cudaf
+    Use openaccf
     Implicit None
 
     ! Local variables
     Integer :: istat
-    !Type(cudaDeviceProp) :: deviceProp
 
     ! Initialize GPU
     istat = cudaGetDeviceCount(deviceCount)
@@ -35,32 +35,24 @@ Contains
     Else
       Write(lun_stdout,*) 'No CUDA capable device found'
     EndIf
-
-    !istat = cudaGetDeviceProperties(deviceProp,mydevice)
-    !If ( istat /= cudaSuccess ) Write(lun_stdout,*) "cudaGetDeviceProperties, istat", istat
-
-     !Write(lun_stdout,'(3(a,i2),3(a,i1))') "Rank: ",myid,", Device: ",mydevice+1," (of ",deviceCount, &
-     !  "), CC: ",deviceProp%major,".",deviceProp%minor,", ComputeMode: ",deviceProp%computeMode
+    istat = cudaSetDevice(mydevice)
 
     !$omp parallel default(shared) private(istat)
-
-    istat = cudaSetDevice(mydevice)
-    If ( istat /= cudaSuccess ) Write(lun_stdout,*) "cudaSetDevice, istat", istat
     
     ! Create cublas handles
     istat = cublasCreate_v2(handle)
-    If ( istat /= CUBLAS_STATUS_SUCCESS ) Write(lun_stdout,*) 'cublasCreate_v2, istat', istat
 
     ! Create CUDA streams
-    !istat = cudaStreamCreateWithFlags(stream, cudaStreamDefault)
-    istat = cudaStreamCreateWithFlags(stream, cudaStreamNonBlocking)
-    if (istat /= cudaSuccess) Write(lun_stdout,*) "cudaStreamCreateWithFlags, istat", istat
+    istat = cudaStreamCreate(stream)
+
+    ! Associate OpenACC async queue with CUDA stream
+    !acc_async_default = acc_get_default_async()
+    !call acc_set_default_async(acc_async_default)
+    acc_queue = mythread
+    istat = acc_set_cuda_stream(acc_queue, stream)
 
     ! Associate each cublas handle with a CUDA stream
     istat = cublasSetStream_v2(handle, stream)
-    if ( istat /= CUBLAS_STATUS_SUCCESS ) Write(lun_stdout,*) 'cublasSetStream_v2, istat', istat
-
-    istat = cudaEventCreateWithFlags(event, cudaEventDefault)
 
     !$omp end parallel
 
@@ -80,7 +72,6 @@ Contains
 
     !$omp parallel default(shared) private(istat)
 
-    istat = cudaEventDestroy(event)
     istat = cudaStreamDestroy(stream)
     istat = cublasDestroy_v2(handle)
 

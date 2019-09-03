@@ -191,8 +191,8 @@ xnet_abundances.o: xnet_controls.o xnet_data.o xnet_types.o
 xnet_conditions.o: xnet_controls.o xnet_types.o xnet_util.o
 xnet_constants.o: xnet_types.o
 xnet_evolve.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_integrate_bdf.o xnet_integrate_be.o xnet_output.o xnet_timers.o xnet_types.o xnet_util.o
-xnet_gpu.o: cublasf.o cudaf.o xnet_controls.o
-xnet_integrate.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_ffn.o xnet_nnu.o xnet_screening.o xnet_timers.o xnet_types.o $(EOS_OBJ) $(LAPACK_OBJ)
+xnet_gpu.o: cublasf.o cudaf.o openaccf.o xnet_controls.o
+xnet_integrate.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_controls.o xnet_data.o xnet_ffn.o xnet_nnu.o xnet_screening.o xnet_timers.o xnet_types.o $(EOS_OBJ) $(LAPACK_OBJ)
 xnet_integrate_bd.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_bdf.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_be.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)

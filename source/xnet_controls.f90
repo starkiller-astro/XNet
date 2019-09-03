@@ -26,14 +26,18 @@ Module xnet_controls
   Integer              :: iscrn      ! If =0, screening is ignored
   Integer              :: iprocess   ! If =0, assume network has been pre-processed.
                                      ! If >0, then run network pre-processing (slows calculation)
-  !$omp threadprivate(zone_id,iweak)
+  !$omp threadprivate(zone_id)
 
   ! Zone Batching Controls
+  Integer  :: nzevolve                ! Number of zones being simultaneously evolved
   Integer  :: nzbatchmx               ! Maximum number of zones in a batch
   Integer  :: nzbatch                 ! Active number of zones in a batch
   Integer  :: szbatch                 ! Starting zone for a batch
+  Integer  :: zb_offset               ! Zone-batch offset in nzevolve
+  Integer  :: zb_lo                   ! Lower extent of zone-batch in nzevolve
+  Integer  :: zb_hi                   ! Upper extent of zone-batch in nzevolve
   Logical, Allocatable, Target :: lzactive(:) ! Mask for active zones
-  !$omp threadprivate(nzbatch,szbatch,lzactive)
+  !$omp threadprivate(nzbatch,szbatch,zb_offset,zb_lo,zb_hi)
 
   ! Integration Controls
   Integer  :: isolv                 ! Sets the integration method (1=BE, 2=BD)
@@ -50,7 +54,6 @@ Module xnet_controls
   Integer, Allocatable :: kmon(:,:) ! Solver-dependent behaviour monitors
   Integer, Allocatable :: ktot(:,:) ! Cumulative solver-dependent behaviour monitors
   Real(dp) :: t9min = 0.01          ! Temperature minimum for turning strong reactions off
-  !$omp threadprivate(kmon,ktot)
 
   ! Self-heating Controls
   Integer  :: iheat        ! If >0, then implicitly couple network to temperature (self-heating)
@@ -73,7 +76,7 @@ Module xnet_controls
   Character(80) :: ev_file_base, bin_file_base ! Output filename bases
   Integer       :: lun_diag                    ! Logical units for per-thread diagnostic output file
   Integer, Allocatable :: lun_ts(:), lun_ev(:) ! Logical units for per-zone output files
-  !$omp threadprivate(lun_diag,lun_ev,lun_ts)
+  !$omp threadprivate(lun_diag)
 
   ! Input controls
   Character(80) :: inab_file_base, thermo_file_base ! Input filename bases
@@ -193,10 +196,14 @@ Contains
       EndIf
     EndIf
     Call parallel_bcast(nzbatchmx)
+    nzevolve = nzbatchmx * nthread
+    Allocate (lzactive(nzevolve))
+    Allocate (iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
+    Allocate (kmon(2,nzevolve),ktot(5,nzevolve))
     !$omp parallel default(shared)
-    Allocate (lzactive(nzbatchmx))
-    Allocate (iweak(nzbatchmx),lun_ev(nzbatchmx),lun_ts(nzbatchmx))
-    Allocate (kmon(2,nzbatchmx),ktot(5,nzbatchmx))
+    zb_offset = (mythread-1) * nzbatchmx
+    zb_lo = zb_offset + 1
+    zb_hi = zb_offset + nzbatchmx
     !$omp end parallel
 
     ! Read Integration Controls

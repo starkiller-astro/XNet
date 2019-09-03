@@ -8,7 +8,17 @@ Module xnet_util
   ! This module contains the data and routines for an assortment of (mostly independent) utility
   ! routines.
   !-------------------------------------------------------------------------------------------------
+  Use xnet_constants, Only: ln_2
+  Use xnet_types, Only: dp
   Implicit None
+
+  Real(dp), Parameter :: exp_max = maxexponent(1.0_dp)*ln_2*0.99_dp
+  Real(dp), Parameter :: exp_min = minexponent(1.0_dp)*ln_2*0.99_dp
+
+  Interface safe_exp
+    Module Procedure safe_exp_scalar
+    Module Procedure safe_exp_vector
+  End Interface safe_exp
 
   Interface readnext
     Module Procedure readnext_i
@@ -39,11 +49,28 @@ Contains
     Return
   End Function ifactorial
 
-  Function safe_exp( x ) Result( y )
+  Function safe_exp_scalar( x ) Result( y )
     !-----------------------------------------------------------------------------------------------
     ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_constants, Only: ln_2
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: x
+
+    ! Function variable
+    Real(dp) :: y
+
+    y = exp( min( exp_max, max( exp_min, x ) ) )
+
+    Return
+  End Function safe_exp_scalar
+
+  Function safe_exp_vector( x ) Result( y )
+    !-----------------------------------------------------------------------------------------------
+    ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
+    !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: dp
     Implicit None
 
@@ -53,14 +80,10 @@ Contains
     ! Function variable
     Real(dp) :: y(size(x))
 
-    ! Local variables
-    Real(dp), Parameter :: exp_max = maxexponent(1.0_dp)*ln_2*0.99_dp
-    Real(dp), Parameter :: exp_min = minexponent(1.0_dp)*ln_2*0.99_dp
-
-    y(:) = exp( min( exp_max, max( exp_min, x(:) ) ) )
+    y = exp( min( exp_max, max( exp_min, x ) ) )
 
     Return
-  End Function safe_exp
+  End Function safe_exp_vector
 
   Integer Function getNewUnit(unit)
     !-----------------------------------------------------------------------------------------------

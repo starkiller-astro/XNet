@@ -20,19 +20,16 @@ Module xnet_conditions
   Real(dp), Allocatable :: t9(:),rho(:),ye(:)    ! Temperature, density, and electron fraction at current time
   Real(dp), Allocatable :: t9o(:),rhoo(:),yeo(:) ! Temperature, density, and electron fraction at previous time
   Real(dp), Allocatable :: t9dot(:)              ! Time derivative of temperature at trial time
-  !$omp threadprivate(t,tt,to,tdel,tdel_next,tdel_old,t9t,t9,t9o,t9dot,rhot,rho,rhoo,yet,ye,yeo)
 
   Real(dp), Allocatable :: cv(:)                 ! Specific heat at constant volume
   Real(dp), Allocatable :: etae(:)               ! Ratio of electron chemical potential to kT
   Real(dp), Allocatable :: detaedt9(:)           ! d(etae)/dT9
-  !$omp threadprivate(cv,etae,detaedt9)
 
   Integer, Allocatable :: nt(:)    ! Point in thermo trajectory for current time
   Integer, Allocatable :: ntt(:)   ! Point in thermo trajectory for trial time
   Integer, Allocatable :: nto(:)   ! Point in thermo trajectory for previous time
   Integer, Allocatable :: ints(:)  ! Nucleus governing timestep
   Integer, Allocatable :: intso(:) ! Nucleus governing last timestep
-  !$omp threadprivate(nto,nt,ntt,ints,intso)
 
   ! Arrays for thermodynamic trajectory that the network follows
   Integer, Parameter    :: nhmx = 50000 ! The max number of thermo points
@@ -40,7 +37,6 @@ Module xnet_conditions
   Integer, Allocatable  :: nstart(:)
   Real(dp), Allocatable :: tstart(:),tstop(:),tdelstart(:),t9start(:),rhostart(:),yestart(:)
   Real(dp), Allocatable :: th(:,:),t9h(:,:),rhoh(:,:),yeh(:,:)
-  !$omp threadprivate(nh,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart,th,t9h,rhoh,yeh)
 
 Contains
 
@@ -49,20 +45,20 @@ Contains
     ! This routine calculates t9 and rho as a function of time, either via interpolation or from an
     ! analytic expression.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_diag, lun_stdout, nzbatchmx, lzactive
+    Use xnet_controls, Only: lun_diag, lun_stdout, nzevolve, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: tf(:)
+    Real(dp), Intent(in) :: tf(nzevolve)
 
     ! Input/Output variables
-    Integer, Intent(inout) :: nf(size(tf))
-    Real(dp), Intent(inout) :: t9f(size(tf)), rhof(size(tf))
+    Integer, Intent(inout) :: nf(nzevolve)
+    Real(dp), Intent(inout) :: t9f(nzevolve), rhof(nzevolve)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Real(dp) :: dt, rdt, dt9, drho
@@ -70,13 +66,13 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     End If
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! For constant conditions (nh = 1), set temperature and density

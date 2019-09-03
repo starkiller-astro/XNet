@@ -41,7 +41,6 @@ Module nuclear_data
   Real(dp), Allocatable :: gg(:,:)      ! Interpolated partition function
   Real(dp), Allocatable :: angm(:)      ! Angular momentum
   Real(dp), Allocatable :: dlngdt9(:,:) ! d(ln(partition functions))/dT9
-  !$omp threadprivate(gg,dlngdt9)
 
 Contains
 
@@ -86,7 +85,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: y(:)
+    Real(dp), Intent(in) :: y(ny)
 
     ! Output variables
     Real(dp), Intent(out) :: enb ! Binding energy [ergs g^{-1}]
@@ -110,16 +109,16 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(:)
+    Real(dp), Intent(in) :: t9(nzevolve)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, ii, izb
@@ -127,13 +126,13 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Do i = 1, ng
           If ( t9(izb) <= t9i(i) ) Exit
@@ -167,7 +166,7 @@ Contains
     EndDo
 
     !If ( idiag >= 1 ) Then
-    !  Do izb = 1, nzbatchmx
+    !  Do izb = zb_lo, zb_hi
     !    If ( mask(izb) ) Then
     !      Write(lun_diag,"(a5,i3,es14.7)") 'PartF',ii,t9(izb)
     !      Write(lun_diag,"(5(i4,es12.4))") (i, gg(i,izb), i=1,ny)
@@ -246,7 +245,7 @@ Contains
     If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
 
     ! Convert to the proper units
-    t9i(:) = real(it9i(:),dp)
+    t9i = real(it9i,dp)
     t9i(1:ng-1) = 0.01*t9i(1:ng-1)
     t9i(ng) = 0.1*t9i(ng)
 
@@ -291,7 +290,7 @@ Contains
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
-    Use xnet_controls, Only: iheat, nzbatchmx
+    Use xnet_controls, Only: iheat, nzevolve
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
@@ -339,22 +338,22 @@ Contains
     Call parallel_bcast(angm)
     Call parallel_bcast(g)
 
-    ia(:) = nint(aa(:))
-    zz(:) = real(iz(:),dp)
-    izmin = minval(iz(:))
-    izmax = maxval(iz(:))
-    nn(:) = real(in(:),dp)
-    inmin = minval(in(:))
-    inmax = maxval(in(:))
-    zz2(:) = zz(:)*zz(:)
-    zz53(:) = zz(:)**five3rd
-    zzi(:) = zz(:)**thbim1
+    ia = nint(aa)
+    zz = real(iz,dp)
+    izmin = minval(iz)
+    izmax = maxval(iz)
+    nn = real(in,dp)
+    inmin = minval(in)
+    inmax = maxval(in)
+    zz2 = zz*zz
+    zz53 = zz**five3rd
+    zzi = zz**thbim1
 
     ! Some commonly used factors of Z
     Allocate (zseq(0:izmax+2),zseq53(0:izmax+2),zseqi(0:izmax+2))
-    zseq(:) = (/ (real(i,dp), i=0,izmax+2) /)
-    zseq53(:) = zseq(:)**five3rd
-    zseqi(:) = zseq(:)**bip1
+    zseq = (/ (real(i,dp), i=0,izmax+2) /)
+    zseq53 = zseq**five3rd
+    zseqi = zseq**bip1
 
     ! Get neutron and proton indices
     ineut = 0
@@ -376,17 +375,15 @@ Contains
     Else
       mex_p = m_p + m_e - m_u
     EndIf
-    be(:) = mex_n*nn(:) + mex_p*zz(:) - mex(:)
+    be = mex_n*nn + mex_p*zz - mex
 
     ! Uncomment the commented end of the line below to use the actual mass instead of A*m_u
-    mm(:) = aa(:) / avn! + mex(:)*epmev/(clt*clt)
+    mm = aa / avn! + mex(:)*epmev/(clt*clt)
     !mm(:) = zz(:)*(m_p+m_e) + nn(:)*m_n - be(:)*epmev/(clt*clt)
 
     ! Allocate threadprivate arrays
-    !$omp parallel
-    Allocate (gg(0:ny,nzbatchmx))
-    If ( iheat > 0 ) Allocate (dlngdt9(0:ny,nzbatchmx))
-    !$omp end parallel
+    Allocate (gg(0:ny,nzevolve))
+    If ( iheat > 0 ) Allocate (dlngdt9(0:ny,nzevolve))
 
     Return
   End Subroutine read_nuclear_data
@@ -436,8 +433,8 @@ Contains
       EndIf
     EndDo
     Allocate (zz(ny),nn(ny),be(ny))
-    zz(:) = real(iz(:),dp)
-    nn(:) = real(in(:),dp)
+    zz = real(iz,dp)
+    nn = real(in,dp)
 
     ! Get neutron and proton indices
     ineut = 0
@@ -459,7 +456,7 @@ Contains
     Else
       mex_p = m_p + m_e - m_u
     EndIf
-    be(:) = mex_n*nn(:) + mex_p*zz(:) - mex(:)
+    be = mex_n*nn + mex_p*zz - mex
 
     ! Write binary data file
     Open(newunit=lun_data, file=trim(data_dir)//'/nuc_data', form='unformatted')
@@ -489,7 +486,6 @@ Module reaction_data
   Real(dp), Allocatable :: rc1(:,:), rc2(:,:), rc3(:,:), rc4(:,:)    ! REACLIB parameters
   Real(dp), Allocatable :: csect1(:,:), csect2(:,:), csect3(:,:), csect4(:,:)
   Real(dp), Allocatable :: dcsect1dt9(:,:), dcsect2dt9(:,:), dcsect3dt9(:,:), dcsect4dt9(:,:)
-  !$omp threadprivate(csect1,csect2,csect3,csect4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
 
   ! Reaction flags to indicate variations in how the rate is calculated
   Integer, Allocatable :: iwk1(:), iwk2(:), iwk3(:), iwk4(:)     ! Weak Reaction
@@ -498,9 +494,6 @@ Module reaction_data
 
   ! Additional rate or energy factors
   Real(dp), Allocatable :: q1(:), q2(:), q3(:), q4(:)         ! Reaction Q values
-  Real(dp), Allocatable :: rpf1(:), rpf2(:), rpf3(:), rpf4(:) ! Partition function ratios for detailed balance
-  Real(dp), Allocatable :: dlnrpf1dt9(:), dlnrpf2dt9(:), dlnrpf3dt9(:), dlnrpf4dt9(:) ! d(ln(partition function ratios))/dT9
-  !$omp threadprivate(rpf1,rpf2,rpf3,rpf4,dlnrpf1dt9,dlnrpf2dt9,dlnrpf3dt9,dlnrpf4dt9)
 
   !-------------------------------------------------------------------------------------------------
   ! Aside from the REACLIB formated data, this dataset includes pointers to sets of external
@@ -529,7 +522,6 @@ Module reaction_data
 
   ! Reaction rates after folding cross-sections in with counting factors
   Real(dp), Allocatable :: b1(:,:), b2(:,:), b3(:,:), b4(:,:) ! Coefficiencts of the Y terms in Eq. 10 of Hix & Meyer (2006)
-  !$omp threadprivate(b1,b2,b3,b4)
 
 Contains
 
@@ -539,7 +531,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzbatchmx
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve
     Use xnet_ffn, Only: ffnsum, ffnenu, ngrid, read_ffn_data
     Use xnet_nnu, Only: read_nnu_data, ntnu, nnuspec, sigmanu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
@@ -682,19 +674,19 @@ Contains
 
     ! Calculate pointers to non-REACLIB data
     Allocate (iffn(nr1),innu(nr1))
-    Where ( iwk1(:) == 2 .or. iwk1(:) == 3 ) ! FFN reaction
-      iffn(:) = nint(rc1(1,:))
-      innu(:) = 0
-    ElseWhere ( iwk1(:) == 7 .or. iwk1(:) == 8 ) ! NNU reaction
-      iffn(:) = 0
-      innu(:) = nint(rc1(1,:))
+    Where ( iwk1 == 2 .or. iwk1 == 3 ) ! FFN reaction
+      iffn = nint(rc1(1,:))
+      innu = 0
+    ElseWhere ( iwk1 == 7 .or. iwk1 == 8 ) ! NNU reaction
+      iffn = 0
+      innu = nint(rc1(1,:))
     ElseWhere
-      iffn(:) = 0
-      innu(:) = 0
+      iffn = 0
+      innu = 0
     EndWhere
 
     ! Allocate and read extended reaction->nuclei arrays linking nuclei to the reactions which affect them
-    nan(:) = le(:,ny)
+    nan = le(:,ny)
     Allocate (mu1(nan(1)),a1(nan(1)),n10(nan(1)),n11(nan(1)))
     Allocate (mu2(nan(2)),a2(nan(2)),n20(nan(2)),n21(nan(2)),n22(nan(2)))
     Allocate (mu3(nan(3)),a3(nan(3)),n30(nan(3)),n31(nan(3)),n32(nan(3)),n33(nan(3)))
@@ -749,22 +741,20 @@ Contains
     EndDo
 
     ! Allocate threadprivate arrays
-    !$omp parallel default(shared)
-    Allocate (csect1(nr1,nzbatchmx),rpf1(nr1))
-    Allocate (csect2(nr2,nzbatchmx),rpf2(nr2))
-    Allocate (csect3(nr3,nzbatchmx),rpf3(nr3))
-    Allocate (csect4(nr4,nzbatchmx),rpf4(nr4))
-    Allocate (b1(nan(1),nzbatchmx))
-    Allocate (b2(nan(2),nzbatchmx))
-    Allocate (b3(nan(3),nzbatchmx))
-    Allocate (b4(nan(4),nzbatchmx))
+    Allocate (csect1(nr1,nzevolve))
+    Allocate (csect2(nr2,nzevolve))
+    Allocate (csect3(nr3,nzevolve))
+    Allocate (csect4(nr4,nzevolve))
+    Allocate (b1(nan(1),nzevolve))
+    Allocate (b2(nan(2),nzevolve))
+    Allocate (b3(nan(3),nzevolve))
+    Allocate (b4(nan(4),nzevolve))
     If ( iheat > 0 ) Then
-      Allocate (dcsect1dt9(nr1,nzbatchmx),dlnrpf1dt9(nr1))
-      Allocate (dcsect2dt9(nr2,nzbatchmx),dlnrpf2dt9(nr2))
-      Allocate (dcsect3dt9(nr3,nzbatchmx),dlnrpf3dt9(nr3))
-      Allocate (dcsect4dt9(nr4,nzbatchmx),dlnrpf4dt9(nr4))
+      Allocate (dcsect1dt9(nr1,nzevolve))
+      Allocate (dcsect2dt9(nr2,nzevolve))
+      Allocate (dcsect3dt9(nr3,nzevolve))
+      Allocate (dcsect4dt9(nr4,nzevolve))
     EndIf
-    !$omp end parallel
 
     Return
   End Subroutine read_reaction_data

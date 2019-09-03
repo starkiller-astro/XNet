@@ -12,7 +12,6 @@ Module xnet_screening
   Implicit None
   Real(dp), Allocatable :: h1(:,:), h2(:,:), h3(:,:), h4(:,:)                 ! Screening factors
   Real(dp), Allocatable :: dh1dt9(:,:), dh2dt9(:,:), dh3dt9(:,:), dh4dt9(:,:) ! d(screening factors)/dT9
-  !$omp threadprivate(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
 
   ! Proton (charge) numbers for individual reactants in 2-, 3-, and 4-reactant reactions
   Real(dp), Allocatable :: z21(:), z22(:), z31(:), z32(:), z33(:)
@@ -43,7 +42,7 @@ Contains
     Use nuclear_data, Only: zz
     Use reaction_data, Only: nreac, n2i, n3i, n4i
     Use xnet_constants, Only: bip1, thbim1, five3rd
-    Use xnet_controls, Only: iheat, iscrn, nzbatchmx
+    Use xnet_controls, Only: iheat, iscrn, nzevolve
     Use xnet_types, Only: dp
     Implicit None
 
@@ -61,68 +60,66 @@ Contains
       Allocate (z21(nr2),z22(nr2))
       Allocate (iz21(nr2),iz22(nr2))
       Allocate (iz2c(nr2),z2c(nr2),zeta2w(nr2),zeta2i(nr2))
-      z21(:) = zz(n2i(1,:))
-      z22(:) = zz(n2i(2,:))
-      iz21(:) = nint(z21(:))
-      iz22(:) = nint(z22(:))
-      iz2c(:) = iz21(:) + iz22(:)
-      z2c(:) = real(iz2c(:),dp)
-      zeta2w(:) = z21(:)*z22(:)
-      zeta2i(:) = z2c(:)**bip1 - z21(:)**bip1 - z22(:)**bip1
+      z21 = zz(n2i(1,:))
+      z22 = zz(n2i(2,:))
+      iz21 = nint(z21)
+      iz22 = nint(z22)
+      iz2c = iz21 + iz22
+      z2c = real(iz2c,dp)
+      zeta2w = z21*z22
+      zeta2i = z2c**bip1 - z21**bip1 - z22**bip1
 
       ! 3-reactant screening terms
       Allocate (z31(nr3),z32(nr3),z33(nr3))
       Allocate (iz31(nr3),iz32(nr3),iz33(nr3))
       Allocate (iz3c(nr3),z3c(nr3),zeta3w(nr3),zeta3i(nr3))
-      z31(:) = zz(n3i(1,:))
-      z32(:) = zz(n3i(2,:))
-      z33(:) = zz(n3i(3,:))
-      iz31(:) = nint(z31(:))
-      iz32(:) = nint(z32(:))
-      iz33(:) = nint(z33(:))
-      iz3c(:) = iz31(:) + iz32(:) + iz33(:)
-      z3c(:) = real(iz3c(:),dp)
-      zeta3w(:) = z31(:)*z32(:) + z31(:)*z33(:) + z32(:)*z33(:)
-      zeta3i(:) = z3c(:)**bip1 - z31(:)**bip1 - z32(:)**bip1 - z33(:)**bip1
+      z31 = zz(n3i(1,:))
+      z32 = zz(n3i(2,:))
+      z33 = zz(n3i(3,:))
+      iz31 = nint(z31)
+      iz32 = nint(z32)
+      iz33 = nint(z33)
+      iz3c = iz31 + iz32 + iz33
+      z3c = real(iz3c,dp)
+      zeta3w = z31*z32 + z31*z33 + z32*z33
+      zeta3i = z3c**bip1 - z31**bip1 - z32**bip1 - z33**bip1
 
       ! 4-reactant screening terms
       Allocate (z41(nr4),z42(nr4),z43(nr4),z44(nr4))
       Allocate (iz41(nr4),iz42(nr4),iz43(nr4),iz44(nr4))
       Allocate (iz4c(nr4),z4c(nr4),zeta4w(nr4),zeta4i(nr4))
-      z41(:) = zz(n4i(1,:))
-      z42(:) = zz(n4i(2,:))
-      z43(:) = zz(n4i(3,:))
-      z44(:) = zz(n4i(4,:))
-      iz41(:) = nint(z41(:))
-      iz42(:) = nint(z42(:))
-      iz43(:) = nint(z43(:))
-      iz44(:) = nint(z44(:))
-      iz4c(:) = iz41(:) + iz42(:) + iz43(:) + iz44(:)
-      z4c(:) = real(iz4c(:),dp)
-      zeta4w(:) = z41(:)*(z42(:) + z43(:) + z44(:)) + z42(:)*(z43(:) + z44(:)) + z43(:) * z44(:)
-      zeta4i(:) = z4c(:)**bip1 - z41(:)**bip1 - z42(:)**bip1 - z43(:)**bip1 - z44(:)**bip1
+      z41 = zz(n4i(1,:))
+      z42 = zz(n4i(2,:))
+      z43 = zz(n4i(3,:))
+      z44 = zz(n4i(4,:))
+      iz41 = nint(z41)
+      iz42 = nint(z42)
+      iz43 = nint(z43)
+      iz44 = nint(z44)
+      iz4c = iz41 + iz42 + iz43 + iz44
+      z4c = real(iz4c,dp)
+      zeta4w = z41*(z42 + z43 + z44) + z42*(z43 + z44) + z43 * z44
+      zeta4i = z4c**bip1 - z41**bip1 - z42**bip1 - z43**bip1 - z44**bip1
     EndIf
 
-    !$omp parallel default(shared)
-    Allocate (h1(nr1,nzbatchmx))
-    Allocate (h2(nr2,nzbatchmx))
-    Allocate (h3(nr3,nzbatchmx))
-    Allocate (h4(nr4,nzbatchmx))
-    h1(:,:) = 0.0
-    h2(:,:) = 0.0
-    h3(:,:) = 0.0
-    h4(:,:) = 0.0
+    Allocate (h1(nr1,nzevolve))
+    Allocate (h2(nr2,nzevolve))
+    Allocate (h3(nr3,nzevolve))
+    Allocate (h4(nr4,nzevolve))
+    h1 = 0.0
+    h2 = 0.0
+    h3 = 0.0
+    h4 = 0.0
     If ( iheat > 0 ) Then
-      Allocate (dh1dt9(nr1,nzbatchmx))
-      Allocate (dh2dt9(nr2,nzbatchmx))
-      Allocate (dh3dt9(nr3,nzbatchmx))
-      Allocate (dh4dt9(nr4,nzbatchmx))
-      dh1dt9(:,:) = 0.0
-      dh2dt9(:,:) = 0.0
-      dh3dt9(:,:) = 0.0
-      dh4dt9(:,:) = 0.0
+      Allocate (dh1dt9(nr1,nzevolve))
+      Allocate (dh2dt9(nr2,nzevolve))
+      Allocate (dh3dt9(nr3,nzevolve))
+      Allocate (dh4dt9(nr4,nzevolve))
+      dh1dt9 = 0.0
+      dh2dt9 = 0.0
+      dh3dt9 = 0.0
+      dh4dt9 = 0.0
     EndIf
-    !$omp end parallel
 
     Return
   End Subroutine screening_init
@@ -147,13 +144,13 @@ Contains
     Use xnet_abundances, Only: yt
     Use xnet_constants, Only: bi, bip1, cds, kbi, thbim2
     Use xnet_conditions, Only: rhot, t9t, etae, detaedt9
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_eos, Only: eos_screen
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: j, mu, izb, izone
@@ -171,18 +168,14 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-
-        ! No screening term for 1-reactant reactions
-        h1(:,izb) = 0.0
-        If ( iheat > 0 ) dh1dt9(:,izb) = 0.0
 
         ! Call EOS to get plasma quantities
         call eos_screen(t9t(izb),rhot(izb),yt(:,izb),etae(izb),detaedt9(izb), &
@@ -203,6 +196,10 @@ Contains
           &                  + cds(2) * gammaz(1:izmax+2)**cds(5) &
           &                  + cds(3) * log(gammaz(1:izmax+2))
         dfhsdt9(1:izmax+2) = -dfhsdt9(1:izmax+2) / t9t(izb)
+
+        ! No screening term for 1-reactant reactions
+        h1(:,izb) = 0.0
+        If ( iheat > 0 ) dh1dt9(:,izb) = 0.0
 
         ! Weak and intermediate screening factors, Table 4 of Graboske et al. (1973)
         lambda12 = zeta2w * ztilde * lambda0
@@ -348,7 +345,7 @@ Contains
         EndIf
 
         If ( idiag >= 5 ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,i5)") 'SCREEN',izone
           Write(lun_diag,"(3a5,i6,5es23.15)") &
             & ('H2',(nname(n2i(j,mu)),j=1,2),mu,lambda12(mu),  h2(mu,izb),h2w(mu),h2i(mu),h2s(mu),mu=1,nreac(2))

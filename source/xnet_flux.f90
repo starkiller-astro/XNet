@@ -12,7 +12,6 @@ Module xnet_flux
   Real(dp), Allocatable :: flx(:,:), flx_int(:,:)
   Real(dp), Allocatable :: dcflx(:,:)
   Integer, Allocatable  :: ifl_orig(:), ifl_term(:)
-  !$omp threadprivate(flx,flx_int)
 
 Contains
 
@@ -21,7 +20,7 @@ Contains
     ! This routine allocates the flux arrays and determines the double counting factors necessary for
     ! reactions with identical reactants.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, nzbatchmx
+    Use xnet_controls, Only: idiag, lun_diag, nzevolve
     Use xnet_match, Only: mflx, nflx
     Use xnet_types, Only: dp
     Implicit None
@@ -49,9 +48,10 @@ Contains
       ifl_term(i) = nflx(count(nflx(5:8,i) /= 0 ) + 4,i)
     EndDo
 
-    !$omp parallel default(shared)
-    Allocate (flx(mflx,nzbatchmx),flx_int(mflx,nzbatchmx))
+    Allocate (flx(mflx,nzevolve),flx_int(mflx,nzevolve))
+    flx = 0.0
     flx_int = 0.0
+    !$omp parallel default(shared)
     If ( idiag >= 5 ) Then
       Write(lun_diag,"(a)") 'Flux Init'
       Write(lun_diag,"(12i5,2f6.3)") &
@@ -71,13 +71,13 @@ Contains
     Use reaction_data, Only: csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i, nreac
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: tdel
-    Use xnet_controls, Only: idiag, lun_diag, ymin, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_match, Only: ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, k, ifl, idcfl, izb, izone
@@ -85,13 +85,13 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Get fluxes
@@ -126,14 +126,20 @@ Contains
         Where ( abs(flx(:,izb)) > flxmin )
           flx_int(:,izb) = flx_int(:,izb) + flx(:,izb)*tdel(izb)
         EndWhere
-        If ( idiag >= 5 ) Then
-          izone = izb + szbatch - 1
+      EndIf
+    EndDo
+
+    If ( idiag >= 5 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          flxmin = ymin / tdel(izb)
           Write(lun_diag,"(a5,i5,es10.3)") 'Flux',izone,flxmin
           Write(lun_diag,"(i5,9a5,i5,2es23.15)") &
             & (k,(nname(nflx(i,k)),i=1,4),' <-> ',(nname(nflx(i,k)),i=5,8),iwflx(k),flx(k,izb),flx_int(k,izb),k=1,mflx)
         EndIf
-      EndIf
-    EndDo
+      EndDo
+    EndIf
 
     Return
   End Subroutine flux
@@ -145,13 +151,13 @@ Contains
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: y, ydot, yo
     Use xnet_conditions, Only: tdel
-    Use xnet_controls, Only: idiag, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_match, Only: mflx, nflx
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Real(dp) :: flx_test(0:ny)
@@ -159,13 +165,13 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Calculate flx_test = dy + dt * (flux_out - flux_in)
@@ -177,7 +183,7 @@ Contains
           flx_test(nflx(5:8,i)) = flx_test(nflx(5:8,i)) + flx(i,izb)*tdel(izb)
         EndDo
         If ( idiag >= 5 ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,2i5,es11.3)") "Flux Check",izone,mflx,tdel(izb)
           Write(lun_diag,"(a5,4es11.3)") &
             & (nname(i),y(i,izb),yo(i,izb)-y(i,izb),ydot(i,izb)*tdel(izb),flx_test(i),i=1,ny)

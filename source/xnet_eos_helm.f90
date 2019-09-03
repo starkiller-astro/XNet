@@ -22,14 +22,15 @@ Contains
   End Subroutine eos_initialize
 
   Subroutine eos_interface(t9,rho,y,ye,cv,etae,detaedt9)
+    Use nuclear_data, Only: ny
+    Use xnet_abundances, Only: y_moment
     Use xnet_constants, Only: avn, epmev
     Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag
     Use xnet_types, Only: dp
-    Use xnet_abundances, Only: y_moment
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(:)
+    Real(dp), Intent(in) :: t9, rho, y(ny)
 
     ! Ouput variables
     Real(dp), Intent(out) :: ye, cv, etae, detaedt9
@@ -72,15 +73,16 @@ Contains
     ! This routine uses the current composition and prior updates to the Equation of State to
     ! calculate the factors needed for screening.
     !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_abundances, Only: y_moment
     Use xnet_constants, Only: avn, bok, clt, e2, ele_en, emass, hbar, pi, pi2, third, two3rd, &
       & thbim2, twm2bi
     Use xnet_controls, Only: idiag, iheat, lun_diag
     Use xnet_types, Only: dp
-    Use xnet_abundances, Only: y_moment
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(:), etae, detaedt9
+    Real(dp), Intent(in) :: t9, rho, y(ny), etae, detaedt9
 
     ! Output variables
     Real(dp), Intent(out) :: ztilde, zinter, lambda0, gammae, dztildedt9

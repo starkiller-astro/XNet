@@ -27,8 +27,8 @@ Program net
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
-    & lun_diag, lun_ev, lun_stdout, lun_ts, mythread, nthread, nzbatchmx, nzbatch, szbatch, lzactive, &
-    & myid, nproc, read_controls
+    & lun_diag, lun_ev, lun_stdout, lun_ts, mythread, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
+    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
   Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
@@ -143,39 +143,40 @@ Program net
   ! This is essentially a ceiling function for integer division
   batch_count = (nzone + nzbatchmx - 1) / nzbatchmx
 
+  ! Set sizes of abundance arrays
+  Allocate (y(ny,nzevolve),yo(ny,nzevolve),yt(ny,nzevolve),ydot(ny,nzevolve),ystart(ny,nzevolve))
+
+  ! Allocate conditions arrays
+  Allocate (t(nzevolve),tt(nzevolve),to(nzevolve), &
+    &       tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
+    &       t9(nzevolve),t9t(nzevolve),t9o(nzevolve), &
+    &       rho(nzevolve),rhot(nzevolve),rhoo(nzevolve), &
+    &       ye(nzevolve),yet(nzevolve),yeo(nzevolve), &
+    &       nt(nzevolve),ntt(nzevolve),nto(nzevolve), &
+    &       ints(nzevolve),intso(nzevolve), &
+    &       t9dot(nzevolve),cv(nzevolve),etae(nzevolve),detaedt9(nzevolve))
+
+  ! Allocate thermo history arrays
+  Allocate (nh(nzevolve),nstart(nzevolve), &
+    &       tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
+    &       t9start(nzevolve),rhostart(nzevolve),yestart(nzevolve), &
+    &       th(nhmx,nzevolve),t9h(nhmx,nzevolve),rhoh(nhmx,nzevolve),yeh(nhmx,nzevolve), &
+    &       tmevnu(nhmx,nnuspec,nzevolve),fluxcms(nhmx,nnuspec,nzevolve))
+
+  ! Allocate zone description arrays
+  Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
+
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
   !$omp parallel default(shared) &
-  !$omp   private(dyf,flx_diff,abund_desc,thermo_desc,ev_file,bin_file,izone,ierr,ibatch,izb) &
+  !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb) &
   !$omp   copyin(timer_setup)
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
 
-  ! Set sizes of abundance arrays
-  Allocate (y(ny,nzbatchmx),yo(ny,nzbatchmx),yt(ny,nzbatchmx),ydot(ny,nzbatchmx),ystart(ny,nzbatchmx))
   Allocate (dyf(0:ny),flx_diff(ny))
-
-  ! Allocate conditions arrays
-  Allocate (t(nzbatchmx),tt(nzbatchmx),to(nzbatchmx), &
-    &       tdel(nzbatchmx),tdel_next(nzbatchmx),tdel_old(nzbatchmx), &
-    &       t9(nzbatchmx),t9t(nzbatchmx),t9o(nzbatchmx), &
-    &       rho(nzbatchmx),rhot(nzbatchmx),rhoo(nzbatchmx), &
-    &       ye(nzbatchmx),yet(nzbatchmx),yeo(nzbatchmx), &
-    &       nt(nzbatchmx),ntt(nzbatchmx),nto(nzbatchmx), &
-    &       ints(nzbatchmx),intso(nzbatchmx), &
-    &       t9dot(nzbatchmx),cv(nzbatchmx),etae(nzbatchmx),detaedt9(nzbatchmx))
-
-  ! Allocate thermo history arrays
-  Allocate (nh(nzbatchmx),nstart(nzbatchmx), &
-    &       tstart(nzbatchmx),tstop(nzbatchmx),tdelstart(nzbatchmx), &
-    &       t9start(nzbatchmx),rhostart(nzbatchmx),yestart(nzbatchmx), &
-    &       th(nhmx,nzbatchmx),t9h(nhmx,nzbatchmx),rhoh(nhmx,nzbatchmx),yeh(nhmx,nzbatchmx), &
-    &       tmevnu(nhmx,nnuspec,nzbatchmx),fluxcms(nhmx,nnuspec,nzbatchmx))
-
-  ! Allocate zone description arrays
-  Allocate (abund_desc(nzbatchmx),thermo_desc(nzbatchmx))
 
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
@@ -195,8 +196,8 @@ Program net
     nzbatch = min(nzone-szbatch+1, nzbatchmx)
 
     ! Active zone mask
-    Do izb = 1, nzbatchmx
-      If ( izb <= nzbatch ) Then
+    Do izb = zb_lo, zb_hi
+      If ( izb <= zb_offset + nzbatch ) Then
         lzactive(izb) = .true.
       Else
         lzactive(izb) = .false.
@@ -213,18 +214,20 @@ Program net
     Call load_initial_abundances(inab_file,abund_desc,ierr)
 
     ! Load initial abundances, time and timestep
-    tdel(:) = 0.0
-    nt(:)   = nstart(:)
-    t(:)    = tstart(:)
-    y(:,:)  = ystart(:,:)
-    t9(:)   = t9start(:)
-    rho(:)  = rhostart(:)
-    ye(:)   = yestart(:)
+    Do izb = zb_lo, zb_hi
+      tdel(izb) = 0.0
+      nt(izb)   = nstart(izb)
+      t(izb)    = tstart(izb)
+      t9(izb)   = t9start(izb)
+      rho(izb)  = rhostart(izb)
+      ye(izb)   = yestart(izb)
+      y(:,izb)  = ystart(:,izb)
+    EndDo
 
     ! Open the evolution file
     If ( itsout >= 2 ) Then
-      Do izb = 1, nzbatch
-        izone = izb + szbatch - 1
+      Do izb = zb_lo, zb_hi
+        izone = izb + szbatch - zb_lo
         ev_file = trim(ev_file_base)
         Call name_ordered(ev_file,izone,nzone)
         If ( idiag >= 0 ) Write(lun_diag,"(a,i5,7es10.3)") trim(ev_file), &
@@ -240,8 +243,8 @@ Program net
 
     ! Open the binary time series file
     If ( itsout >= 1 ) Then
-      Do izb = 1, nzbatch
-        izone = izb + szbatch - 1
+      Do izb = zb_lo, zb_hi
+        izone = izb + szbatch - zb_lo
         bin_file = trim(bin_file_base)
         Call name_ordered(bin_file,izone,nzone)
         Open(newunit=lun_ts(izb), file=bin_file, form='unformatted')
@@ -271,7 +274,7 @@ Program net
     Call full_net
 
     ! Test how well sums of fluxes match abundances changes
-    Do izb = 1, nzbatch
+    Do izb = zb_lo, zb_hi
       If ( idiag >= 3 ) Then
         dyf = 0.0
         Do k = 1, mflx
@@ -299,5 +302,3 @@ Program net
   Call parallel_finalize()
 
 End Program net
-
-

@@ -116,6 +116,9 @@ endif
 ## Flags for compiling with OpenACC
 ifeq ($(GPU_MODE),ON)
     FLAGS += $(OPENACC)
+    ifeq ($(OPENACC_MODE),ON)
+      BASE += openaccf.o
+    endif
 endif
 
 ## Flags for using a GPU solver package

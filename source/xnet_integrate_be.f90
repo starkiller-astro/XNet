@@ -24,7 +24,7 @@ Contains
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, t9, t9o, t9t, rho, rhoo, rhot, &
       yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
-      & nzbatchmx, szbatch
+      & szbatch, zb_lo, zb_hi
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
 
@@ -32,48 +32,43 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: its(:) ! On input,  = 0 indicates active zone
-                                     ! On output, = 1 if zone fails to converge
+    Integer, Intent(inout) :: its(zb_lo:zb_hi) ! On input,  = 0 indicates active zone
+                                               ! On output, = 1 if zone fails to converge
 
     ! Local variables
     Integer, Parameter :: ktsmx = 10
     Integer :: kts, izb, izone
-    Integer :: inr(nzbatchmx)
-    Integer :: mykts(nzbatchmx)
+    Integer :: inr(zb_lo:zb_hi)
+    Integer :: mykts(zb_lo:zb_hi)
+    Logical :: lzstep(zb_lo:zb_hi)
 
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
     ! If the zone has previously converged or failed, do not iterate
-    Where ( its(:) /= 0 )
-      inr(:) = -1
-    ElseWhere
-      inr(:) = 0
-    EndWhere
+    Do izb = zb_lo, zb_hi
+      If ( its(izb) /= 0 ) Then
+        inr(izb) = -1
+        lzstep(izb) = .false.
+      Else
+        inr(izb) = 0
+        lzstep(izb) = .true.
+      EndIf
+    EndDo
 
     !-----------------------------------------------------------------------------------------------
     ! For each trial timestep, tdel, the NR iteration is attempted.
     ! The possible results for a timestep are a converged set of yt or a failure to converge.
     ! If convergence fails, retry with the trial timestep reduced by tdel_maxmult.
     !-----------------------------------------------------------------------------------------------
-    mykts(:) = 0
+    mykts = 0
     Do kts = 1, ktsmx
 
       ! Attempt Backward Euler integration over desired timestep
       Call step_be(kstep,inr)
 
-      ! Record number of NR iterations
-      Where ( its(:) == 0 )
-        Where ( inr(:) > 0 )
-          kmon(2,:) = inr(:)
-          ktot(2,:) = ktot(2,:) + inr(:)
-        ElseWhere ( inr(:) == 0 )
-          kmon(2,:) = kitmx + 1
-          ktot(2,:) = ktot(2,:) + kitmx + 1
-        EndWhere
-      EndWhere
+      Do izb = zb_lo, zb_hi
 
-      Do izb = 1, nzbatchmx
         ! If integration fails, reset abundances, reduce timestep and retry.
         If ( inr(izb) == 0 ) Then
           tdel(izb) = tdel(izb) / tdel_maxmult
@@ -82,37 +77,51 @@ Contains
           yt(:,izb) = y(:,izb)
           mykts(izb) = kts+1
 
+          ! Record number of NR iterations
+          If ( its(izb) == 0 ) Then
+            kmon(2,izb) = kitmx + 1
+            ktot(2,izb) = ktot(2,izb) + kitmx + 1
+          EndIf
+
         ! If integration is successfull, flag the zone for removal from zone loop
         ElseIf ( inr(izb) > 0 ) Then
           mykts(izb) = kts
+
+          ! Record number of NR iterations
+          If ( its(izb) == 0 ) Then
+            kmon(2,izb) = inr(izb)
+            ktot(2,izb) = ktot(2,izb) + inr(izb)
+          EndIf
         EndIf
       EndDo
 
       ! Reset temperature and density for failed integrations
-      Call t9rhofind(kstep,tt,ntt,t9t,rhot,mask_in = (inr(:) == 0))
+      lzstep = ( inr == 0 )
+      Call t9rhofind(kstep,tt,ntt,t9t,rhot,mask_in = lzstep)
       If ( iheat > 0 ) Then
-        Where ( inr(:) == 0 )
-          t9t(:) = t9(:)
-        EndWhere
+        Do izb = zb_lo, zb_hi
+          If ( inr(izb) == 0 ) Then
+            t9t(izb) = t9(izb)
+          EndIf
+        EndDo
       EndIf
 
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
-        Do izb = 1, nzbatchmx
+        Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
-            izone = izb + szbatch - 1
+            izone = izb + szbatch - zb_lo
             Write(lun_diag,"(a,i5,i3,3es12.4)") 'BE TS Reduce',izone,kts,tt(izb),tdel(izb),tdel_maxmult
           EndIf
         EndDo
       EndIf
 
-      If ( all( inr(:) /= 0 ) ) Then
-        Exit
-      EndIf
+      ! Test if all zones have converged
+      If ( .not. any( lzstep ) ) Exit
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( inr(izb) > 0 ) Then
         nto(izb) = nt(izb)
         nt(izb) = ntt(izb)
@@ -133,8 +142,8 @@ Contains
     EndDo
 
     ! Log TS success/failure
-    Do izb = 1, nzbatchmx
-      izone = izb + szbatch - 1
+    Do izb = zb_lo, zb_hi
+      izone = izb + szbatch - zb_lo
       If ( inr(izb) > 0 ) Then
         If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3)") &
           & 'BE TS Success',kstep,izone,mykts(izb),inr(izb)
@@ -145,8 +154,12 @@ Contains
       EndIf
     EndDo
 
-    kmon(1,:) = mykts(:)
-    ktot(1,:) = ktot(1,:) + mykts(:)
+    Do izb = zb_lo, zb_hi
+      If ( inr(izb) >= 0 ) Then
+        kmon(1,izb) = mykts(izb)
+        ktot(1,izb) = ktot(1,izb) + mykts(izb)
+      EndIf
+    EndDo
 
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer
@@ -163,7 +176,7 @@ Contains
     Use xnet_abundances, Only: y, ydot, yt
     Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
-      & nzbatchmx, szbatch, iscrn
+      & szbatch, zb_lo, zb_hi, iscrn
     Use xnet_integrate, Only: cross_sect, yderiv
     Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_nraph
@@ -174,31 +187,35 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Input/Output variables
-    Integer, Intent(inout) :: inr(:) ! On input,  = 0 indicates active zone
-                                     !            =-1 indicates inactive zone
-                                     ! On output, > 0 indicates # NR iterations if converged
+    Integer, Intent(inout) :: inr(zb_lo:zb_hi) ! On input,  = 0 indicates active zone
+                                               !            =-1 indicates inactive zone
+                                               ! On output, > 0 indicates # NR iterations if converged
 
     ! Local variables
     Integer :: irdymx, idymx
     Integer :: i, k, kit, izb, izone
-    Real(dp) :: testc, testc2, testm, testn(nzbatchmx), toln(nzbatchmx)
-    Real(dp) :: xtot(nzbatchmx), xtot_init(nzbatchmx), rdt(nzbatchmx), mult(nzbatchmx)
-    Real(dp) :: yrhs(ny,nzbatchmx), dy(ny,nzbatchmx), reldy(ny)
-    Real(dp) :: t9rhs(nzbatchmx), dt9(nzbatchmx), relt9
-    Logical :: iterate(nzbatchmx), eval_rates(nzbatchmx), rebuild(nzbatchmx)
+    Real(dp) :: testc, testc2, testm, testn(zb_lo:zb_hi), toln(zb_lo:zb_hi)
+    Real(dp) :: xtot(zb_lo:zb_hi), xtot_init(zb_lo:zb_hi), rdt(zb_lo:zb_hi), mult(zb_lo:zb_hi)
+    Real(dp) :: yrhs(ny,zb_lo:zb_hi), dy(ny,zb_lo:zb_hi), reldy(ny)
+    Real(dp) :: t9rhs(zb_lo:zb_hi), dt9(zb_lo:zb_hi), relt9
+    Logical :: iterate(zb_lo:zb_hi), eval_rates(zb_lo:zb_hi), rebuild(zb_lo:zb_hi)
 
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
     ! Create mask for active zone integrations
-    iterate(:) = ( inr(:) == 0 )
+    iterate = ( inr == 0 )
 
     ! Calculate initial total mass fraction
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( iterate(izb) ) Then
-        xtot_init(izb) = sum(aa(:)*y(:,izb)) - 1.0
+        xtot_init(izb) = sum(aa*y(:,izb)) - 1.0
         rdt(izb) = 1.0 / tdel(izb)
         mult(izb) = -1.0
+      Else
+        xtot_init(izb) = 0.0
+        rdt(izb) = 0.0
+        mult(izb) = 0.0
       EndIf
     EndDo
 
@@ -206,34 +223,34 @@ Contains
     Do kit = 1, kitmx
 
       ! Rebuild and update LU factorization of the jacobian every ijac iterations
-      rebuild(:) = ( iterate(:) .and. mod(kit-1,ijac) == 0 )
+      rebuild = ( iterate .and. mod(kit-1,ijac) == 0 )
 
       ! If thermodynamic conditions are changing, rates need to be udpated
       If ( iheat > 0 ) Then
-        eval_rates(:) = iterate(:)
+        eval_rates = iterate
       ElseIf ( kit == 1 ) Then
-        eval_rates(:) = ( iterate(:) .and. nh(:) > 1 )
+        eval_rates = ( iterate .and. nh(zb_lo:zb_hi) > 1 )
       Else
-        eval_rates(:) = .false.
+        eval_rates = .false.
       EndIf
 
       ! Calculate the reaction rates and abundance time derivatives
-      Call cross_sect(mask_in = eval_rates(:))
-      Call yderiv(mask_in = iterate(:))
-      Call jacobian_build(diag_in = rdt(:),mult_in = mult(:),mask_in = rebuild(:))
-      Call jacobian_decomp(kstep,mask_in = rebuild(:))
+      Call cross_sect(mask_in = eval_rates)
+      Call yderiv(mask_in = iterate)
+      Call jacobian_build(diag_in = rdt,mult_in = mult,mask_in = rebuild)
+      Call jacobian_decomp(kstep,mask_in = rebuild)
 
       ! Calculate equation to zero
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           yrhs(:,izb) = (y(:,izb)-yt(:,izb))*rdt(izb) + ydot(:,izb)
           If ( iheat > 0 ) t9rhs(izb) = (t9(izb)-t9t(izb))*rdt(izb) + t9dot(izb)
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
-        Do izb = 1, nzbatchmx
+        Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
-            izone = izb + szbatch - 1
+            izone = izb + szbatch - zb_lo
             Write(lun_diag,"(a3,2i5,es14.7)") 'RHS',kstep,izone,rdt(izb)
             Write(lun_diag,"(a5,4es23.15)") (nname(i),yrhs(i,izb),ydot(i,izb),yt(i,izb),y(i,izb),i=1,ny)
             If ( iheat > 0 ) Write(lun_diag,"(a5,4es23.15)") 'T9',t9rhs(izb),t9dot(izb),t9t(izb),t9(izb)
@@ -242,20 +259,22 @@ Contains
       EndIf
 
       ! Solve the jacobian and calculate the changes in abundances, dy
-      !Call jacobian_solve(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate(:))
-      !Call jacobian_decomp(kstep,mask_in = iterate(:))
-      Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate(:))
+      !Call jacobian_solve(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
+      !Call jacobian_decomp(kstep,mask_in = iterate)
+      Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
 
       ! Evolve the abundances and calculate convergence tests
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
-          yt(:,izb) = yt(:,izb) + dy(:,izb)
-          Where ( yt(:,izb) < ymin )
-            yt(:,izb) = 0.0
-            reldy(:) = 0.0
-          ElseWhere
-            reldy(:) = abs(dy(:,izb) / yt(:,izb))
-          EndWhere
+          Do k = 1, ny
+            yt(k,izb) = yt(k,izb) + dy(k,izb)
+            If ( yt(k,izb) < ymin ) Then
+              yt(k,izb) = 0.0
+              reldy(k) = 0.0
+            Else
+              reldy(k) = abs(dy(k,izb) / yt(k,izb))
+            EndIf
+          EndDo
           If ( iheat > 0 ) Then
             t9t(izb) = t9t(izb) + dt9(izb)
             If ( abs(t9t(izb)) > tiny(0.0) ) Then
@@ -267,8 +286,8 @@ Contains
             relt9 = 0.0
           EndIf
           If ( idiag >= 4 ) Then
-            izone = izb + szbatch - 1
-            irdymx = maxloc(reldy(:),dim=1)
+            izone = izb + szbatch - zb_lo
+            irdymx = maxloc(reldy,dim=1)
             idymx = maxloc(dy(:,izb),dim=1)
             Write(lun_diag,"(a3,2i5,i3,2(a5,2es23.15))") &
               & ' dY',kstep,izone,kit,nname(idymx),dy(idymx,izb),y(idymx,izb),nname(irdymx),reldy(irdymx),y(irdymx,izb)
@@ -284,9 +303,9 @@ Contains
           ! testc2 which measures total abundance changes, and
           ! testm which tests mass conservation.
           !-----------------------------------------------------------------------------------------
-          testc  = sum(reldy(:))
-          testc2 = sum(aa(:)*dy(:,izb))
-          xtot   = sum(aa(:)*yt(:,izb)) - 1.0
+          testc  = sum(reldy)
+          testc2 = sum(aa*dy(:,izb))
+          xtot   = sum(aa*yt(:,izb)) - 1.0
           testm  = xtot(izb) - xtot_init(izb)
           If ( idiag >= 3 ) Write(lun_diag,"(a,3i5,3es14.6)") 'NR',kstep,izone,kit,testm,testc,testc2
 
@@ -320,8 +339,8 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      Do izb = 1, nzbatchmx
-        izone = izb + szbatch - 1
+      Do izb = zb_lo, zb_hi
+        izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 ) Then
           Write(lun_diag,"(a,3i5,3es12.4)") 'Conv',kstep,izone,inr(izb),xtot(izb),testn(izb),toln(izb)
         ElseIf ( inr(izb) == 0 ) Then

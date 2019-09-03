@@ -13,41 +13,26 @@ Module xnet_jacobian
   !-----------------------------------------------------------------------------------------------
   ! The Jacobian matrix for the solver.
   !-----------------------------------------------------------------------------------------------
-  Use, Intrinsic :: iso_c_binding, Only: C_DOUBLE, C_INT, C_INTPTR_T, C_PTR, C_SIZE_T, C_SIZEOF
+  Use, Intrinsic :: iso_c_binding
   Use xnet_types, Only: dp
   Implicit None
+  Real(dp), Allocatable :: dydotdy(:,:,:) ! dYdot/dY part of jac
+  Real(dp), Allocatable, Target :: jac(:,:,:)     ! the Jacobian matrix
+  Real(dp), Allocatable, Target :: rhs(:,:)       ! the Jacobian matrix
+  Integer, Allocatable, Target :: indx(:,:)       ! Pivots in the LU decomposition
+  Integer, Allocatable, Target :: info(:)
+  !$acc declare create(dydotdy,jac,rhs,indx,info)
 
-  ! CPU data (pointers for pinned memory)
-  Real(dp), Allocatable :: dydotdy(:,:,:)
-  Real(dp), Pointer :: jac(:,:,:), rhs(:,:)
-  Integer, Pointer :: indx(:,:), info(:)
-  !$omp threadprivate(dydotdy,jac,rhs,indx,info)
-
-  ! C pointers for pinned memory
-  Type(C_PTR) :: hjac, hrhs, hinfo, hindx
-  !$omp threadprivate(hjac,hrhs,hinfo,hindx)
-
-  ! Device pointers for arrays
-  Type(C_PTR) :: djac, drhs, dindx, dinfo
-  Integer(C_INTPTR_T), Pointer :: djacf(:,:,:), drhsf(:,:)
-  !$omp threadprivate(djac,drhs,dindx,dinfo,djacf,drhsf)
-
-  ! Arrays of pointers to each device array batch element address
-  Type(C_PTR), Allocatable, Target :: djaci(:), drhsi(:)
-  !$omp threadprivate(djaci,drhsi)
-
-  ! Host and device addresses for the arrays of device pointers
-  Type(C_PTR) :: hdjac_array, hdrhs_array
-  Type(C_PTR) :: djac_array, drhs_array
-  !$omp threadprivate(hdjac_array,hdrhs_array,djac_array,drhs_array)
+  Type(C_PTR), Allocatable, Target :: hjac(:), hrhs(:)
+  Type(C_PTR), Allocatable, Target :: djac(:), drhs(:)
 
   ! Array size parameters
   Real(C_DOUBLE), Parameter :: ddummy = 0.0
   Integer(C_INT), Parameter :: idummy = 0
   Integer(C_INTPTR_T), Parameter :: cptr_dummy = 0
-  Integer(C_SIZE_T), Parameter :: sizeof_double = C_SIZEOF(ddummy)
-  Integer(C_SIZE_T), Parameter :: sizeof_int = C_SIZEOF(idummy)
-  Integer(C_SIZE_T), Parameter :: sizeof_cptr = C_SIZEOF(cptr_dummy)
+  Integer(C_SIZE_T), Parameter :: sizeof_double = c_sizeof(ddummy)
+  Integer(C_SIZE_T), Parameter :: sizeof_int = c_sizeof(idummy)
+  Integer(C_SIZE_T), Parameter :: sizeof_cptr = c_sizeof(cptr_dummy)
   Integer(C_SIZE_T) :: sizeof_jac, sizeof_rhs, sizeof_indx, sizeof_info, sizeof_batch
 
   ! Parameters for GPU array dimensions
@@ -59,11 +44,10 @@ Contains
     !-------------------------------------------------------------------------------------------------
     ! Initializes the Jacobian data.
     !-------------------------------------------------------------------------------------------------
-    Use, Intrinsic :: iso_c_binding, Only: c_f_pointer, c_loc
     Use cublasf
     Use cudaf
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzbatchmx
+    Use xnet_controls, Only: iheat, nzevolve, nzbatchmx, nthread
     Use xnet_gpu, Only: gpu_init
     Implicit None
 
@@ -71,7 +55,7 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: istat, i
+    Integer :: istat, izb, tid
 
     Call gpu_init
 
@@ -81,58 +65,36 @@ Contains
     Else
       msize = ny
     EndIf
-    sizeof_jac = msize*msize*nzbatchmx*sizeof_double
-    sizeof_rhs = msize*nzbatchmx*sizeof_double
-    sizeof_indx = msize*nzbatchmx*sizeof_int
-    sizeof_info = nzbatchmx*sizeof_int
-    sizeof_batch = nzbatchmx*sizeof_cptr
 
-    !$omp parallel default(shared) private(istat,i)
+    Allocate (dydotdy(msize,msize,nzevolve))
+    Allocate (jac(msize,msize,nzevolve))
+    Allocate (rhs(msize,nzevolve))
+    Allocate (indx(msize,nzevolve))
+    Allocate (info(nzevolve))
+    dydotdy = 0.0
+    jac = 0.0
+    rhs = 0.0
+    indx = 0
+    info = 0
+    !$acc update device(dydotdy,jac,rhs,indx,info)
 
-    ! Allocate CPU memory (pinned for asynchronous host<->device copy)
-    Allocate (dydotdy(msize,msize,nzbatchmx))
-    istat = cudaHostAlloc(hjac, sizeof_jac, cudaHostAllocDefault)
-    istat = cudaHostAlloc(hrhs, sizeof_rhs, cudaHostAllocDefault)
-    istat = cudaHostAlloc(hindx, sizeof_indx, cudaHostAllocDefault)
-    istat = cudaHostAlloc(hinfo, sizeof_info, cudaHostAllocDefault)
-    Call c_f_pointer(hjac, jac, (/msize,msize,nzbatchmx/))
-    Call c_f_pointer(hrhs, rhs, (/msize,nzbatchmx/))
-    Call c_f_pointer(hindx, indx, (/msize,nzbatchmx/))
-    Call c_f_pointer(hinfo, info, (/nzbatchmx/))
-    dydotdy(:,:,:) = 0.0
-    jac(:,:,:) = 0.0
-    indx(:,:) = 0
+    Allocate (hjac(nzevolve))
+    Allocate (hrhs(nzevolve))
+    Do izb = 1, nzevolve
+      hjac(izb) = c_loc( jac(1,1,izb) )
+      hrhs(izb) = c_loc( rhs(1,izb) )
+    EndDo
 
-    ! Allocate GPU memory for arrays
-    istat = cudaMalloc(djac, sizeof_jac)
-    istat = cudaMalloc(drhs, sizeof_rhs)
-    istat = cudaMalloc(dindx, sizeof_indx)
-    istat = cudaMalloc(dinfo, sizeof_info)
-
-    ! Setup fortran pointers to device-addresses of device arrays
-    Call c_f_pointer(djac, djacf, (/msize,msize,nzbatchmx/))
-    Call c_f_pointer(drhs, drhsf, (/msize,nzbatchmx/))
-
-    ! Setup arrays of pointers to each device array batch element address
-    Allocate (djaci(nzbatchmx))
-    Allocate (drhsi(nzbatchmx))
-    do i = 1, nzbatchmx
-      ! Get the device-addresses for this batch element
-      djaci(i) = c_loc(djacf(1,1,i))
-      drhsi(i) = c_loc(drhsf(1,i))
-    end do
-
-    ! Get the host-addresses for the arrays of device-pointers
-    hdjac_array = c_loc(djaci(1))
-    hdrhs_array = c_loc(drhsi(1))
-
-    ! Allocate GPU memory for batched GPU operations and copy array of pointers to device
-    istat = cudaMalloc(djac_array, sizeof_batch)
-    istat = cudaMalloc(drhs_array, sizeof_batch)
-    istat = cublasSetVector(nzbatchmx, sizeof_cptr, hdjac_array, 1, djac_array, 1)
-    istat = cublasSetVector(nzbatchmx, sizeof_cptr, hdrhs_array, 1, drhs_array, 1)
-
-    !$omp end parallel
+    Allocate (djac(nzevolve))
+    Allocate (drhs(nzevolve))
+    !$acc enter data create(djac,drhs)
+    !$acc host_data use_device(jac,rhs)
+    Do izb = 1, nzevolve
+      djac(izb) = c_loc( jac(1,1,izb) )
+      drhs(izb) = c_loc( rhs(1,izb) )
+    EndDo
+    !$acc end host_data
+    !$acc update device(djac,drhs)
 
     Return
   End Subroutine read_jacobian_data
@@ -146,24 +108,11 @@ Contains
     ! Local variables
     Integer :: istat
 
-    !$omp parallel default(shared) private(istat)
+    Deallocate (dydotdy,jac,rhs,indx,info)
 
-    istat = cudaFree(djac)
-    istat = cudaFree(drhs)
-    istat = cudaFree(dindx)
-    istat = cudaFree(dinfo)
-    Deallocate (djaci)
-    Deallocate (drhsi)
-
-    istat = cudaFree(djac_array)
-    istat = cudaFree(drhs_array)
-    istat = cudaFreeHost(hjac)
-    istat = cudaFreeHost(hrhs)
-    istat = cudaFreeHost(hindx)
-    istat = cudaFreeHost(hinfo)
-    Deallocate (dydotdy)
-
-    !$omp end parallel
+    Deallocate (hjac,hrhs)
+    !$acc exit data delete(djac,drhs)
+    Deallocate (djac,drhs)
 
   End Subroutine jacobian_finalize
 
@@ -172,29 +121,28 @@ Contains
     ! This augments a previously calculation Jacobian matrix by multiplying all elements by mult and
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzbatchmx, lzactive
-    Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: diag(:), mult(:)
+    Real(dp), Intent(in) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, j, i0, izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         jac(:,:,izb) = mult(izb) * dydotdy(:,:,izb)
         Do i0 = 1, msize
@@ -216,14 +164,14 @@ Contains
       & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Intent(in) :: diag_in(:), mult_in(:)
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Real(dp), Optional, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -232,21 +180,21 @@ Contains
     Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
     Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp) :: diag(nzbatchmx), mult(nzbatchmx)
+    Real(dp) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
     ! Build the Jacobian
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         dydotdy(:,:,izb) = 0.0
         Do i0 = 1, ny
@@ -304,7 +252,7 @@ Contains
     EndDo
 
     If ( iheat > 0 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Do i0 = 1, ny
             la1 = la(1,i0)
@@ -373,30 +321,32 @@ Contains
 
     ! Apply the externally provided factors
     If ( present(diag_in) ) Then
-      diag(:) = diag_in(:)
+      diag = diag_in
     Else
-      diag(:) = 0.0
+      diag = 0.0
     EndIf
     If ( present(mult_in) ) Then
-      mult(:) = mult_in(:)
+      mult = mult_in
     Else
-      mult(:) = 1.0
+      mult = 1.0
     EndIf
-    Call jacobian_scale(diag,mult,mask_in = mask(:))
+    Call jacobian_scale(diag,mult,mask_in = mask)
 
     If ( idiag >= 6 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a9,i5,2es14.7)") 'JAC_BUILD',izone,diag(izb),mult(izb)
           Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
         EndIf
       EndDo
     EndIf
 
-    Where ( mask(:) )
-      ktot(3,:) = ktot(3,:) + 1
-    EndWhere
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        ktot(3,izb) = ktot(3,izb) + 1
+      EndIf
+    EndDo
 
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
@@ -410,8 +360,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use cublasf
     Use cudaf
+    Use openaccf
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive, nzbatch
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
+      & mythread
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
@@ -419,59 +371,84 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(:,:)
-    Real(dp), Intent(in) :: t9rhs(:)
+    Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
-    Real(dp), Intent(out) :: dt9(size(t9rhs))
+    Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
+    Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
+    Type(C_PTR) :: djac_array, drhs_array, dindx, dinfo, hinfo
     Integer :: i, izb, izone, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
-    Do izb = 1, nzbatchmx
+    !$acc host_data use_device(djac,drhs,indx,info)
+    djac_array = c_loc( djac(zb_lo) )
+    drhs_array = c_loc( drhs(zb_lo) )
+    dindx = c_loc( indx(1,zb_lo) )
+    dinfo = c_loc( info(zb_lo) )
+    !$acc end host_data
+    hinfo = c_loc( info(zb_lo) )
+
+    !$acc parallel loop gang &
+    !$acc copyin(mask,yrhs,t9rhs) &
+    !$acc present(rhs)
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        rhs(1:ny,izb) = yrhs(:,izb)
+        !$acc loop vector
+        Do i = 1, ny
+          rhs(i,izb) = yrhs(i,izb)
+        EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       EndIf
     EndDo
+    !$acc end parallel loop
 
     ! Copy the system to the GPU
-    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac, msize, djac, msize, stream)
-    istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs, 1, drhs, 1, stream)
+    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac(zb_lo), msize, djac(zb_lo), msize, stream)
+    !istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs(zb_lo), 1, drhs(zb_lo), 1, stream)
 
     ! Solve the linear system
     istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
     istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
 
     ! Copy the solution back to the CPU
-    istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs, 1, hrhs, 1, stream)
+    !istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs(zb_lo), 1, hrhs(zb_lo), 1, stream)
     istat = cudaStreamSynchronize(stream)
-    Do izb = 1, nzbatchmx
+
+    !$acc parallel loop gang &
+    !$acc copyin(mask) &
+    !$acc copyout(dy,dt9) &
+    !$acc present(rhs)
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        dy(:,izb) = rhs(1:ny,izb)
+        !$acc loop vector
+        Do i = 1, ny
+          dy(i,izb) = rhs(i,izb)
+        EndDo
         If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)
       EndIf
     EndDo
+    !$acc end parallel loop
 
     If ( idiag >= 5 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,i5)") 'JAC_SOLVE',izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
@@ -490,7 +467,9 @@ Contains
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
     Use cublasf
-    Use xnet_controls, Only: idiag, lun_diag, nzbatchmx, szbatch, lzactive, nzbatch
+    Use cudaf
+    Use openaccf
+    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, mythread
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -499,33 +478,40 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
+    Type(C_PTR) :: djac_array, dindx, dinfo
     Integer :: i, j, izb, izone, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
+    !$acc host_data use_device(djac,drhs,indx,info)
+    djac_array = c_loc( djac(zb_lo) )
+    dindx = c_loc( indx(1,zb_lo) )
+    dinfo = c_loc( info(zb_lo) )
+    !$acc end host_data
+
     ! Copy the Jacobian to the GPU
-    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac, msize, djac, msize, stream)
+    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac(zb_lo), msize, djac(zb_lo), msize, stream)
 
     ! Calculate the LU decomposition
     istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
 
     If ( idiag >= 6 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a3,i5)") 'LUD',izone
           Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
         EndIf
@@ -545,8 +531,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use cublasf
     Use cudaf
+    Use openaccf
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive, nzbatch
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
+      & mythread
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
@@ -554,59 +542,82 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(:,:)
-    Real(dp), Intent(in) :: t9rhs(:)
+    Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
-    Real(dp), Intent(out) :: dt9(size(t9rhs))
+    Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
+    Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
+    Type(C_PTR) :: djac_array, drhs_array, dindx, hinfo
     Integer :: i, izb, izone, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    Do izb = 1, nzbatchmx
+    !$acc host_data use_device(djac,drhs,indx)
+    djac_array = c_loc( djac(zb_lo) )
+    drhs_array = c_loc( drhs(zb_lo) )
+    dindx = c_loc( indx(1,zb_lo) )
+    !$acc end host_data
+    hinfo = c_loc( info(zb_lo) )
+
+    !$acc parallel loop gang &
+    !$acc copyin(mask,yrhs,t9rhs) &
+    !$acc present(rhs)
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        rhs(1:ny,izb) = yrhs(:,izb)
+        !$acc loop vector
+        Do i = 1, ny
+          rhs(i,izb) = yrhs(i,izb)
+        EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       EndIf
     EndDo
+    !$acc end parallel loop
 
     ! Copy the RHS to the GPU
-    istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs, 1, drhs, 1, stream)
+    !istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs(zb_lo), 1, drhs(zb_lo), 1, stream)
 
     ! Solve the LU-decomposed triangular system via back-substitution
     istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
 
     ! Copy the solution back to the CPU
-    istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs, 1, hrhs, 1, stream)
-
+    !istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs(zb_lo), 1, hrhs(zb_lo), 1, stream)
     istat = cudaStreamSynchronize(stream)
-    Do izb = 1, nzbatchmx
+
+    !$acc parallel loop gang &
+    !$acc copyin(mask) &
+    !$acc copyout(dy,dt9) &
+    !$acc present(rhs)
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        dy(:,izb) = rhs(1:ny,izb)
+        !$acc loop vector
+        Do i = 1, ny
+          dy(i,izb) = rhs(i,izb)
+        EndDo
         If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)
       EndIf
     EndDo
+    !$acc end parallel loop
 
     If ( idiag >= 5 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,i5)") 'BKSUB', izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)

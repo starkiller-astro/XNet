@@ -21,7 +21,7 @@ Contains
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: rho, t, t9, tdel
     Use xnet_controls, Only: nnucout, nnucout_string, idiag, inucout, itsout, kmon, lun_diag, &
-      & lun_ev, lun_stdout, lun_ts, nzbatchmx, szbatch, lzactive
+      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_flux, Only: flx, flx_int, flux
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_output
@@ -30,10 +30,10 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: enuc(:), edot(:)
+    Real(dp), Intent(in) :: enuc(zb_lo:zb_hi), edot(zb_lo:zb_hi)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Character(40) :: ev_format
@@ -44,26 +44,26 @@ Contains
     timer_output = timer_output - start_timer
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     ! Calculate reaction fluxes
     If ( itsout >= 1 .or. idiag >= 1 ) Then
       If ( kstep > 0 ) Then
-        Call flux(mask_in = mask(:))
+        Call flux(mask_in = mask)
       Else
-        flx_int(:,:) = 0.0
+        flx_int = 0.0
       EndIf
     EndIf
 
     If ( itsout >= 1 ) Then
       Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,2es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
 
           ! An abundance snapshot is written to the binary file
           Write(lun_ts(izb)) kstep,t(izb),t9(izb),rho(izb),tdel(izb),edot(izb),y(:,izb),flx(:,izb)
@@ -102,7 +102,7 @@ Contains
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: tt, tstop
     Use xnet_controls, Only: changemx, iconvc, isolv, kitmx, kstmx, ktot, lun_diag, tolc, tolm, yacc, &
-      & nzbatchmx, szbatch, lzactive, idiag
+      & szbatch, zb_lo, zb_hi, lzactive, idiag
     Use xnet_flux, Only: flx_int
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_timers
@@ -112,7 +112,7 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer, Parameter :: itimer_reset = 0
@@ -121,9 +121,9 @@ Contains
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
 
     If ( idiag >= 0 ) Then
@@ -131,9 +131,9 @@ Contains
       start_timer = xnet_wtime()
       timer_output = timer_output - start_timer
 
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
 
           ! Write final abundances to diagnostic output (in ASCII)
           Write(lun_diag,"(a3,3i6,2es14.7)") 'End',izone,kstep,kstmx,tt(izb),tstop(izb)

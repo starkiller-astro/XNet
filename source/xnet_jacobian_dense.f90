@@ -19,7 +19,6 @@ Module xnet_jacobian
   Real(dp), Allocatable :: jac(:,:,:)     ! the Jacobian matrix
   Integer, Allocatable :: indx(:,:)       ! Pivots in the LU decomposition
   Integer :: msize                        ! Size of linear system to be solved
-  !$omp threadprivate(dydotdy,jac,indx)
 
 Contains
 
@@ -28,7 +27,7 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzbatchmx
+    Use xnet_controls, Only: iheat, nzevolve
     Implicit None
 
     ! Input variables
@@ -40,21 +39,17 @@ Contains
       msize = ny
     EndIf
 
-    !$omp parallel default(shared)
-    Allocate (dydotdy(msize,msize,nzbatchmx),jac(msize,msize,nzbatchmx),indx(msize,nzbatchmx))
-    dydotdy(:,:,:) = 0.0
-    jac(:,:,:) = 0.0
-    indx(:,:) = 0
-    !$omp end parallel
+    Allocate (dydotdy(msize,msize,nzevolve),jac(msize,msize,nzevolve),indx(msize,nzevolve))
+    dydotdy = 0.0
+    jac = 0.0
+    indx = 0
 
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
     Implicit None
-    !$omp parallel default(shared)
     Deallocate (dydotdy,jac,indx)
-    !$omp end parallel
     Return
   End Subroutine jacobian_finalize
 
@@ -63,28 +58,28 @@ Contains
     ! This augments a previously calculation Jacobian matrix by multiplying all elements by mult and
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzbatchmx, lzactive
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: diag(:), mult(:)
+    Real(dp), Intent(in) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, j, i0, izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         jac(:,:,izb) = mult(izb) * dydotdy(:,:,izb)
         Do i0 = 1, msize
@@ -106,14 +101,14 @@ Contains
       & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Intent(in) :: diag_in(:), mult_in(:)
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Real(dp), Optional, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
@@ -122,21 +117,21 @@ Contains
     Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
     Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp) :: diag(nzbatchmx), mult(nzbatchmx)
+    Real(dp) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
     ! Build the Jacobian
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         dydotdy(:,:,izb) = 0.0
         Do i0 = 1, ny
@@ -194,7 +189,7 @@ Contains
     EndDo
 
     If ( iheat > 0 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Do i0 = 1, ny
             la1 = la(1,i0)
@@ -263,30 +258,32 @@ Contains
 
     ! Apply the externally provided factors
     If ( present(diag_in) ) Then
-      diag(:) = diag_in(:)
+      diag = diag_in
     Else
-      diag(:) = 0.0
+      diag = 0.0
     EndIf
     If ( present(mult_in) ) Then
-      mult(:) = mult_in(:)
+      mult = mult_in
     Else
-      mult(:) = 1.0
+      mult = 1.0
     EndIf
-    Call jacobian_scale(diag,mult,mask_in = mask(:))
+    Call jacobian_scale(diag,mult,mask_in = mask)
 
     If ( idiag >= 6 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a9,i5,2es14.7)") 'JAC_BUILD',izone,diag(izb),mult(izb)
           Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
         EndIf
       EndDo
     EndIf
 
-    Where ( mask(:) )
-      ktot(3,:) = ktot(3,:) + 1
-    EndWhere
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        ktot(3,izb) = ktot(3,izb) + 1
+      EndIf
+    EndDo
 
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
@@ -299,44 +296,43 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(:,:)
-    Real(dp), Intent(in) :: t9rhs(:)
+    Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
-    Real(dp), Intent(out) :: dt9(size(t9rhs))
+    Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
+    Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Real(dp) :: rhs(msize)
-    Integer :: i, izb, izone, info(nzbatchmx)
+    Integer :: i, izb, izone, info(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
-    Do izb = 1, nzbatchmx
+    ! Solve the linear system
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         rhs(1:ny) = yrhs(:,izb)
         If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
-
-        ! Solve the linear system
         Call dgesv(msize,1,jac(1,1,izb),msize,indx(1,izb),rhs,msize,info(izb))
         dy(:,izb) = rhs(1:ny)
         If ( iheat > 0 ) dt9(izb) = rhs(ny+1)
@@ -344,9 +340,9 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,i5)") 'JAC_SOLVE',izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
@@ -364,7 +360,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
 
@@ -372,35 +368,34 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, izb, izone, info(nzbatchmx)
+    Integer :: i, j, izb, izone, info(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
-    Do izb = 1, nzbatchmx
+    ! Calculate the LU decomposition
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-
-        ! Calculate the LU decomposition
         Call dgetrf(msize,msize,jac(1,1,izb),msize,indx(1,izb),info(izb))
       EndIf
     EndDo
 
     If ( idiag >= 6 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a3,i5,i4)") 'LUD',izone,info(izb)
           Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
         EndIf
@@ -419,45 +414,44 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, szbatch, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: yrhs(:,:)
-    Real(dp), Intent(in) :: t9rhs(:)
+    Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
 
     ! Output variables
-    Real(dp), Intent(out) :: dy(size(yrhs,1),size(yrhs,2))
-    Real(dp), Intent(out) :: dt9(size(t9rhs))
+    Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
+    Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Real(dp) :: rhs(msize)
-    Integer :: i, izb, izone, info(nzbatchmx)
+    Integer :: i, izb, izone, info(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    Do izb = 1, nzbatchmx
+    ! Solve the LU-decomposed triangular system via back-substitution
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         rhs(1:ny) = yrhs(:,izb)
         If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
-
-        ! Solve the LU-decomposed triangular system via back-substitution
         Call dgetrs('N',msize,1,jac(1,1,izb),msize,indx(1,izb),rhs,msize,info(izb))
         dy(:,izb) = rhs(1:ny)
         If ( iheat > 0 ) dt9(izb) = rhs(ny+1)
@@ -465,9 +459,9 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
-      Do izb = 1, nzbatchmx
+      Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          izone = izb + szbatch - 1
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,i5)") 'BKSUB', izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)

@@ -7,21 +7,22 @@ Module model_input_ascii
     ! Read the thermdynamic trajectory
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: iostat_end
-    Use xnet_controls, Only: idiag, lun_diag, lun_th, nzone, szbatch, nzbatchmx, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, lun_th, nzone, nzevolve, szbatch, zb_lo, zb_hi, &
+      lzactive
     Use xnet_nnu, Only: nnuspec, fluxcms, tmevnu
     Use xnet_util, Only: replace_tabs, readnext, xnet_terminate
-    Use xnet_conditions, Only: nhmx,nh,tstart,tstop,tdelstart,th,t9h,rhoh,yeh
+    Use xnet_conditions, Only: nhmx, nh, tstart, tstop, tdelstart, th, t9h, rhoh, yeh
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: thermo_file(nzone)
 
     ! Output variables
-    Character(80), Intent(out) :: thermo_desc(nzbatchmx)
+    Character(80), Intent(out) :: thermo_desc(nzevolve)
     Integer, Intent(out) :: ierr
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer, Parameter :: max_line_length = 1024
@@ -30,29 +31,32 @@ Module model_input_ascii
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     ! Initialize
-    tstart = 0.0
-    tstop = 0.0
-    tdelstart = 0.0
-    th = 0.0
-    t9h = 0.0
-    rhoh = 0.0
-    yeh = 0.0
-    fluxcms = 0.0
-    tmevnu = 0.0
     ierr = 0
 
-    !$omp critical(th_read)
-    Do izb = 1, nzbatchmx
-      If ( mask(izb) ) Then
-        izone = izb + szbatch - 1
+    Do izb = zb_lo, zb_hi
+      tstart(izb) = 0.0
+      tstop(izb) = 0.0
+      tdelstart(izb) = 0.0
+      th(:,izb) = 0.0
+      t9h(:,izb) = 0.0
+      rhoh(:,izb) = 0.0
+      yeh(:,izb) = 0.0
+      fluxcms(:,:,izb) = 0.0
+      tmevnu(:,:,izb) = 0.0
+    EndDo
 
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        izone = izb + szbatch - zb_lo
+
+        !$omp critical(th_read)
         Open(newunit=lun_th, file=trim(thermo_file(izone)), action='read', status='old', iostat=ierr)
         If ( ierr /= 0 ) Then
           Call xnet_terminate('Failed to open input file: '//trim(thermo_file(izone)))
@@ -99,19 +103,19 @@ Module model_input_ascii
         EndDo
         nh(izb) = n - 1
         Close(lun_th)
+        !$omp end critical(th_read)
 
         ! Do not use tdelstart from thermo files
         tdelstart(izb) = min(0.0,tdelstart(izb))
 
         ! Log thermo description
         If ( idiag >= 0 ) Write(lun_diag,"(a)") thermo_desc(izb)
+
+        ! Convert to appropriate units (CGS, except temperature (GK) and neutrino flux)
+        !t9h(:,izb) = t9h(:,izb) * 1.0e-9
+        fluxcms(:,:,izb) = 1.0e-42 * fluxcms(:,:,izb)
       EndIf
     EndDo
-    !$omp end critical(th_read)
-
-    ! Convert to appropriate units (CGS, except temperature (GK) and neutrino flux)
-!   t9h = t9h * 1.0e-9
-    fluxcms = 1.0e-42 * fluxcms
 
     Return
   End Subroutine read_thermo_file
@@ -124,7 +128,8 @@ Module model_input_ascii
     Use nuclear_data, Only: ny, nname
     Use xnet_conditions, Only: nstart, tstart, t9start, rhostart, yestart, nh, th, yeh
     USe xnet_abundances, Only: y_moment, ystart
-    Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, szbatch, nzbatchmx, lzactive
+    Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, nzevolve, szbatch, zb_lo, zb_hi, &
+      lzactive
     Use xnet_nse, Only: nse_solve, ynse
     Use xnet_types, Only: dp
     Implicit None
@@ -133,11 +138,11 @@ Module model_input_ascii
     Character(*), Intent(in) :: inab_file(nzone)
 
     ! Output variables
-    Character(80), Intent(out) :: abund_desc(nzbatchmx)
+    Character(80), Intent(out) :: abund_desc(nzevolve)
     Integer, Intent(out) :: ierr
 
     ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(:)
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Real(dp) :: yein, yin(ny)
@@ -147,20 +152,23 @@ Module model_input_ascii
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
-      mask => mask_in(:)
+      mask(zb_lo:) => mask_in
     Else
-      mask => lzactive(:)
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
-    If ( .not. any(mask(:)) ) Return
+    If ( .not. any(mask) ) Return
 
     ! Initialize
-    yestart = 0.0
-    ystart(:,:) = 0.0
     ierr = 0
+    
+    Do izb = zb_lo, zb_hi
+      yestart(izb) = 0.0
+      ystart(:,izb) = 0.0
+    EndDo
 
-    Do izb = 1, nzbatchmx
+    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        izone = izb + szbatch - 1
+        izone = izb + szbatch - zb_lo
 
         ! Interpolate electron fraction from thermo file
         If ( nstart(izb) > 1 .and. nstart(izb) <= nh(izb) ) Then
@@ -237,7 +245,7 @@ Module model_input_ascii
 
     ! Initialize
     yein = 0.0
-    yin(:) = 0.0
+    yin = 0.0
     yext = 0.0
 
     !$omp critical(ab_read)
@@ -248,8 +256,8 @@ Module model_input_ascii
 
       Read(lun_ab,*) abund_desc
       Do
-        char_tmp(:) = '     '
-        real_tmp(:) = 0.0
+        char_tmp = '     '
+        real_tmp = 0.0
 
         ! Read nread_max entries at once, for backwards compatability with multiple entries per line
         Read(lun_ab,*,iostat=ierr) (char_tmp(i), real_tmp(i), i=1,nread_max)
@@ -303,12 +311,12 @@ Module model_input_ascii
       Close(lun_ab)
 
       ! Total mass fraction inside network
-      xnet = sum(yin(:)*aa(:))
-      znet = sum(yin(:)*zz(:))
+      xnet = sum(yin*aa)
+      znet = sum(yin*zz)
       If ( idiag >= 1 ) Write(lun_diag,"(a,4es15.7)") 'ynet, xnet, anet, znet: ',sum(yin(:)),xnet,xnet,znet
 
       ! Normalize so total mass fraction is one
-      yin(:) = yin(:) / xnet
+      yin = yin / xnet
 
       ! Calculate properties of matter not in network
       If ( yext > 0.0 ) Then
