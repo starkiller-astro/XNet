@@ -22,8 +22,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname, benuc
     Use xnet_abundances, Only: yo, y, yt, ydot
-    Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, t9, t9o, t9t, t9dot, rho, rhoo, rhot, &
-      yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9rhofind
+    Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
+      rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9rhofind
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
       lzactive, szbatch, nzbatchmx
     Use xnet_integrate, Only: timestep
@@ -70,6 +70,7 @@ Contains
     yet(:) = ye(:)
     yeo(:) = ye(:)
     tdel_old(:) = tdel(:)
+    tdel_next(:) = tdel(:)
 
     edot(:) = 0.0
     en0(:) = 0.0
