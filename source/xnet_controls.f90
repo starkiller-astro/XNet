@@ -306,7 +306,8 @@ Contains
     Write(nnucout_string,"(i4)") nnucout
     nnucout_string = adjustl(nnucout_string)
     If ( parallel_IOProcessor() ) Then
-      Read(lun_control,"("//nnucout_string//"a5)") output_nuc
+!     Read(lun_control,"("//nnucout_string//"a5)") output_nuc
+      Read(lun_control,"(14a5)") output_nuc
       Write(lun_stdout,*) 'nnucout',nnucout
     EndIf
     Call parallel_bcast(output_nuc)
@@ -324,6 +325,10 @@ Contains
       Read(lun_control,"(a80)") data_dir
       Read(lun_control,*)
       nzone_read = nzone
+    !-----------------------------------------------------------------------------------------------
+    ! XNet generally expects individual files for the thermodynamic history and initial abundances
+    ! for each zone
+    !-----------------------------------------------------------------------------------------------
       Do izone = 1, nzone
         Read(lun_control,"(a80)",iostat=ierr) inab_file(izone)
         If ( ierr == iostat_end ) Then
@@ -340,7 +345,12 @@ Contains
       EndDo
       Close(lun_control)
       nzone_read = izone - 1
-      If ( nzone_read == 1 .and. nzone_read < nzone ) Then
+    !-----------------------------------------------------------------------------------------------
+    ! If the number of thermodynamic history and initial abundances is less than one per zone...
+    !-----------------------------------------------------------------------------------------------
+      If (index(thermo_file(1),'.h5')>0 .or. index(thermo_file(1),'.hdf')>0 ) Then
+        Write(lun_stdout,"(a,i4,a)") 'Read ', nzone_read, ' HDF files.'
+      ElseIf ( nzone_read == 1 .and. nzone_read < nzone ) Then
         inab_file_base = inab_file(1)
         thermo_file_base = thermo_file(1)
         Do izone = 1, nzone
