@@ -40,7 +40,6 @@ Contains
     Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
     Real(dp) :: enold(zb_lo:zb_hi), en0(zb_lo:zb_hi)
     Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
-    Real(dp) :: ytot, ztot, atot
     Integer :: k, izb, izone, kstep, nstep_est, idiag0
     Integer :: its(zb_lo:zb_hi), mykstep(zb_lo:zb_hi)
     Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
@@ -85,7 +84,7 @@ Contains
       If ( lzactive(izb) ) Then
 
         ! Calculate the total energy of the nuclei
-        Call benuc(yt(:,izb),enb(izb),enm(izb),ytot,ztot,atot)
+        Call benuc(yt(:,izb),enb(izb),enm(izb))
         en0(izb) = enm(izb)
         delta_en(izb) = 0.0
         edot(izb) = 0.0
@@ -142,7 +141,7 @@ Contains
               & 'T9',t9(izb),t9o(izb),t9(izb)-t9o(izb),tdel(izb)*t9dot(izb)
           EndIf
           enold(izb) = enm(izb)
-          Call benuc(yt(:,izb),enb(izb),enm(izb),ytot,ztot,atot)
+          Call benuc(yt(:,izb),enb(izb),enm(izb))
           delta_en(izb) = enm(izb) - en0(izb)
           edot(izb) = -(enm(izb)-enold(izb)) / tdel(izb)
 

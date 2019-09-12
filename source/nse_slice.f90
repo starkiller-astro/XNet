@@ -23,7 +23,7 @@ Program nse_slice
   Character(80) :: data_dir, data_desc, thermo_desc, abund_desc
   Character(80) :: diag_file_base = 'nse_diag'
   Character(80) :: diag_file, bin_file, inab_file, thermo_file
-  Real(dp) :: rho, ye, t9, t, tdel, flx, edot, enb, enm, ytot, ztot, atot
+  Real(dp) :: rho, ye, t9, t, tdel, flx, edot, enb, enm
   Integer :: i, kstep, mflx, ifl_orig, ifl_term, lun_ts
 
   ! Identify number of MPI nodes and ID number for this PE
@@ -93,7 +93,7 @@ Program nse_slice
   Call nse_solve(rho,t9,ye)
 
   If ( itsout > 0 ) Then
-    Call benuc(ynse,enb,enm,ytot,ztot,atot)
+    Call benuc(ynse,enb,enm)
     kstep = 0
     t = 0.0_dp
     tdel = 1.0_dp
