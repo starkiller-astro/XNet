@@ -74,11 +74,10 @@ Contains
     Return
   End Subroutine index_from_name
 
-  Subroutine benuc(y,enb,enm,ytot,ztot,atot)
+  Subroutine benuc(y,enb,enm)
     !-----------------------------------------------------------------------------------------------
-    ! This routine finds moments of the abundance distribution useful for hydrodynamics, including
-    ! the total abundance, electron fraction, binding energy, and mass excess energy and outputs in
-    ! mol/g and ergs/g.
+    ! This routine calculates the binding energy and mass excess energy [ergs/g] of the abundance
+    ! distribution.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: epmev, avn
     Use xnet_types, Only: dp
@@ -90,11 +89,11 @@ Contains
     ! Output variables
     Real(dp), Intent(out) :: enb ! Binding energy [ergs g^{-1}]
     Real(dp), Intent(out) :: enm ! Mass excess [ergs g^{-1}]
-    Real(dp), Intent(out) :: ytot, ztot, atot ! Abundance moments
 
-    ytot = sum(y)
+    ! Local variables
+    Real(dp) :: ztot ! Total proton number
+
     ztot = sum(y * zz)
-    atot = sum(y * aa)
     enb  = sum(y * be)
     enm  = mex_p*ztot + mex_n*(1.0-ztot) - enb
 
