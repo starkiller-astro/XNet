@@ -7,9 +7,9 @@ module eos_type_module
 
   private :: rt
 
-  double precision, parameter, private :: ONE = 1.0d0
-  double precision, parameter, private :: ZERO = 0.0d0
-  double precision, parameter, private :: small_x = 0.0d0
+  real(rt), parameter, private :: ONE = 1.0d0
+  real(rt), parameter, private :: ZERO = 0.0d0
+  real(rt), parameter, private :: small_x = 0.0d0
 
   integer, parameter :: eos_input_rt = 1  ! rho, T are inputs
   integer, parameter :: eos_input_rh = 2  ! rho, h are inputs
@@ -236,9 +236,9 @@ contains
 
   subroutine eos_get_small_temp(small_temp_out)
 
-    !$acc routine seq
-
     implicit none
+
+    !$acc routine seq
 
     real(rt), intent(out) :: small_temp_out
 
@@ -252,9 +252,9 @@ contains
 
   subroutine eos_get_small_dens(small_dens_out)
 
-    !$acc routine seq
-
     implicit none
+
+    !$acc routine seq
 
     real(rt), intent(out) :: small_dens_out
 
@@ -268,9 +268,9 @@ contains
 
   subroutine eos_get_max_temp(max_temp_out)
 
-    !$acc routine seq
-
     implicit none
+
+    !$acc routine seq
 
     real(rt), intent(out) :: max_temp_out
 
@@ -284,9 +284,9 @@ contains
 
   subroutine eos_get_max_dens(max_dens_out)
 
-    !$acc routine seq
-
     implicit none
+
+    !$acc routine seq
 
     real(rt), intent(out) :: max_dens_out
 
