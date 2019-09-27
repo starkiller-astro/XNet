@@ -515,6 +515,16 @@ interface
         type(c_ptr),    value  :: queue
     end subroutine
 
+    subroutine magma_dgetrf_nopiv_batched( &
+        m, n, dA_array, lda, dinfo_array, batchcount, queue ) &
+    bind(C, name="magma_dgetrf_nopiv_batched")
+        use iso_c_binding
+        integer(c_int), value  :: m, n, lda, batchcount
+        type(c_ptr),    value  :: dA_array    !! double_real**
+        type(c_ptr),    value  :: dinfo_array !! int*
+        type(c_ptr),    value  :: queue
+    end subroutine
+
     subroutine magma_dgetrs_batched( &
         trans, n, nrhs, dA_array, ldda, dipiv_array, dB_array, lddb, batchcount, queue ) &
     bind(C, name="magma_dgetrs_batched")
@@ -523,6 +533,38 @@ interface
         type(c_ptr),    value  :: dA_array    !! double_real**
         type(c_ptr),    value  :: dipiv_array !! int**
         type(c_ptr),    value  :: dB_array    !! double_real**
+        type(c_ptr),    value  :: queue
+    end subroutine
+
+    subroutine magma_dgetrs_nopiv_batched( &
+        trans, n, nrhs, dA_array, ldda, dB_array, lddb, dinfo_array, batchcount, queue ) &
+    bind(C, name="magma_dgetrs_nopiv_batched")
+        use iso_c_binding
+        integer(c_int), value  :: trans, n, nrhs, ldda, lddb, batchcount
+        type(c_ptr),    value  :: dA_array    !! double_real**
+        type(c_ptr),    value  :: dB_array    !! double_real**
+        type(c_ptr),    value  :: dinfo_array !! int*
+        type(c_ptr),    value  :: queue
+    end subroutine
+
+    subroutine magmablas_dtrsv_outofplace_batched( &
+        uplo, trans, diag, n, dA_array, ldda, db_array, incb, dx_array, batchcount, queue, flag ) &
+    bind(C, name="magmablas_dtrsv_outofplace_batched")
+        use iso_c_binding
+        integer(c_int), value  :: uplo, trans, diag, n, ldda, incb, batchcount, flag
+        type(c_ptr),    value  :: dA_array    !! double_real**
+        type(c_ptr),    value  :: db_array    !! double_real**
+        type(c_ptr),    value  :: dx_array    !! double_real**
+        type(c_ptr),    value  :: queue
+    end subroutine
+
+    subroutine magma_dlaswp_rowserial_batched( &
+        n, dA_array, ldda, k1, k2, dipiv_array, batchcount, queue ) &
+    bind(C, name="magma_dlaswp_rowserial_batched")
+        use iso_c_binding
+        integer(c_int), value  :: n, ldda, k1, k2, batchcount
+        type(c_ptr),    value  :: dA_array    !! double_real**
+        type(c_ptr),    value  :: dipiv_array !! int**
         type(c_ptr),    value  :: queue
     end subroutine
 
