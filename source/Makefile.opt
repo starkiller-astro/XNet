@@ -9,6 +9,13 @@ CMODE ?= OPT
 ## Choose executable name
 EXE = xnet
 
+## Choose compiler
+PE_ENV  ?= GNU
+#PE_ENV  ?= PGI
+#PE_ENV  ?= INTEL
+#PE_ENV  ?= CRAY
+#PE_ENV  ?= XL
+
 ## SELECT MPI MODE, Default=OFF
 #MPI_MODE = ON
 
