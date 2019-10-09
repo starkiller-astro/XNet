@@ -36,7 +36,8 @@ Contains
 
     ! Open and read the matching data arrays
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_match, file=trim(data_dir)//"/match_data", form="unformatted", status="old")
+      Open(newunit=lun_match, file=trim(data_dir)//"/match_data", form="unformatted", status="old", &
+        & action='read')
       Read(lun_match) mflx, nr
 
       ! Make sure match_data agrees with reaction_data
