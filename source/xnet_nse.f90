@@ -350,7 +350,7 @@ Contains
       Call nse_nr(uvec,check,info)
       If ( info > 0 ) Exit
     EndDo
-    If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'CP98:', &
+    If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es24.16)') 'CP98:', &
     & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
 
     ! Save the CP98 result
@@ -368,7 +368,7 @@ Contains
         Do i = 1, 3
           Call nse_screen
           Call nse_nr(uvec,check,info)
-          If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
+          If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es24.16)') 'XNET:', &
           & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
         EndDo
       EndIf
@@ -385,7 +385,7 @@ Contains
           Call nse_nr(uvec,check,info)
           If ( info > 0 ) Exit
         EndDo
-        If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
+        If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es24.16)') 'XNET:', &
         & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
       EndIf
     EndIf
@@ -411,7 +411,7 @@ Contains
       If ( info0 > 0 ) Then
         If ( itsout >= 3 ) Write(lun_stdout,'(a)') 'XNet screening failed; using CP98 screening result'
       Else
-        Write(lun_stdout,'(a,i2,a,3es23.15)') &
+        Write(lun_stdout,'(a,i2,a,3es24.16)') &
           & 'Check convergence of root finder (',info,'), rho,T,Ye= ',rhonse,t9nse,yense
         Call xnet_terminate('NSE ERROR: NR Failed',info)
       EndIf
@@ -435,11 +435,11 @@ Contains
     If ( itsout >= 2 ) Then
       Write(lun_stdout,'(a)') 'NSE solved'
       Write(lun_stdout,'(a,1x,3i15)')     'NR iters, LS iters, F evals =',knrtot(1),knrtot(2),knrtot(3)
-      Write(lun_stdout,'(a,2es23.15)')    'roots                       =',uvec(1),uvec(2)
-      Write(lun_stdout,'(a,4es23.15)')    'xneut, xprot, xalpha, xni56 =',xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56)
-      Write(lun_stdout,'(a,2es23.15)')    'residuals                   =',fvec(1),fvec(2)
+      Write(lun_stdout,'(a,2es24.16)')    'roots                       =',uvec(1),uvec(2)
+      Write(lun_stdout,'(a,4es24.16)')    'xneut, xprot, xalpha, xni56 =',xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56)
+      Write(lun_stdout,'(a,2es24.16)')    'residuals                   =',fvec(1),fvec(2)
       ii = maxloc(xnse,1)
-      Write(lun_stdout,'(a,a23,es23.15)') 'largest mass fraction       =',nname(ii),xnse(ii)
+      Write(lun_stdout,'(a,a23,es24.16)') 'largest mass fraction       =',nname(ii),xnse(ii)
     EndIf
 
     stop_timer = xnet_wtime()
@@ -648,9 +648,9 @@ Contains
     EndIf
 
     If ( itsout >= 2 ) Then
-      Write(lun_stdout,'(a,2es23.15)') 'Initial guess               =', uvec(1), uvec(2)
-      Write(lun_stdout,'(a5,f11.7,es23.15)') nname(iye(1)), za_ye(1), xnse(iye(1))
-      Write(lun_stdout,'(a5,f11.7,es23.15)') nname(iye(2)), za_ye(2), xnse(iye(2))
+      Write(lun_stdout,'(a,2es24.16)') 'Initial guess               =', uvec(1), uvec(2)
+      Write(lun_stdout,'(a5,f11.7,es24.16)') nname(iye(1)), za_ye(1), xnse(iye(1))
+      Write(lun_stdout,'(a5,f11.7,es24.16)') nname(iye(2)), za_ye(2), xnse(iye(2))
     EndIf
     If ( itsout >= 3 ) Then
       Write(lun_stdout,'(a,2a5)') 'iza_min,   iza_max   =', nname(iza_min),   nname(iza_max)
@@ -820,9 +820,9 @@ Contains
     unorm = l2norm( scaleu(:)*uvec(:) )
     maxstep = maxstep0 * max( unorm, l2norm( scaleu(:) ) )
 
-    If ( itsout >= 3 ) Write(lun_stdout,'(3i3,7es23.15)') &
+    If ( itsout >= 3 ) Write(lun_stdout,'(3i3,7es24.16)') &
       & 0, knr(2), knr(3), uvec(1), uvec(2), fvec(1), fvec(2), f, testf, testu
-    If ( itsout >= 4 ) Write(lun_stdout,'(9x,2es23.15)') xnse(i_nn), xnse(i_pp)
+    If ( itsout >= 4 ) Write(lun_stdout,'(9x,2es24.16)') xnse(i_nn), xnse(i_pp)
 
     ! Do the NR iterations
     Do nrit = 1, nritmax
@@ -848,7 +848,7 @@ Contains
 
       ! Check for singular matrix
       If ( det <= 2.0_dp*epsilon(det) .or. jcond*tolmin > 1.0_dp ) Then
-        If ( itsout >=1 ) Write(lun_stdout,'(a,2es23.15)') 'Singular Matrix: det,jcond = ',det,jcond
+        If ( itsout >=1 ) Write(lun_stdout,'(a,2es24.16)') 'Singular Matrix: det,jcond = ',det,jcond
         info = -7
         Exit
       EndIf
@@ -887,9 +887,9 @@ Contains
         testg = l2norm( abs(gvec(:)) * merge( abs(uvec(:)), typu(:), abs(uvec(:))>typu(:) ) / max(f, 0.5_dp*n) )
       EndIf
 
-      If ( itsout >= 3 ) Write(lun_stdout,'(3i3,8es23.15)') &
+      If ( itsout >= 3 ) Write(lun_stdout,'(3i3,8es24.16)') &
         & nrit, knr(2), knr(3), uvec(1), uvec(2), fvec(1), fvec(2), f, testf, testu, testg
-      If ( itsout >= 4 ) Write(lun_stdout,'(7x,i2,6es23.15)') &
+      If ( itsout >= 4 ) Write(lun_stdout,'(7x,i2,6es24.16)') &
         & info2, xnse(1), xnse(2), pvec(1), pvec(2), gvec(1), gvec(2)
 
       If ( info2 < 0 ) Then
@@ -975,7 +975,7 @@ Contains
     betak(0) = 0.0_dp
     betak(1) = 1.0_dp
     slopek(:) = slope
-    If ( itsout >= 4 ) Write(lun_stdout,'(3x,i3,3x,4es23.15)') 0, beta_min, f0, f0+alpha*betak(1)*slope, slope
+    If ( itsout >= 4 ) Write(lun_stdout,'(3x,i3,3x,4es24.16)') 0, beta_min, f0, f0+alpha*betak(1)*slope, slope
 
     Do lsit = 1, lsitmax
 
@@ -983,7 +983,7 @@ Contains
       uvec(:) = uvec0(:) + betak(lsit)*pvec(:)
       fk(lsit) = nse_func(uvec)
 
-      If ( itsout >= 4 ) Write(lun_stdout,'(3x,i3,3x,5es23.15)') &
+      If ( itsout >= 4 ) Write(lun_stdout,'(3x,i3,3x,5es24.16)') &
         & lsit, betak(lsit), fk(lsit), fk(lsit-1) + alpha*betak(lsit)*slopek(lsit-1), slopek(lsit-1), &
         & dot_prod( (gveck(:)-gvec(:)), pvec )
 
@@ -1229,7 +1229,7 @@ Contains
         hnse(j) = s0
       EndDo
 
-      If ( idiag >= 5 ) Write(lun_diag,'(a5,3i6,7es23.15)') &
+      If ( idiag >= 5 ) Write(lun_diag,'(a5,3i6,7es24.16)') &
         & ('HNSE',iz1,iz2(j-1),j,lambda12(j-1),h0(j-1),hw(j-1),hi(j-1),hs(j-1),hnse(j),j=2,izmax)
 
     EndIf
@@ -1282,7 +1282,7 @@ Contains
       hnse(1) = 0.0_dp
       hnse(2:izmax) = z2(2:izmax)*fh0(1) - fh0(2:izmax)
 
-      If ( idiag >= 5 ) Write(lun_diag,"(a5,3i6,23x,es23.15,69x,es23.15)") &
+      If ( idiag >= 5 ) Write(lun_diag,"(a5,3i6,23x,es24.16,69x,es24.16)") &
         & ('HNSE',iz1,iz2(j-1),j,sum(h0(1:(j-1))),hnse(j),j=2,izmax)
 
     EndIf
