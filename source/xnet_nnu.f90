@@ -27,7 +27,8 @@ Module xnet_nnu
   Real(dp), Allocatable :: tmevnu(:,:,:)  ! Neutrino temperature [MeV]
   Real(dp), Allocatable :: fluxcms(:,:,:) ! Neutrino fluxes [cm^-2 s^-1]
 
-  Real(dp), Dimension(:,:), Allocatable :: sigmanu ! dim(nnnu,ntnu)
+  Real(dp), Allocatable :: sigmanu(:,:) ! dim(nnnu,ntnu)
+  Real(dp), Allocatable :: rnnu(:,:,:)
 
 Contains
 
@@ -45,7 +46,7 @@ Contains
     Integer :: i, j, lun_nnu
 
     Allocate (sigmanu(nnnu,ntnu))
-    Open(newunit=lun_nnu, file=trim(data_dir)//"/netneutr", status='old')
+    Open(newunit=lun_nnu, file=trim(data_dir)//"/netneutr", status='old', action='read')
     Do i = 1, nnnu
       Read(lun_nnu,*)
       Read(lun_nnu,*) (sigmanu(i,j), j=1,ntnu)
@@ -66,17 +67,17 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: nzevolve, zb_lo, zb_hi, lzactive, ineutrino
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: nnnu
-    Real(dp), Intent(in) :: time(nzevolve)
+    Real(dp), Intent(in) :: time(zb_lo:zb_hi)
 
     ! Output variables
-    Real(dp), Intent(out), Dimension(nnnu,nnuspec,zb_lo:zb_hi) :: rate
+    Real(dp), Intent(out) :: rate(nnnu,nnuspec,zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -96,14 +97,27 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !$acc enter data async(tid) &
+    !$acc copyin(mask)
+
     ! Only interpolate if neutrino reactions are on
     If ( ineutrino == 0 ) Then
+      !$acc parallel loop gang async(tid) &
+      !$acc present(mask,rate)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          rate(:,:,izb) = 0.0
+          !$acc loop vector collapse(2)
+          Do j = 1, nnuspec
+            Do k = 1, nnnu
+              rate(k,j,izb) = 0.0
+            EndDo
+          EndDo
         EndIf
       EndDo
     Else
+      !$acc parallel loop gang async(tid) &
+      !$acc present(mask,time,rate,nh,th,tmevnu,fluxcms,sigmanu) &
+      !$acc private(n)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
 
@@ -113,6 +127,7 @@ Contains
 
           ! Otherwise, intepolate the neutrino fluxes and temperature from time history
           Else
+            !$acc loop seq
             Do i = 1, nh(izb)
               If ( time(izb) <= th(i,izb) ) Exit
             EndDo
@@ -120,6 +135,8 @@ Contains
           EndIf
 
           ! Compute neutrino cross sections
+          !$acc loop seq &
+          !$acc private(rdt,ltnu,flux,it)
           Do j = 1, nnuspec
 
             ! Linear interpolation in log-space
@@ -134,11 +151,14 @@ Contains
               ltnu = rdt*log(tmevnu(n,j,izb)) + (1.0-rdt)*log(tmevnu(n-1,j,izb))
               flux = safe_exp( rdt*log(fluxcms(n,j,izb)) + (1.0-rdt)*log(fluxcms(n-1,j,izb)) )
             EndIf
+            !$acc loop seq
             Do i = 1, ntnu
               If ( ltnu <= ltnugrid(i) ) Exit
             EndDo
             it = i
 
+            !$acc loop vector &
+            !$acc private(ltnu1,ltnu2,lsigmanu1,lsigmanu2,rdltnu,rcsnu)
             Do k = 1, nnnu
 
               ! Log interpolation
@@ -160,6 +180,9 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask)
 
     Return
   End Subroutine nnu_rate
