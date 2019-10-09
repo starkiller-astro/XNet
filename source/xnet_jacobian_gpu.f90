@@ -16,15 +16,16 @@ Module xnet_jacobian
   Use, Intrinsic :: iso_c_binding
   Use xnet_types, Only: dp
   Implicit None
-  Real(dp), Allocatable :: dydotdy(:,:,:) ! dYdot/dY part of jac
+  Real(dp), Allocatable, Target :: dydotdy(:,:,:) ! dYdot/dY part of jac
   Real(dp), Allocatable, Target :: jac(:,:,:)     ! the Jacobian matrix
   Real(dp), Allocatable, Target :: rhs(:,:)       ! the Jacobian matrix
+  Real(dp), Allocatable, Target :: work(:,:)      ! the Jacobian matrix
   Integer, Allocatable, Target :: indx(:,:)       ! Pivots in the LU decomposition
+  Integer, Allocatable, Target :: indxinfo(:,:)
   Integer, Allocatable, Target :: info(:)
-  !$acc declare create(dydotdy,jac,rhs,indx,info)
 
   Type(C_PTR), Allocatable, Target :: hjac(:), hrhs(:)
-  Type(C_PTR), Allocatable, Target :: djac(:), drhs(:)
+  Type(C_PTR), Allocatable, Target :: djac(:), drhs(:), dwork(:), dindx(:), dindxinfo(:)
 
   ! Array size parameters
   Real(C_DOUBLE), Parameter :: ddummy = 0.0
@@ -38,6 +39,17 @@ Module xnet_jacobian
   ! Parameters for GPU array dimensions
   Integer :: msize ! Size of linear system to be solved
 
+  Real(dp), Allocatable, Target :: diag0(:)
+  Real(dp), Allocatable, Target :: mult1(:)
+
+  Logical, Parameter :: pivot = .false.
+
+  Type(C_PTR), Allocatable, Target :: djacp(:), drhsp(:), dindxp(:)
+
+  !$acc declare &
+  !$acc create(dydotdy,jac,rhs,work,indx,indxinfo,info,djac,drhs,dwork,dindx,dindxinfo,diag0,mult1, &
+  !$acc        djacp,drhsp,dindxp)
+
 Contains
 
   Subroutine read_jacobian_data(data_dir)
@@ -47,7 +59,7 @@ Contains
     Use cublasf
     Use cudaf
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzevolve, nzbatchmx, nthread
+    Use xnet_controls, Only: iheat, nzevolve, nzbatchmx, tid
     Use xnet_gpu, Only: gpu_init
     Implicit None
 
@@ -55,7 +67,7 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: istat, izb, tid
+    Integer :: istat, izb
 
     Call gpu_init
 
@@ -66,17 +78,25 @@ Contains
       msize = ny
     EndIf
 
+    Allocate (diag0(nzevolve))
+    Allocate (mult1(nzevolve))
+    diag0 = 0.0
+    mult1 = 1.0
+
     Allocate (dydotdy(msize,msize,nzevolve))
     Allocate (jac(msize,msize,nzevolve))
     Allocate (rhs(msize,nzevolve))
+    Allocate (work(msize,nzevolve))
     Allocate (indx(msize,nzevolve))
+    Allocate (indxinfo(msize,nzevolve))
     Allocate (info(nzevolve))
     dydotdy = 0.0
     jac = 0.0
     rhs = 0.0
+    work = 0.0
     indx = 0
+    indxinfo = 0
     info = 0
-    !$acc update device(dydotdy,jac,rhs,indx,info)
 
     Allocate (hjac(nzevolve))
     Allocate (hrhs(nzevolve))
@@ -86,15 +106,28 @@ Contains
     EndDo
 
     Allocate (djac(nzevolve))
+    Allocate (djacp(nzevolve))
     Allocate (drhs(nzevolve))
-    !$acc enter data create(djac,drhs)
-    !$acc host_data use_device(jac,rhs)
+    Allocate (drhsp(nzevolve))
+    Allocate (dwork(nzevolve))
+    Allocate (dindx(nzevolve))
+    Allocate (dindxp(nzevolve))
+    Allocate (dindxinfo(nzevolve))
+    !$acc host_data use_device(jac,rhs,work,indx,indxinfo)
     Do izb = 1, nzevolve
       djac(izb) = c_loc( jac(1,1,izb) )
+      djacp(izb) = c_loc( jac(1,1,izb) )
       drhs(izb) = c_loc( rhs(1,izb) )
+      drhsp(izb) = c_loc( rhs(1,izb) )
+      dwork(izb) = c_loc( work(1,izb) )
+      dindx(izb) = c_loc( indx(1,izb) )
+      dindxp(izb) = c_loc( indx(1,izb) )
+      dindxinfo(izb) = c_loc( indxinfo(1,izb) )
     EndDo
     !$acc end host_data
-    !$acc update device(djac,drhs)
+
+    !$acc update async(tid) &
+    !$acc device(dydotdy,jac,rhs,work,indx,indxinfo,info,djac,djacp,drhs,drhsp,dwork,dindx,dindxp,dindxinfo,diag0,mult1)
 
     Return
   End Subroutine read_jacobian_data
@@ -108,31 +141,35 @@ Contains
     ! Local variables
     Integer :: istat
 
+    Deallocate (diag0,mult1)
+
     Deallocate (dydotdy,jac,rhs,indx,info)
 
     Deallocate (hjac,hrhs)
-    !$acc exit data delete(djac,drhs)
-    Deallocate (djac,drhs)
+    Deallocate (djac,drhs,dwork,dindx,dindxinfo)
+    Deallocate (djacp,drhsp,dindxp)
 
   End Subroutine jacobian_finalize
 
-  Subroutine jacobian_scale(diag,mult,mask_in)
+  Subroutine jacobian_scale(diag_in,mult_in,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! This augments a previously calculation Jacobian matrix by multiplying all elements by mult and
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use nuclear_data, Only: ny, nname
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, i0, izb
+    Integer :: i, j, i0, j1, izb, izone
+    Real(dp), Pointer :: diag(:), mult(:)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -142,14 +179,60 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    If ( present(diag_in) ) Then
+      diag(zb_lo:) => diag_in
+    Else
+      diag(zb_lo:) => diag0(zb_lo:zb_hi)
+    EndIf
+    If ( present(mult_in) ) Then
+      mult(zb_lo:) => mult_in
+    Else
+      mult(zb_lo:) => mult1(zb_lo:zb_hi)
+    EndIf
+
+    !$acc enter data async(tid) &
+    !$acc copyin(mask,diag,mult)
+
+    !$acc parallel loop gang collapse(2) async(tid) &
+    !$acc present(mask,mult,diag,jac,dydotdy)
     Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        jac(:,:,izb) = mult(izb) * dydotdy(:,:,izb)
-        Do i0 = 1, msize
-          jac(i0,i0,izb) = jac(i0,i0,izb) + diag(izb)
-        EndDo
-      EndIf
+      Do j1 = 1, msize
+        If ( mask(izb) ) Then
+          !$acc loop vector
+          Do i0 = 1, msize
+            jac(i0,j1,izb) = mult(izb) * dydotdy(j1,i0,izb)
+          EndDo
+          jac(j1,j1,izb) = jac(j1,j1,izb) + diag(izb)
+        EndIf
+      EndDo
     EndDo
+
+    If ( idiag >= 5 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          !$acc update wait(tid) &
+          !$acc host(diag(izb),mult(izb),jac(:,:,izb))
+          Write(lun_diag,"(a9,i5,2es24.16)") 'JAC_SCALE',izone,diag(izb),mult(izb)
+          Do i = 1, ny
+            Write(lun_diag,"(3a)") 'J(',nname(i),',Y)'
+            Write(lun_diag,"(7es24.16)") (jac(i,j,izb),j=1,ny)
+          EndDo
+          If ( iheat > 0 ) Then
+            Write(lun_diag,"(3a)") 'J(Y,T9)'
+            Write(lun_diag,"(7es24.16)") (jac(i,ny+1,izb),i=1,ny)
+            Write(lun_diag,"(a)") 'J(T9,Y)'
+            Write(lun_diag,"(7es24.16)") (jac(ny+1,j,izb),j=1,ny)
+            Write(lun_diag,"(a)") 'J(T9,T9)'
+            Write(lun_diag,"(es24.16)") jac(ny+1,ny+1,izb)
+          EndIf
+        EndIf
+      EndDo
+      Flush(lun_diag)
+    EndIf
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask,diag,mult)
     
     Return
   End Subroutine jacobian_scale
@@ -159,28 +242,29 @@ Contains
     ! This routine calculates the reaction Jacobian matrix, dYdot/dY, and augments by multiplying
     ! all elements by mult and adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, mex
+    Use nuclear_data, Only: ny, mex, nname
     Use reaction_data, Only: a1, a2, a3, a4, b1, b2, b3, b4, la, le, mu1, mu2, mu3, mu4, n11, n21, &
-      & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
+      & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9, nan, &
+      & n10, n20, n30, n40
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
+      & lzactive, tid
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
     Integer :: la1, le1, la2, le2, la3, le3, la4, le4
     Integer :: i11, i21, i22, i31, i32, i33, i41, i42, i43, i44
-    Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
+    Real(dp) :: s1, s2, s3, s4, sdot, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
     Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -193,160 +277,144 @@ Contains
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
+    !$acc enter data async(tid) &
+    !$acc copyin(mask)
+
     ! Build the Jacobian
+
+    !$acc parallel loop gang collapse(2) async(tid) &
+    !$acc present(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex,ktot, &
+    !$acc         n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44, &
+    !$acc         dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9, &
+    !$acc         mu1,mu2,mu3,mu4,a1,a2,a3,a4)
     Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        dydotdy(:,:,izb) = 0.0
-        Do i0 = 1, ny
-          la1 = la(1,i0)
-          la2 = la(2,i0)
-          la3 = la(3,i0)
-          la4 = la(4,i0)
-          le1 = le(1,i0)
-          le2 = le(2,i0)
-          le3 = le(3,i0)
-          le4 = le(4,i0)
-          Do j1 = la1, le1
-            r1 = b1(j1,izb)
-            i11 = n11(j1)
-            dydotdy(i0,i11,izb) = dydotdy(i0,i11,izb) + r1
+      Do i0 = 1, ny
+        If ( mask(izb) ) Then
+          !$acc loop vector
+          Do j1 = 1, msize
+            dydotdy(j1,i0,izb) = 0.0
           EndDo
-          Do j1 = la2, le2
-            r2 = b2(j1,izb)
-            i21 = n21(j1)
-            i22 = n22(j1)
-            y21 = yt(i21,izb)
-            y22 = yt(i22,izb)
-            dydotdy(i0,i21,izb) = dydotdy(i0,i21,izb) + r2 * y22
-            dydotdy(i0,i22,izb) = dydotdy(i0,i22,izb) + r2 * y21
+          !$acc loop vector
+          Do j1 = la(1,i0), le(1,i0)
+            !$acc atomic
+            dydotdy(n11(j1),i0,izb) = dydotdy(n11(j1),i0,izb) + b1(j1,izb)
           EndDo
-          Do j1 = la3, le3
-            r3 = b3(j1,izb)
-            i31 = n31(j1)
-            i32 = n32(j1)
-            i33 = n33(j1)
-            y31 = yt(i31,izb)
-            y32 = yt(i32,izb)
-            y33 = yt(i33,izb)
-            dydotdy(i0,i31,izb) = dydotdy(i0,i31,izb) + r3 * y32 * y33
-            dydotdy(i0,i32,izb) = dydotdy(i0,i32,izb) + r3 * y33 * y31
-            dydotdy(i0,i33,izb) = dydotdy(i0,i33,izb) + r3 * y31 * y32
+          !$acc loop vector
+          Do j1 = la(2,i0), le(2,i0)
+            !$acc atomic
+            dydotdy(n21(j1),i0,izb) = dydotdy(n21(j1),i0,izb) + b2(j1,izb) * yt(n22(j1),izb)
+            !$acc atomic
+            dydotdy(n22(j1),i0,izb) = dydotdy(n22(j1),i0,izb) + b2(j1,izb) * yt(n21(j1),izb)
           EndDo
-          Do j1 = la4, le4
-            r4 = b4(j1,izb)
-            i41 = n41(j1)
-            i42 = n42(j1)
-            i43 = n43(j1)
-            i44 = n44(j1)
-            y41 = yt(i41,izb)
-            y42 = yt(i42,izb)
-            y43 = yt(i43,izb)
-            y44 = yt(i44,izb)
-            dydotdy(i0,i41,izb) = dydotdy(i0,i41,izb) + r4 * y42 * y43 * y44
-            dydotdy(i0,i42,izb) = dydotdy(i0,i42,izb) + r4 * y43 * y44 * y41
-            dydotdy(i0,i43,izb) = dydotdy(i0,i43,izb) + r4 * y44 * y41 * y42
-            dydotdy(i0,i44,izb) = dydotdy(i0,i44,izb) + r4 * y41 * y42 * y43
+          !$acc loop vector
+          Do j1 = la(3,i0), le(3,i0)
+            !$acc atomic
+            dydotdy(n31(j1),i0,izb) = dydotdy(n31(j1),i0,izb) + b3(j1,izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
+            !$acc atomic
+            dydotdy(n32(j1),i0,izb) = dydotdy(n32(j1),i0,izb) + b3(j1,izb) * yt(n33(j1),izb) * yt(n31(j1),izb)
+            !$acc atomic
+            dydotdy(n33(j1),i0,izb) = dydotdy(n33(j1),i0,izb) + b3(j1,izb) * yt(n31(j1),izb) * yt(n32(j1),izb)
           EndDo
-        EndDo
-      EndIf
+          !$acc loop vector
+          Do j1 = la(4,i0), le(4,i0)
+            !$acc atomic
+            dydotdy(n41(j1),i0,izb) = dydotdy(n41(j1),i0,izb) + b4(j1,izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
+            !$acc atomic
+            dydotdy(n42(j1),i0,izb) = dydotdy(n42(j1),i0,izb) + b4(j1,izb) * yt(n43(j1),izb) * yt(n44(j1),izb) * yt(n41(j1),izb)
+            !$acc atomic
+            dydotdy(n43(j1),i0,izb) = dydotdy(n43(j1),i0,izb) + b4(j1,izb) * yt(n44(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb)
+            !$acc atomic
+            dydotdy(n44(j1),i0,izb) = dydotdy(n44(j1),i0,izb) + b4(j1,izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb)
+          EndDo
+
+          If ( iheat > 0 ) Then
+            s1 = 0.0
+            !$acc loop vector &
+            !$acc reduction(+:s1)
+            Do j1 = la(1,i0), le(1,i0)
+              s1 = s1 + a1(j1) * dcsect1dt9(mu1(j1),izb) * yt(n11(j1),izb)
+            EndDo
+            s2 = 0.0
+            !$acc loop vector &
+            !$acc reduction(+:s2)
+            Do j1 = la(2,i0), le(2,i0)
+              s2 = s2 + a2(j1) * dcsect2dt9(mu2(j1),izb) * yt(n21(j1),izb) * yt(n22(j1),izb)
+            EndDo
+            s3 = 0.0
+            !$acc loop vector &
+            !$acc reduction(+:s3)
+            Do j1 = la(3,i0), le(3,i0)
+              s3 = s3 + a3(j1) * dcsect3dt9(mu3(j1),izb) * yt(n31(j1),izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
+            EndDo
+            s4 = 0.0
+            !$acc loop vector &
+            !$acc reduction(+:s4)
+            Do j1 = la(4,i0), le(4,i0)
+              s4 = s4 + a4(j1) * dcsect4dt9(mu4(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
+            EndDo
+            dydotdy(ny+1,i0,izb) = s1 + s2 + s3 + s4
+          EndIf
+        EndIf
+      EndDo
     EndDo
 
     If ( iheat > 0 ) Then
+
+      !$acc parallel loop gang collapse(2) async(tid) &
+      !$acc present(mask,dydotdy,cv,mex) &
+      !$acc private(sdot)
       Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          Do i0 = 1, ny
-            la1 = la(1,i0)
-            la2 = la(2,i0)
-            la3 = la(3,i0)
-            la4 = la(4,i0)
-            le1 = le(1,i0)
-            le2 = le(2,i0)
-            le3 = le(3,i0)
-            le4 = le(4,i0)
-            s1 = 0.0
-            Do j1 = la1, le1
-              dr1dt9 = a1(j1)*dcsect1dt9(mu1(j1),izb)
-              i11 = n11(j1)
-              y11 = yt(i11,izb)
-              s1 = s1 + dr1dt9 * y11
+        Do j1 = 1, msize
+          If ( mask(izb) ) Then
+            sdot = 0.0
+            !$acc loop vector &
+            !$acc reduction(-:sdot)
+            Do i0 = 1, ny
+              sdot = sdot - mex(i0)*dydotdy(j1,i0,izb) / cv(izb)
             EndDo
-            s2 = 0.0
-            Do j1 = la2, le2
-              dr2dt9 = a2(j1)*dcsect2dt9(mu2(j1),izb)
-              i21 = n21(j1)
-              i22 = n22(j1)
-              y21 = yt(i21,izb)
-              y22 = yt(i22,izb)
-              s2 = s2 + dr2dt9 * y21 * y22
-            EndDo
-            s3 = 0.0
-            Do j1 = la3, le3
-              dr3dt9 = a3(j1)*dcsect3dt9(mu3(j1),izb)
-              i31 = n31(j1)
-              i32 = n32(j1)
-              i33 = n33(j1)
-              y31 = yt(i31,izb)
-              y32 = yt(i32,izb)
-              y33 = yt(i33,izb)
-              s3 = s3 + dr3dt9 * y31 * y32 * y33
-            EndDo
-            s4 = 0.0
-            Do j1 = la4, le4
-              dr4dt9 = a4(j1)*dcsect4dt9(mu4(j1),izb)
-              i41 = n41(j1)
-              i42 = n42(j1)
-              i43 = n43(j1)
-              i44 = n44(j1)
-              y41 = yt(i41,izb)
-              y42 = yt(i42,izb)
-              y43 = yt(i43,izb)
-              y44 = yt(i44,izb)
-              s4 = s4 + dr4dt9 * y41 * y42 * y43 * y44
-            EndDo
-            dydotdy(i0,ny+1,izb)= s1 + s2 + s3 + s4
-          EndDo
-
-          ! The BLAS version of dydotdy(ny+1,i,izb) = -sum(mex*dydotdy(1:ny,i,izb))/cv(izb)
-          Call dgemv('T',ny,msize,1.0/cv(izb),dydotdy(1,1,izb),msize,mex,1,0.0,dt9dotdy,1)
-          dydotdy(ny+1,:,izb) = -dt9dotdy
-        EndIf
-      EndDo
-
-      ! This also works, but could be inefficient if there are few active zones in batch
-      !Call dgemv('T',ny,msize*nzbatchmx,1.0,dydotdy(1,1,1),msize,mex,1,0.0,dt9dotdy,1)
-      !ForAll ( izb = 1:nzbatchmx, j1 = 1:msize, mask(izb) )
-      !  dydotdy(ny+1,j1,izb) = -dt9dotdy(j1,izb) / cv(izb)
-      !EndForAll
-    EndIf
-
-    ! Apply the externally provided factors
-    If ( present(diag_in) ) Then
-      diag = diag_in
-    Else
-      diag = 0.0
-    EndIf
-    If ( present(mult_in) ) Then
-      mult = mult_in
-    Else
-      mult = 1.0
-    EndIf
-    Call jacobian_scale(diag,mult,mask_in = mask)
-
-    If ( idiag >= 6 ) Then
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
-          Write(lun_diag,"(a9,i5,2es14.7)") 'JAC_BUILD',izone,diag(izb),mult(izb)
-          Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
-        EndIf
+            dydotdy(j1,ny+1,izb) = sdot
+          EndIf
+        EndDo
       EndDo
     EndIf
 
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ktot(3,izb) = ktot(3,izb) + 1
       EndIf
     EndDo
+
+    ! Apply the externally provided factors
+    Call jacobian_scale(diag_in,mult_in,mask_in = mask)
+
+    If ( idiag >= 5 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          !$acc update wait(tid) &
+          !$acc host(dydotdy(:,:,izb))
+          Write(lun_diag,"(a9,i5)") 'JAC_BUILD',izone
+          Do i = 1, ny
+            Write(lun_diag,"(3a)") 'dYDOT(',nname(i),')/dY'
+            Write(lun_diag,"(7es24.16)") (dydotdy(j,i,izb),j=1,ny)
+          EndDo
+          If ( iheat > 0 ) Then
+            Write(lun_diag,"(3a)") 'dYDOT/dT9'
+            Write(lun_diag,"(7es24.16)") (dydotdy(ny+1,i,izb),i=1,ny)
+            Write(lun_diag,"(a)") 'dT9DOT/dY'
+            Write(lun_diag,"(7es24.16)") (dydotdy(j,ny+1,izb),j=1,ny)
+            Write(lun_diag,"(a)") 'dT9DOT/dT9'
+            Write(lun_diag,"(es24.16)") dydotdy(ny+1,ny+1,izb)
+          EndIf
+        EndIf
+      EndDo
+      Flush(lun_diag)
+    EndIf
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask)
 
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
@@ -360,10 +428,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use cublasf
     Use cudaf
-    Use openaccf
+    Use magmaf
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
-      & mythread
+      & tid
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
@@ -382,8 +450,8 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Type(C_PTR) :: djac_array, drhs_array, dindx, dinfo, hinfo
-    Integer :: i, izb, izone, istat
+    Type(C_PTR) :: djac_array, drhs_array, dindxinfo_array, dwork_array, dindx_array, dinfo, hinfo
+    Integer :: i, izb, izb_p, nzmask, izone, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -392,69 +460,107 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+    nzmask = count(mask)
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
-    !$acc host_data use_device(djac,drhs,indx,info)
-    djac_array = c_loc( djac(zb_lo) )
-    drhs_array = c_loc( drhs(zb_lo) )
-    dindx = c_loc( indx(1,zb_lo) )
-    dinfo = c_loc( info(zb_lo) )
-    !$acc end host_data
-    hinfo = c_loc( info(zb_lo) )
+    !$acc enter data async(tid) &
+    !$acc copyin(mask)
 
-    !$acc parallel loop gang &
-    !$acc copyin(mask,yrhs,t9rhs) &
-    !$acc present(rhs)
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,yrhs,t9rhs,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !$acc loop vector
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
-        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
+        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)!*1.0e9
+      Else
+        !$acc loop vector
+        Do i = 1, msize
+          rhs(i,izb) = 0.0
+        EndDo
       EndIf
     EndDo
-    !$acc end parallel loop
 
-    ! Copy the system to the GPU
-    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac(zb_lo), msize, djac(zb_lo), msize, stream)
-    !istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs(zb_lo), 1, drhs(zb_lo), 1, stream)
+    !$acc serial async(tid) &
+    !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx)
+    i = 0
+    !$acc loop &
+    !$acc private(izb_p) &
+    !$acc reduction(+:i)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        i = i + 1
+        izb_p = zb_lo + i - 1
+        djacp(izb_p) = djac(izb)
+        drhsp(izb_p) = drhs(izb)
+        dindxp(izb_p) = dindx(izb)
+      EndIf
+    EndDo
+    !$acc end serial
+
+    !$acc host_data use_device(djacp,drhsp,dindxp,dwork,dindxinfo,info)
+    djac_array = c_loc( djacp(zb_lo) )
+    drhs_array = c_loc( drhsp(zb_lo) )
+    dindx_array = c_loc( dindxp(zb_lo) )
+    dwork_array = c_loc( dwork(zb_lo) )
+    dindxinfo_array = c_loc( dindxinfo(zb_lo) )
+    dinfo = c_loc( info(zb_lo) )
+    !$acc end host_data
+    !hinfo = c_loc( info(zb_lo) )
 
     ! Solve the linear system
-    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
-    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
+    !istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx(zb_lo), dinfo, nzmask)
+    !istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx(zb_lo), drhs_array, msize, hinfo, nzmask)
+    If ( pivot ) Then
+      call magma_dgetrf_batched &
+        ( msize, msize, djac_array, msize, dindx_array, dindxinfo_array, dinfo, nzmask, magma_queue )
+      !call magma_dgetrs_batched &
+      !  ( MagmaNoTrans, msize, 1, djac_array, msize, dindx_array, drhs_array, msize, nzmask, magma_queue )
+      call magma_dlaswp_rowserial_batched &
+        ( 1, drhs_array, msize, 1, msize, dindx_array, nzmask, magma_queue )
+    Else
+      call magma_dgetrf_nopiv_batched &
+        ( msize, msize, djac_array, msize, dinfo, nzmask, magma_queue )
+      !call magma_dgetrs_nopiv_batched &
+      !  ( MagmaNoTrans, msize, 1, djac_array, msize, drhs_array, msize, dinfo, nzmask, magma_queue )
+    EndIf
+    call magmablas_dtrsv_outofplace_batched &
+      ( MagmaLower, MagmaNoTrans, MagmaUnit, msize, djac_array, msize, drhs_array, 1, dwork_array, nzmask, magma_queue, 0 )
+    call magmablas_dtrsv_outofplace_batched &
+      ( MagmaUpper, MagmaNoTrans, MagmaNonUnit, msize, djac_array, msize, dwork_array, 1, drhs_array, nzmask, magma_queue, 0 )
 
-    ! Copy the solution back to the CPU
-    !istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs(zb_lo), 1, hrhs(zb_lo), 1, stream)
-    istat = cudaStreamSynchronize(stream)
-
-    !$acc parallel loop gang &
-    !$acc copyin(mask) &
-    !$acc copyout(dy,dt9) &
-    !$acc present(rhs)
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,dy,dt9,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !$acc loop vector
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
-        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)
+        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)!*1.0e-9
       EndIf
     EndDo
-    !$acc end parallel loop
 
-    If ( idiag >= 5 ) Then
+    If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          !$acc update wait(tid) &
+          !$acc host(dy(:,izb),dt9(izb))
           Write(lun_diag,"(a,i5)") 'JAC_SOLVE',izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
         EndIf
       EndDo
+      Flush(lun_diag)
     EndIf
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -468,8 +574,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use cublasf
     Use cudaf
-    Use openaccf
-    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, mythread
+    Use magmaf
+    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -481,8 +587,8 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Type(C_PTR) :: djac_array, dindx, dinfo
-    Integer :: i, j, izb, izone, istat
+    Type(C_PTR) :: djac_array, dindx_array, dindxinfo_array, dinfo
+    Integer :: i, j, izb, izone, izb_p, nzmask, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -491,31 +597,58 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+    nzmask = count(mask)
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
-    !$acc host_data use_device(djac,drhs,indx,info)
-    djac_array = c_loc( djac(zb_lo) )
-    dindx = c_loc( indx(1,zb_lo) )
+    !$acc serial async(tid) &
+    !$acc present(mask,djacp,djac,dindxp,dindx)
+    i = 0
+    !$acc loop &
+    !$acc private(izb_p) &
+    !$acc reduction(+:i)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        i = i + 1
+        izb_p = zb_lo + i - 1
+        djacp(izb_p) = djac(izb)
+        dindxp(izb_p) = dindx(izb)
+      EndIf
+    EndDo
+    !$acc end serial
+
+    !$acc host_data use_device(djacp,dindxp,dindxinfo,info)
+    djac_array = c_loc( djacp(zb_lo) )
+    dindx_array = c_loc( dindxp(zb_lo) )
+    dindxinfo_array = c_loc( dindxinfo(zb_lo) )
     dinfo = c_loc( info(zb_lo) )
     !$acc end host_data
 
-    ! Copy the Jacobian to the GPU
-    istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac(zb_lo), msize, djac(zb_lo), msize, stream)
-
     ! Calculate the LU decomposition
-    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
+    !istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx(zb_lo), dinfo, nzmask)
+    If ( pivot ) Then
+      call magma_dgetrf_batched &
+        ( msize, msize, djac_array, msize, dindx_array, dindxinfo_array, dinfo, nzmask, magma_queue )
+    Else
+      call magma_dgetrf_nopiv_batched &
+        ( msize, msize, djac_array, msize, dinfo, nzmask, magma_queue )
+    EndIf
+    !$acc update async(tid) &
+    !$acc device(info(zb_lo))
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          !$acc update wait(tid) &
+          !$acc host(jac(:,:,izb))
           Write(lun_diag,"(a3,i5)") 'LUD',izone
           Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
         EndIf
       EndDo
+      Flush(lun_diag)
     EndIf
 
     stop_timer = xnet_wtime()
@@ -531,10 +664,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use cublasf
     Use cudaf
-    Use openaccf
+    Use magmaf
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
-      & mythread
+      & tid
     Use xnet_gpu, Only: handle, stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
@@ -553,8 +686,8 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Type(C_PTR) :: djac_array, drhs_array, dindx, hinfo
-    Integer :: i, izb, izone, istat
+    Type(C_PTR) :: djac_array, drhs_array, dwork_array, dindx_array, dinfo, hinfo
+    Integer :: i, izb, izone, izb_p, nzmask, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -563,67 +696,102 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+    nzmask = count(mask)
 
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    !$acc host_data use_device(djac,drhs,indx)
-    djac_array = c_loc( djac(zb_lo) )
-    drhs_array = c_loc( drhs(zb_lo) )
-    dindx = c_loc( indx(1,zb_lo) )
-    !$acc end host_data
-    hinfo = c_loc( info(zb_lo) )
+    !$acc enter data async(tid) &
+    !$acc copyin(mask)
 
-    !$acc parallel loop gang &
-    !$acc copyin(mask,yrhs,t9rhs) &
-    !$acc present(rhs)
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,yrhs,t9rhs,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !$acc loop vector
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
-        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
+        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)!*1.0e9
+      Else
+        !$acc loop vector
+        Do i = 1, msize
+          rhs(i,izb) = 0.0
+        EndDo
       EndIf
     EndDo
-    !$acc end parallel loop
 
-    ! Copy the RHS to the GPU
-    !istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs(zb_lo), 1, drhs(zb_lo), 1, stream)
+    !$acc serial async(tid) &
+    !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx)
+    i = 0
+    !$acc loop &
+    !$acc private(izb_p) &
+    !$acc reduction(+:i)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        i = i + 1
+        izb_p = zb_lo + i - 1
+        djacp(izb_p) = djac(izb)
+        drhsp(izb_p) = drhs(izb)
+        dindxp(izb_p) = dindx(izb)
+      EndIf
+    EndDo
+    !$acc end serial
+
+    !$acc host_data use_device(djacp,drhsp,dindxp,dwork,dindxinfo,info)
+    djac_array = c_loc( djacp(zb_lo) )
+    drhs_array = c_loc( drhsp(zb_lo) )
+    dindx_array = c_loc( dindxp(zb_lo) )
+    dwork_array = c_loc( dwork(zb_lo) )
+    dinfo = c_loc( info(zb_lo) )
+    !$acc end host_data
+    !hinfo = c_loc( info(zb_lo) )
 
     ! Solve the LU-decomposed triangular system via back-substitution
-    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
+    !istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx(zb_lo), drhs_array, msize, hinfo, nzmask)
+    If ( pivot ) Then
+      !call magma_dgetrs_batched &
+      !  ( MagmaNoTrans, msize, 1, djac_array, msize, dindx_array, drhs_array, msize, nzmask, magma_queue )
+      call magma_dlaswp_rowserial_batched &
+        ( 1, drhs_array, msize, 1, msize, dindx_array, nzmask, magma_queue )
+    Else
+      !call magma_dgetrs_nopiv_batched &
+      !  ( MagmaNoTrans, msize, 1, djac_array, msize, drhs_array, msize, dinfo, nzmask, magma_queue )
+    EndIf
+    call magmablas_dtrsv_outofplace_batched &
+      ( MagmaLower, MagmaNoTrans, MagmaUnit, msize, djac_array, msize, drhs_array, 1, dwork_array, nzmask, magma_queue, 0 )
+    call magmablas_dtrsv_outofplace_batched &
+      ( MagmaUpper, MagmaNoTrans, MagmaNonUnit, msize, djac_array, msize, dwork_array, 1, drhs_array, nzmask, magma_queue, 0 )
 
-    ! Copy the solution back to the CPU
-    !istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs(zb_lo), 1, hrhs(zb_lo), 1, stream)
-    istat = cudaStreamSynchronize(stream)
-
-    !$acc parallel loop gang &
-    !$acc copyin(mask) &
-    !$acc copyout(dy,dt9) &
-    !$acc present(rhs)
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,dy,dt9,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !$acc loop vector
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
-        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)
+        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)!*1.0e-9
       EndIf
     EndDo
-    !$acc end parallel loop
 
-    If ( idiag >= 5 ) Then
+    If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          !$acc update wait(tid) &
+          !$acc host(dy(:,izb),dt9(izb))
           Write(lun_diag,"(a,i5)") 'BKSUB', izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
         EndIf
       EndDo
+      Flush(lun_diag)
     EndIf
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
