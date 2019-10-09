@@ -18,6 +18,8 @@ Module xnet_ffn
   Real(dp), Parameter :: enegrid(nenegrid) = &    ! Electron density grid for FFN rate data
     & (/ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0 /)
   Real(dp), Allocatable :: ffnsum(:,:), ffnenu(:,:) ! dim(nffn,ngrid)
+  Real(dp), Allocatable :: rffn(:,:)              ! FFN reaction rates
+  Real(dp), Allocatable :: dlnrffndt9(:,:)        ! log FFN reaction rates derivatives
 
 Contains
 
@@ -35,7 +37,7 @@ Contains
     Integer :: i, j, lun_ffn
 
     Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
-    Open(newunit=lun_ffn, file=trim(data_dir)//"/netweak", status='old')
+    Open(newunit=lun_ffn, file=trim(data_dir)//"/netweak", status='old', action='read')
     Do i = 1, nffn
       Read(lun_ffn,*)
       Read(lun_ffn,*) (ffnsum(i,j), ffnenu(i,j), j=1,ngrid)
@@ -50,13 +52,13 @@ Contains
     ! This routine calculates the reaction rates for FFN weak rates
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: ln_10
-    Use xnet_controls, Only: iheat, nzevolve, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
     Integer, Intent(in)  :: nffn              ! Number of FFN rates
-    Real(dp), Intent(in) :: t9(nzevolve)      ! Temperature [GK]
+    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)   ! Temperature [GK]
     Real(dp), Intent(in) :: ene(zb_lo:zb_hi)  ! Electron Density [g cm^{-3}]
 
     ! Output variables
@@ -80,10 +82,17 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !$acc enter data async(tid) &
+    !$acc copyin(mask)
+
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,t9,ene,rf,dlnrfdt9,ffnsum) &
+    !$acc private(lt1,enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Find the temperature grid point
+        !$acc loop seq
         Do i = 1, nt9grid
           If ( t9(izb) <= t9grid(i) ) Exit
         EndDo
@@ -102,6 +111,9 @@ Contains
         i2 = i1 + 1
         i3 = nt9grid*le1 + lt1
         i4 = i3 + 1
+
+        !$acc loop vector &
+        !$acc private(dr1,dr2,r1,r2)
         Do k = 1, nffn
           dr1 = ffnsum(k,i2) - ffnsum(k,i1)
           dr2 = ffnsum(k,i4) - ffnsum(k,i3)
@@ -118,6 +130,9 @@ Contains
         EndDo
       EndIf
     EndDo
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask)
 
     Return
   End Subroutine ffn_rate
