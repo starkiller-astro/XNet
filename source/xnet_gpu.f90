@@ -17,9 +17,10 @@ Module xnet_gpu
 Contains
 
   Subroutine gpu_init
-    Use xnet_controls, Only: lun_stdout, myid, mythread
+    Use xnet_controls, Only: lun_stdout, myid, tid
     Use cublasf
     Use cudaf
+    Use magmaf
     Use openaccf
     Implicit None
 
@@ -43,16 +44,27 @@ Contains
     istat = cublasCreate_v2(handle)
 
     ! Create CUDA streams
-    istat = cudaStreamCreate(stream)
+    !istat = cudaStreamCreate(stream)
 
     ! Associate OpenACC async queue with CUDA stream
     !acc_async_default = acc_get_default_async()
     !call acc_set_default_async(acc_async_default)
-    acc_queue = mythread
-    istat = acc_set_cuda_stream(acc_queue, stream)
+    acc_queue = tid
+    stream = acc_get_cuda_stream(acc_queue)
+    !istat = acc_set_cuda_stream(acc_queue, stream)
 
     ! Associate each cublas handle with a CUDA stream
     istat = cublasSetStream_v2(handle, stream)
+
+    !$omp end parallel
+
+    call magma_getdevice( magma_device )
+    call magma_init()
+
+    !$omp parallel default(shared) private(istat)
+
+    call magma_queue_create_from_cuda &
+      ( magma_device, stream, handle, C_NULL_PTR, magma_queue )
 
     !$omp end parallel
 
