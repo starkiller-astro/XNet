@@ -505,12 +505,13 @@ interface
     !! -------------------------------------------------------------------------
     !! batched GPU interfaces (all arrays in GPU memory)
     subroutine magma_dgetrf_batched( &
-        m, n, dA_array, lda, dipiv_array, dinfo_array, batchcount, queue ) &
+        m, n, dA_array, lda, dipiv_array, dpivinfo_array, dinfo_array, batchcount, queue ) &
     bind(C, name="magma_dgetrf_batched")
         use iso_c_binding
         integer(c_int), value  :: m, n, lda, batchcount
         type(c_ptr),    value  :: dA_array    !! double_real**
         type(c_ptr),    value  :: dipiv_array !! int**
+        type(c_ptr),    value  :: dpivinfo_array !! int**
         type(c_ptr),    value  :: dinfo_array !! int*
         type(c_ptr),    value  :: queue
     end subroutine
