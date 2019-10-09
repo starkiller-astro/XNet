@@ -45,17 +45,17 @@ Contains
     ! This routine calculates t9 and rho as a function of time, either via interpolation or from an
     ! analytic expression.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_diag, lun_stdout, nzevolve, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: lun_diag, lun_stdout, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: tf(nzevolve)
+    Real(dp), Intent(in) :: tf(zb_lo:zb_hi)
 
     ! Input/Output variables
-    Integer, Intent(inout) :: nf(nzevolve)
-    Real(dp), Intent(inout) :: t9f(nzevolve), rhof(nzevolve)
+    Integer, Intent(out) :: nf(zb_lo:zb_hi)
+    Real(dp), Intent(out) :: t9f(zb_lo:zb_hi), rhof(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -72,6 +72,12 @@ Contains
     End If
     If ( .not. any(mask) ) Return
 
+    !$acc enter data async(tid) &
+    !$acc copyin(mask)
+
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh) &
+    !$acc private(rdt,dt,dt9,drho)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
@@ -83,6 +89,7 @@ Contains
 
         ! Otherwise, calculate T9 and rho by interpolation
         Else
+          !$acc loop seq
           Do n = 1, nh(izb)
             If ( tf(izb) <= th(n,izb) ) Exit
           EndDo
@@ -105,6 +112,9 @@ Contains
         EndIf
       EndIf
     EndDo
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask)
 
     Return
   End Subroutine t9rhofind
