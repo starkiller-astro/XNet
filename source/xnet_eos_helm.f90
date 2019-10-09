@@ -63,7 +63,7 @@ Contains
       detaedt9 = 0.0
       cv = 0.0
     EndIf
-    If ( idiag >= 3 ) Write(lun_diag,"(a,6es23.15)") 'EOS',t9,rho,ye,cv,etae,detaedt9
+    If ( idiag >= 3 ) Write(lun_diag,"(a,6es24.16)") 'EOS',t9,rho,ye,cv,etae,detaedt9
 
     Return
   End Subroutine eos_interface
@@ -109,7 +109,7 @@ Contains
     ae = (3.0 / (4.0*pi*avn*rho*ye))**third ! electron-sphere radius
     gammae = e2 / (ae*bkt) ! electron Coulomb coupling parameter
     zinter = zibar / (ztilde**thbim2 * zbar**twm2bi)
-    If ( idiag >= 3 ) Write(lun_diag,"(a14,9es23.15)") 'EOS Screen', &
+    If ( idiag >= 3 ) Write(lun_diag,"(a14,9es24.16)") 'EOS Screen', &
       & t9,rho,ye,z2bar,zbar,sratio,ztilde,ztilde*lambda0,gammae
 
     Return
