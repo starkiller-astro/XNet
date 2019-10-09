@@ -510,7 +510,7 @@ Contains
         Write(lun_diag,"(2x,a5,6es15.7)") (nname(i), &
           zt0(i,0,izb),z(i,0,izb),yt(i,izb), &
           zt0(i,1,izb),z(i,1,izb),ydot(i,izb)*tdel(izb),i=1,ny)
-        If ( iheat > 0 ) Write(lun_diag,"(2x,a5,6es23.15)") 'T9', &
+        If ( iheat > 0 ) Write(lun_diag,"(2x,a5,6es24.16)") 'T9', &
           zt0(neq,0,izb),z(neq,0,izb),t9t(izb), &
           zt0(neq,1,izb),z(neq,1,izb),t9dot(izb)*tdel(izb)
       EndDo
@@ -680,7 +680,8 @@ Contains
         If ( iheat > 0 ) t9t(izb) = zt0(neq,0,izb)
       EndIf
     EndDo
-    If ( iheat == 0 ) Call t9rhofind(kstep,tt,ntt,t9t,rhot,mask_in = retry_ts(zb_lo:zb_hi))
+    If ( iheat == 0 ) Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi), &
+      rhot(zb_lo:zb_hi),mask_in = retry_ts)
 
     ! Initialize masks
     Do izb = zb_lo, zb_hi
@@ -767,9 +768,9 @@ Contains
             izone = izb + szbatch - zb_lo
             Write(lun_diag,"(a,3i5,3es14.7)") &
               'BDF RHS',kstep,izone,nit_nr(izb),gam(izb),gamratio(izb),tdel(izb)
-            Write(lun_diag,"(2x,a5,4es23.15)") &
+            Write(lun_diag,"(2x,a5,4es24.16)") &
               (nname(i),yrhs(i,izb),ydot(i,izb),yt(i,izb),zt0(i,0,izb),i=1,ny)
-            If ( iheat > 0 ) Write(lun_diag,"(2x,a5,4es23.15)") &
+            If ( iheat > 0 ) Write(lun_diag,"(2x,a5,4es24.16)") &
               'T9',t9rhs(izb),t9dot(izb),t9t(izb),zt0(neq,0,izb)
           EndIf
         EndDo
@@ -809,9 +810,9 @@ Contains
             izone = izb + szbatch - zb_lo
             If ( idiag >= 4 ) Then
               idymx = maxloc(dy(:,izb),dim=1)
-              Write(lun_diag,"(a10,3i5,a5,2es23.15)") &
+              Write(lun_diag,"(a10,3i5,a5,2es24.16)") &
                 'dY',kstep,izone,nit_nr(izb),nname(idymx),dy(idymx,izb),y(idymx,izb)
-              If ( iheat > 0 ) Write(lun_diag,"(a10,3i5,5x,2es23.15)") &
+              If ( iheat > 0 ) Write(lun_diag,"(a10,3i5,5x,2es24.16)") &
                 'dT9',kstep,izone,nit_nr(izb),dt9(izb),t9t(izb)
               If ( idiag >= 5 ) Write(lun_diag,"(a5,4es12.4)") &
                 (nname(k),yt(k,izb),dy(k,izb),(aa(k)*dy(k,izb)),(aa(k)*yt(k,izb)),k=1,ny)
@@ -1167,14 +1168,14 @@ Contains
           etaq(:,izb) = 1.0_dp
           error = tq(0,izb) * acnrm(izb)
           etaq(0,izb) = 1.0_dp / ( (biasq * error) ** (1.0_dp/(q(izb)+1)) + addon )
-          If ( idiag >= 3 ) Write(lun_diag,"(a,2es23.15)") 'BDF Eta(0)',error,etaq(0,izb)
+          If ( idiag >= 3 ) Write(lun_diag,"(a,2es24.16)") 'BDF Eta(0)',error,etaq(0,izb)
           If ( q_age(izb) > q(izb) ) Then
 
             ! eta for q-1
             If ( q(izb) > 1 ) Then
               error = tq(-1,izb) * normw( z(:,q(izb),izb), ewt(:,izb) )
               etaq(-1,izb) = 1.0_dp / ( (biasqm1 * error) ** (1.0_dp/q(izb)) + addon )
-              If ( idiag >= 3 ) Write(lun_diag,"(a,2es23.15)") 'BDF Eta(-1)',error,etaq(-1,izb)
+              If ( idiag >= 3 ) Write(lun_diag,"(a,2es24.16)") 'BDF Eta(-1)',error,etaq(-1,izb)
             EndIf
 
             ! eta for q+1
@@ -1183,7 +1184,7 @@ Contains
               acorhat(:) = acor(:,izb) - c * acorp(:,izb)
               error = tq(1,izb) * normw( acorhat(:), ewt(:,izb) )
               etaq(1,izb) = 1.0_dp / ( (biasqp1 * error) ** (1.0_dp/(q(izb)+2)) + addon )
-              If ( idiag >= 3 ) Write(lun_diag,"(a,2es23.15)") 'BDF Eta(+1)',error,etaq(+1,izb)
+              If ( idiag >= 3 ) Write(lun_diag,"(a,2es24.16)") 'BDF Eta(+1)',error,etaq(+1,izb)
             EndIf
 
             ! Wait a bit before considering another order change
