@@ -15,6 +15,7 @@ Contains
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
     Implicit None
+    !$acc routine seq
     Real(dp) x,ex,t,w,s,fd,factor
     Parameter (factor=-2.d0)    ! = 1/(k+1)
     If(x<-2.d0) Then
@@ -169,6 +170,7 @@ Contains
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
     Implicit None
+    !$acc routine seq
     Real(dp) x,ex,t,w,s,fd,factor
     Parameter (factor=2.d0)    ! = 1/(k+1)
     If(x<-2.d0) Then
@@ -314,6 +316,7 @@ Contains
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
     Implicit None
+    !$acc routine seq
     Real(dp) x,ex,t,w,s,fd,factor
     Parameter (factor=2.d0/3.d0)    ! = 1/(k+1)
     If(x<-2.d0) Then
