@@ -71,7 +71,7 @@ Contains
     Use reaction_data, Only: csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i, nreac
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: tdel
-    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_match, Only: ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx
     Use xnet_types, Only: dp
     Implicit None
@@ -93,6 +93,9 @@ Contains
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+
+        !$acc update wait(tid) &
+        !$acc host(csect1(:,izb),csect2(:,izb),csect3(:,izb),csect4(:,izb),yt(:,izb),tdel(izb))
 
         ! Get fluxes
         flx(:,izb) = 0.0
@@ -135,7 +138,7 @@ Contains
           izone = izb + szbatch - zb_lo
           flxmin = ymin / tdel(izb)
           Write(lun_diag,"(a5,i5,es10.3)") 'Flux',izone,flxmin
-          Write(lun_diag,"(i5,9a5,i5,2es23.15)") &
+          Write(lun_diag,"(i5,9a5,i5,2es24.16)") &
             & (k,(nname(nflx(i,k)),i=1,4),' <-> ',(nname(nflx(i,k)),i=5,8),iwflx(k),flx(k,izb),flx_int(k,izb),k=1,mflx)
         EndIf
       EndDo
