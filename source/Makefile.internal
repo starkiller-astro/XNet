@@ -100,8 +100,8 @@ ifeq ($(PE_ENV),INTEL)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  = -check all,noarg_temp_created -fpe0 -gen-interfaces -warn interfaces
 
-    F77FLAGS      = -real-size 64 -integer-size 32
-    F90FLAGS      = -real-size 64 -integer-size 32
+    F77FLAGS      = -fpp -real-size 64 -integer-size 32
+    F90FLAGS      = -fpp -real-size 64 -integer-size 32
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -124,12 +124,12 @@ else ifeq ($(PE_ENV),PGI)
     ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
         INLINE    = -Mipa=fast,inline,safe
     else
-        INLINE    =
+        INLINE    = -tp=pwr9
     endif
 
     # generic flags
-    OPT_FLAGS     = -g -gopt -fast $(ARCHOPT) $(INLINE)
-    DEBUG_FLAGS   = -g -gopt -O0 -traceback
+    OPT_FLAGS     = -g -gopt -O3 $(ARCHOPT) $(INLINE)
+    DEBUG_FLAGS   = -g -gopt -O0 -Kieee -Mnofprelaxed -Mnobuiltin
 
     ifeq ($(OPENMP_MODE),ON)
         OPENMP    = -mp
@@ -137,17 +137,21 @@ else ifeq ($(PE_ENV),PGI)
         OPENMP    = -mp -Mnoopenmp
     endif
     ifeq ($(OPENACC_MODE),ON)
-        OPENACC   = -acc -ta=tesla:cc70,cuda10.1,ptxinfo -Minfo=accel
+        ifeq ($(CMODE),DEBUG)
+            OPENACC += -acc=noautopar,verystrict -ta=tesla:ptxinfo -Mcuda=debug -Minfo=accel
+        else
+            OPENACC += -acc -ta=tesla:cc70,cuda10.1,ptxinfo -Minfo=accel
+        endif
     else
-        OPENACC   = -acclibs
+        OPENACC   =
     endif
 
     # Fortran-specific flags
     OPT_FFLAGS    =
     DEBUG_FFLAGS  = -Ktrap=fp -Mbounds -Mchkptr -Mdclchk
 
-    F77FLAGS      = -r8 -i4 -Mfixed
-    F90FLAGS      = -r8 -i4
+    F77FLAGS      = -Mpreprocess -r8 -i4 -Mfixed
+    F90FLAGS      = -Mpreprocess -r8 -i4
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -174,7 +178,7 @@ else ifeq ($(PE_ENV),GNU)
 
     # generic flags
     OPT_FLAGS     = -g -Ofast -funroll-loops -fprefetch-loop-arrays $(ARCHOPT) $(INLINE)
-    DEBUG_FLAGS   = -g -Og -ggdb -ftrapv -fexceptions -Wall -Wextra \
+    DEBUG_FLAGS   = -g -O0 -ggdb -ftrapv -fexceptions -Wall -Wextra \
                     -Wno-unused-variable -Wno-unused-parameter
 
     ifeq ($(OPENMP_MODE),ON)
@@ -193,8 +197,8 @@ else ifeq ($(PE_ENV),GNU)
     DEBUG_FFLAGS  = -fcheck=bounds,do,mem,pointer -ffpe-trap=invalid,zero,overflow -fbacktrace \
                     -Wno-unused-dummy-argument -Wno-unused-label -Wno-maybe-uninitialized
 
-    F77FLAGS      = -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-compare-reals
-    F90FLAGS      = -fdefault-real-8 -fdefault-double-8 -fimplicit-none -ffree-line-length-none
+    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-compare-reals
+    F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -ffree-line-length-none
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -270,8 +274,8 @@ else ifeq ($(PE_ENV),XL)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  = -qflag=i:w
 
-    F77FLAGS      = -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg -qfixed
-    F90FLAGS      = -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg
+    F77FLAGS      = -qpreprocess -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg -qfixed
+    F90FLAGS      = -qpreprocess -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg
 
     # C-specific flags
     OPT_CFLAGS    =
