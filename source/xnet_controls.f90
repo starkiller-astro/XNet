@@ -86,8 +86,8 @@ Module xnet_controls
   !$omp threadprivate(lun_th,lun_ab)
 
   ! Job indentifiers
-  Integer :: myid, nproc, mythread, nthread ! task & thread ids and counts
-  !$omp threadprivate(mythread)
+  Integer :: myid, nproc, tid, nthread ! task & thread ids and counts
+  !$omp threadprivate(tid)
 
 Contains
 
@@ -165,7 +165,8 @@ Contains
 
     ! Read Problem Description
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_control, file='control', status='old')
+      Open(newunit=lun_control, file='control', status='old', action='read', iostat=ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('Failed to open control file',ierr)
       Call find_controls_block(lun_control,'Problem Description',ierr)
       Read(lun_control,"(a80)") (descript(i), i=1,3) ! text description of the problem.
     EndIf
@@ -199,9 +200,10 @@ Contains
     nzevolve = nzbatchmx * nthread
     Allocate (lzactive(nzevolve))
     Allocate (iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
-    Allocate (kmon(2,nzevolve),ktot(5,nzevolve))
+    Allocate (kmon(5,nzevolve),ktot(5,nzevolve))
+
     !$omp parallel default(shared)
-    zb_offset = (mythread-1) * nzbatchmx
+    zb_offset = (tid-1) * nzbatchmx
     zb_lo = zb_offset + 1
     zb_hi = zb_offset + nzbatchmx
     !$omp end parallel
@@ -360,6 +362,9 @@ Contains
     Call parallel_bcast(data_dir)
     Call parallel_bcast(inab_file)
     Call parallel_bcast(thermo_file)
+
+    !$acc enter data async(tid) &
+    !$acc create(lzactive,iweak,kmon,ktot)
 
     Return
   End Subroutine read_controls
