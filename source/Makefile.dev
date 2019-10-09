@@ -36,7 +36,7 @@ CUBLAS_SRC    = cublasf.f90 $(CUDA_SRC)
 CUBLAS_OBJ    = $(addsuffix .o,$(basename $(CUBLAS_SRC)))
 
 ## MAGMA
-MAGMA_DIR   ?= $(HOME)/magma-2.4.0
+MAGMA_DIR   ?= $(OLCF_MAGMA_ROOT)
 MAGMA_INC    = -I$(MAGMA_DIR)/include $(CUBLAS_INC)
 MAGMA_LIBDIR = -L$(MAGMA_DIR)/lib $(CUBLAS_LIBDIR)
 MAGMA_LIBS   = -lmagma $(CUBLAS_LIBS)
