@@ -80,6 +80,7 @@ Contains
     ! distribution.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: epmev, avn
+    Use xnet_controls, Only: tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -104,24 +105,29 @@ Contains
     Return
   End Subroutine benuc
 
-  Subroutine partf(t9,mask_in)
+  Subroutine benuc2(y,enb,enm,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the nuclear partition functions as a function of temperature.
+    ! This routine calculates the binding energy and mass excess energy [ergs/g] of the abundance
+    ! distribution.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi, lzactive
+    Use xnet_constants, Only: epmev, avn
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
-    Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(nzevolve)
+    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
+
+    ! Output variables
+    Real(dp), Intent(out) :: enb(zb_lo:zb_hi) ! Binding energy [ergs g^{-1}]
+    Real(dp), Intent(out) :: enm(zb_lo:zb_hi) ! Mass excess [ergs g^{-1}]
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, ii, izb
-    Real(dp) :: rdt9
+    Real(dp) :: ztot ! Total proton number
+    Integer :: izb
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -133,33 +139,101 @@ Contains
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+        ztot     = sum(y(:,izb) * zz)
+        enb(izb) = sum(y(:,izb) * be)
+        enm(izb) = mex_p*ztot + mex_n*(1.0-ztot) - enb(izb)
+
+        ! Change units from MeV/nucleon to erg/g
+        enb(izb) = epmev * avn * enb(izb)
+        enm(izb) = epmev * avn * enm(izb)
+      EndIf
+    EndDo
+
+    Return
+  End Subroutine benuc2
+
+  Subroutine partf(t9,mask_in)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculates the nuclear partition functions as a function of temperature.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive, tid
+    Use xnet_types, Only: dp
+    Use xnet_util, Only: safe_exp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)
+
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
+    ! Local variables
+    Integer :: i, ii, k, izb
+    Real(dp) :: rdt9
+    Logical, Pointer :: mask(:)
+
+    If ( present(mask_in) ) Then
+      mask(zb_lo:) => mask_in
+    Else
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+    EndIf
+    If ( .not. any(mask) ) Return
+
+    !$acc enter data async(tid) &
+    !$acc copyin(mask)
+
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,t9,t9i,gg,g,dlngdt9) &
+    !$acc private(ii,rdt9)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+
+        !$acc loop seq
         Do i = 1, ng
           If ( t9(izb) <= t9i(i) ) Exit
         EndDo
         ii = i
 
         ! Linear interpolation in log-space
+        gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
         Select Case (ii)
         Case (1)
-          gg(1:ny,izb) = g(1,1:ny)
+          !$acc loop vector
+          Do k = 1, ny
+            gg(k,izb) = g(1,k)
+          EndDo
         Case (ng+1)
-          gg(1:ny,izb) = g(ng,1:ny)
+          !$acc loop vector
+          Do k = 1, ny
+            gg(k,izb) = g(ng,k)
+          EndDo
         Case Default
           rdt9 = (t9(izb)-t9i(ii-1)) / (t9i(ii)-t9i(ii-1))
-          gg(1:ny,izb) = safe_exp( rdt9*log(g(ii,1:ny)) + (1.0-rdt9)*log(g(ii-1,1:ny)) )
+          !$acc loop vector
+          Do k = 1, ny
+            gg(k,izb) = safe_exp( rdt9*log(g(ii,k)) + (1.0-rdt9)*log(g(ii-1,k)) )
+          EndDo
         End Select
-        gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
 
         If ( iheat > 0 ) Then
+          dlngdt9(0,izb) = 0.0
           Select Case (ii)
           Case (1)
-            dlngdt9(1:ny,izb) = log(g(2,1:ny)/g(1,1:ny)) / (t9i(2)-t9i(1))
+            !$acc loop vector
+            Do k = 1, ny
+              dlngdt9(k,izb) = log(g(2,k)/g(1,k)) / (t9i(2)-t9i(1))
+            EndDo
           Case (ng+1)
-            dlngdt9(1:ny,izb) = log(g(ng,1:ny)/g(ng-1,1:ny)) / (t9i(ng)-t9i(ng-1))
+            !$acc loop vector
+            Do k = 1, ny
+              dlngdt9(k,izb) = log(g(ng,k)/g(ng-1,k)) / (t9i(ng)-t9i(ng-1))
+            EndDo
           Case Default
-            dlngdt9(1:ny,izb) = log(g(ii,1:ny)/g(ii-1,1:ny)) / (t9i(ii)-t9i(ii-1))
+            !$acc loop vector
+            Do k = 1, ny
+              dlngdt9(k,izb) = log(g(ii,k)/g(ii-1,k)) / (t9i(ii)-t9i(ii-1))
+            EndDo
           End Select
-          dlngdt9(0,izb) = 0.0
         EndIf
       EndIf
     EndDo
@@ -172,6 +246,9 @@ Contains
     !    EndIf
     !  EndDo
     !EndIf
+
+    !$acc exit data async(tid) &
+    !$acc delete(mask)
 
     Return
   End Subroutine partf
@@ -189,7 +266,7 @@ Contains
     Integer :: lun_sunet, inuc, ierr
 
     filename = trim(data_dir)//'/sunet'
-    Open(newunit=lun_sunet, file=trim(filename), status='old', iostat=ierr)
+    Open(newunit=lun_sunet, file=trim(filename), status='old', action='read', iostat=ierr)
     If ( ierr /= 0 ) Call xnet_terminate('Failed to open sunet file',ierr)
 
     If ( .not. allocated(nname) ) Then
@@ -233,7 +310,7 @@ Contains
     Integer :: inuc, j, ierr, lun_winv
 
     filename = trim(data_dir)//'/netwinv'
-    Open(newunit=lun_winv, file=trim(filename), status='old', iostat=ierr)
+    Open(newunit=lun_winv, file=trim(filename), status='old', action='read', iostat=ierr)
     If ( ierr /= 0 ) Call xnet_terminate('Failed to open netwinv file',ierr)
 
     Read(lun_winv,"(i5)",iostat=ierr) ny
@@ -289,7 +366,7 @@ Contains
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
-    Use xnet_controls, Only: iheat, nzevolve
+    Use xnet_controls, Only: iheat, nzevolve, tid
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
@@ -307,7 +384,7 @@ Contains
 
     ! Read in the data description
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_desc, file=trim(data_dir)//"/net_desc", status='old', iostat=ierr)
+      Open(newunit=lun_desc, file=trim(data_dir)//"/net_desc", status='old', action='read', iostat=ierr)
       If ( ierr == 0 ) Then
         Read(lun_desc,"(a80)") data_desc
         Close(lun_desc)
@@ -380,8 +457,13 @@ Contains
     mm = aa / avn! + mex(:)*epmev/(clt*clt)
     !mm(:) = zz(:)*(m_p+m_e) + nn(:)*m_n - be(:)*epmev/(clt*clt)
 
-    Allocate (gg(0:ny,nzevolve))
-    If ( iheat > 0 ) Allocate (dlngdt9(0:ny,nzevolve))
+    Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
+
+    !$acc enter data async(tid) &
+    !$acc copyin(aa,zz,nn,be,mex,mm,ia,iz,in, &
+    !$acc        zz2,zz53,zzi,zseq,zseq53,zseqi, &
+    !$acc        it9i,t9i,g,angm) &
+    !$acc create(gg,dlngdt9)
 
     Return
   End Subroutine read_nuclear_data
@@ -457,7 +539,7 @@ Contains
     be = mex_n*nn + mex_p*zz - mex
 
     ! Write binary data file
-    Open(newunit=lun_data, file=trim(data_dir)//'/nuc_data', form='unformatted')
+    Open(newunit=lun_data, file=trim(data_dir)//'/nuc_data', form='unformatted', action='write')
     Write(lun_data) ny
     Write(lun_data) t9i
     Write(lun_data) (nname(i),aa(i),zz(i),nn(i),be(i),(g(n,i),n=1,ng),angm(i),i=1,ny)
@@ -529,9 +611,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve
-    Use xnet_ffn, Only: ffnsum, ffnenu, ngrid, read_ffn_data
-    Use xnet_nnu, Only: read_nnu_data, ntnu, nnuspec, sigmanu
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, tid
+    Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ngrid, rffn, dlnrffndt9
+    Use xnet_nnu, Only: read_nnu_data, ntnu, nnuspec, sigmanu, rnnu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -541,14 +623,15 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: i, j, n, l
+    Integer :: i, j, n, l, ierr
     Integer :: nr1, nr2, nr3, nr4
     Integer :: lun_s3, lun_s4
 
     ! Read in nuclear set, numbers of reactions, and extents of extended reaction arrays
     Allocate (la(4,ny),le(4,ny))
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_s4, file=trim(data_dir)//"/nets4", form='unformatted', status='old')
+      Open(newunit=lun_s4, file=trim(data_dir)//"/nets4", form='unformatted', status='old', action='read', iostat=ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('Failed to open nets4 file',ierr)
       Read(lun_s4) ny
       Read(lun_s4) (nname(i), i=1,ny)
       Read(lun_s4) nffn, nnnu
@@ -574,11 +657,15 @@ Contains
         Call read_ffn_data(nffn,data_dir)
       Else
         Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
+        ffnsum = 0.0
+        ffnenu = 0.0
       EndIf
       Call parallel_bcast(ffnsum)
       Call parallel_bcast(ffnenu)
     Else
       Allocate(ffnsum(1,ngrid),ffnenu(1,ngrid))
+      ffnsum = 0.0
+      ffnenu = 0.0
     Endif
 
     ! If there are NNU rates, read in the NNU data and set NNU array sizes
@@ -587,17 +674,20 @@ Contains
         Call read_nnu_data(nnnu,data_dir)
       Else
         Allocate (sigmanu(nnnu,ntnu))
+        sigmanu = 0.0
       EndIf
       Call parallel_bcast(sigmanu)
     Else
       Allocate (sigmanu(1,ntnu))
+      sigmanu = 0.0
     EndIf
 
     ! Read in reaction arrays for 1 reactant reactions
     nr1 = nreac(1)
     Allocate (n1i(5,nr1),iwk1(nr1),ires1(nr1),irev1(nr1),rc1(7,nr1),q1(nr1))
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_s3, file=trim(data_dir)//"/nets3", form='unformatted', status='old')
+      Open(newunit=lun_s3, file=trim(data_dir)//"/nets3", form='unformatted', status='old', action='read', iostat=ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('Failed to open nets3 file',ierr)
       Do j = 1, nr1
         Read(lun_s3) n, (n1i(l,j), l=1,5), iwk1(j), ires1(j), irev1(j), (rc1(l,j), l=1,7), q1(j)
         If ( n /= j ) Then
@@ -738,20 +828,32 @@ Contains
       EndDo
     EndDo
 
-    Allocate (csect1(nr1,nzevolve))
-    Allocate (csect2(nr2,nzevolve))
-    Allocate (csect3(nr3,nzevolve))
-    Allocate (csect4(nr4,nzevolve))
     Allocate (b1(nan(1),nzevolve))
     Allocate (b2(nan(2),nzevolve))
     Allocate (b3(nan(3),nzevolve))
     Allocate (b4(nan(4),nzevolve))
-    If ( iheat > 0 ) Then
-      Allocate (dcsect1dt9(nr1,nzevolve))
-      Allocate (dcsect2dt9(nr2,nzevolve))
-      Allocate (dcsect3dt9(nr3,nzevolve))
-      Allocate (dcsect4dt9(nr4,nzevolve))
-    EndIf
+    Allocate (csect1(nr1,nzevolve))
+    Allocate (csect2(nr2,nzevolve))
+    Allocate (csect3(nr3,nzevolve))
+    Allocate (csect4(nr4,nzevolve))
+    Allocate (dcsect1dt9(nr1,nzevolve))
+    Allocate (dcsect2dt9(nr2,nzevolve))
+    Allocate (dcsect3dt9(nr3,nzevolve))
+    Allocate (dcsect4dt9(nr4,nzevolve))
+
+    Allocate (rffn(max(1,nffn),nzevolve))
+    Allocate (dlnrffndt9(max(1,nffn),nzevolve))
+    Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
+
+    !$acc enter data async(tid) &
+    !$acc copyin(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4, &
+    !$acc        iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4, &
+    !$acc        mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i, &
+    !$acc        n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44, &
+    !$acc        iffn,ffnsum,ffnenu,innu,sigmanu) &
+    !$acc create(csect1,csect2,csect3,csect4,b1,b2,b3,b4, &
+    !$acc        dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9, &
+    !$acc        rffn,dlnrffndt9,rnnu)
 
     Return
   End Subroutine read_reaction_data
