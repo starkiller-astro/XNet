@@ -23,11 +23,11 @@ Program net
   Use xnet_abundances, Only: ystart, yo, y, yt, ydot
   Use xnet_conditions, Only: t, tt, to, tdel, tdel_next, tdel_old, t9t, rhot, yet, t9, rho, ye, &
     & t9o, rhoo, yeo, t9dot, cv, etae, detaedt9, nt, ntt, nto, ints, intso, nstart, tstart, tstop, &
-    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
+    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
-    & lun_diag, lun_ev, lun_stdout, lun_ts, mythread, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
+    & lun_diag, lun_ev, lun_stdout, lun_ts, tid, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
     & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
@@ -41,7 +41,7 @@ Program net
   Use xnet_screening, Only: screening_init
   Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_setup
   Use xnet_types, Only: dp
-  Use xnet_util, Only: name_ordered
+  Use xnet_util, Only: name_ordered, t9rhofind1
   Use model_input_ascii
   Implicit None
 
@@ -49,6 +49,7 @@ Program net
   Integer :: i, k, izone ! Loop indices
   Integer :: ierr, inuc
   Integer :: ibatch, batch_count, izb
+  Integer :: kstep
 
   ! Thermodynamic input data
   Real(dp), Allocatable :: dyf(:), flx_diff(:)
@@ -69,8 +70,8 @@ Program net
 
   ! Identify threads
   !$omp parallel default(shared)
-  mythread = 1
-  !$ mythread = omp_get_thread_num() + 1
+  tid = 1
+  !$ tid = omp_get_thread_num() + 1
   !$omp single
   nthread = 1
   !$ nthread = omp_get_num_threads()
@@ -97,10 +98,10 @@ Program net
   If ( idiag >= 0 ) Then
     diag_file = trim(diag_file_base)
     Call name_ordered(diag_file,myid,nproc)
-    Call name_ordered(diag_file,mythread,nthread)
-    Open(newunit=lun_diag, file=diag_file)
+    Call name_ordered(diag_file,tid,nthread)
+    Open(newunit=lun_diag, file=diag_file, action='write')
     Write(lun_diag,"(a5,2i5)") 'MyId',myid,nproc
-    !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',mythread,' of ',nthread
+    !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',tid,' of ',nthread
   EndIf
   !$omp end parallel
 
@@ -145,32 +146,52 @@ Program net
 
   ! Set sizes of abundance arrays
   Allocate (y(ny,nzevolve),yo(ny,nzevolve),yt(ny,nzevolve),ydot(ny,nzevolve),ystart(ny,nzevolve))
+  y = 0.0 ; yo = 0.0 ; yt = 0.0 ; ydot = 0.0 ; ystart = 0.0
 
   ! Allocate conditions arrays
-  Allocate (t(nzevolve),tt(nzevolve),to(nzevolve), &
-    &       tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
-    &       t9(nzevolve),t9t(nzevolve),t9o(nzevolve), &
+  Allocate (tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
+    &       t(nzevolve),tt(nzevolve),to(nzevolve), &
+    &       t9(nzevolve),t9t(nzevolve),t9o(nzevolve),t9dot(nzevolve), &
     &       rho(nzevolve),rhot(nzevolve),rhoo(nzevolve), &
     &       ye(nzevolve),yet(nzevolve),yeo(nzevolve), &
+    &       cv(nzevolve),etae(nzevolve),detaedt9(nzevolve), &
     &       nt(nzevolve),ntt(nzevolve),nto(nzevolve), &
-    &       ints(nzevolve),intso(nzevolve), &
-    &       t9dot(nzevolve),cv(nzevolve),etae(nzevolve),detaedt9(nzevolve))
+    &       ints(nzevolve),intso(nzevolve))
+  tdel  = 0.0 ; tdel_next = 0.0 ; tdel_old = 0.0
+  t     = 0.0 ; tt        = 0.0 ; to       = 0.0
+  t9    = 0.0 ; t9t       = 0.0 ; t9o      = 0.0 ; t9dot = 0.0
+  rho   = 0.0 ; rhot      = 0.0 ; rhoo     = 0.0
+  ye    = 0.0 ; yet       = 0.0 ; yeo      = 0.0
+  cv    = 0.0 ; etae      = 0.0 ; detaedt9 = 0.0
+  nt    = 0   ; ntt       = 0   ; nto      = 0
+  ints  = 0   ; intso     = 0
 
   ! Allocate thermo history arrays
-  Allocate (nh(nzevolve),nstart(nzevolve), &
-    &       tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
+  Allocate (nstart(nzevolve),tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
     &       t9start(nzevolve),rhostart(nzevolve),yestart(nzevolve), &
-    &       th(nhmx,nzevolve),t9h(nhmx,nzevolve),rhoh(nhmx,nzevolve),yeh(nhmx,nzevolve), &
-    &       tmevnu(nhmx,nnuspec,nzevolve),fluxcms(nhmx,nnuspec,nzevolve))
+    &       nh(nzevolve),th(nhmx,nzevolve),t9h(nhmx,nzevolve),rhoh(nhmx,nzevolve), &
+    &       yeh(nhmx,nzevolve),tmevnu(nhmx,nnuspec,nzevolve),fluxcms(nhmx,nnuspec,nzevolve))
+  tstart = 0.0 ; tstop   = 0.0 ; tdelstart = 0.0 ; th      = 0.0
+  nstart = 0   ; t9start = 0.0 ; rhostart  = 0.0 ; yestart = 0.0
+  nh     = 0   ; t9h     = 0.0 ; rhoh      = 0.0 ; yeh     = 0.0
+  tmevnu = 0.0 ; fluxcms = 0.0
 
   ! Allocate zone description arrays
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
+
+  !$acc enter data async(tid) &
+  !$acc copyin(y,yo,yt,ydot,ystart,t,tt,to,tdel,tdel_next,tdel_old,t9,t9t,t9o, &
+  !$acc        rho,rhot,rhoo,ye,yet,yeo,nt,ntt,nto,ints,intso,t9dot,cv,etae,detaedt9, &
+  !$acc        nh,nstart,tstart,tstop,tdelstart,t9start,rhostart,yestart,th,t9h,rhoh, &
+  !$acc        yeh,tmevnu,fluxcms)
+
+  !$acc wait(tid)
 
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
   !$omp parallel default(shared) &
-  !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb) &
+  !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
   !$omp   copyin(timer_setup)
 
   start_timer = xnet_wtime()
@@ -208,7 +229,12 @@ Program net
     Call read_thermo_file(thermo_file,thermo_desc,ierr)
 
     ! Determine thermodynamic conditions at tstart
-    Call t9rhofind(0,tstart,nstart,t9start,rhostart)
+    Do izb = zb_lo, zb_hi
+      If ( lzactive(izb) ) Then
+        Call t9rhofind1(0,tstart(izb),nstart(izb),t9start(izb),rhostart(izb), &
+          & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
+      EndIf
+    EndDo
 
     ! Determine initial abundances
     Call load_initial_abundances(inab_file,abund_desc,ierr)
@@ -232,7 +258,7 @@ Program net
         Call name_ordered(ev_file,izone,nzone)
         If ( idiag >= 0 ) Write(lun_diag,"(a,i5,7es10.3)") trim(ev_file), &
           & nh(izb),th(nh(izb),izb),t9h(nh(izb),izb),rhoh(nh(izb),izb),tstart(izb),tstop(izb)
-        Open(newunit=lun_ev(izb), file=ev_file)
+        Open(newunit=lun_ev(izb), file=ev_file, action='write')
 
         ! Write evolution file header
         Write(ev_header_format,"(a)") "(a4,a15,4a10,"//trim(nnucout_string)//"a9,a4)"
@@ -247,7 +273,7 @@ Program net
         izone = izb + szbatch - zb_lo
         bin_file = trim(bin_file_base)
         Call name_ordered(bin_file,izone,nzone)
-        Open(newunit=lun_ts(izb), file=bin_file, form='unformatted')
+        Open(newunit=lun_ts(izb), file=bin_file, form='unformatted', action='write')
 
         ! Write Control Parameters to ts file
         Write(lun_ts(izb)) (descript(i),i=1,3),data_desc
@@ -267,15 +293,35 @@ Program net
       EndDo
     EndIf
 
+    !$acc update async(tid) &
+    !$acc device(tstart(zb_lo:zb_hi),tstop(zb_lo:zb_hi),tdelstart(zb_lo:zb_hi), &
+    !$acc        nh(zb_lo:zb_hi),th(:,zb_lo:zb_hi),t9h(:,zb_lo:zb_hi),rhoh(:,zb_lo:zb_hi), &
+    !$acc        yeh(:,zb_lo:zb_hi),tmevnu(:,:,zb_lo:zb_hi),fluxcms(:,:,zb_lo:zb_hi), &
+    !$acc        nstart(zb_lo:zb_hi),t9start(zb_lo:zb_hi),rhostart(zb_lo:zb_hi), &
+    !$acc        yestart(zb_lo:zb_hi),ystart(:,zb_lo:zb_hi), &
+    !$acc        lzactive(zb_lo:zb_hi),tdel(zb_lo:zb_hi), &
+    !$acc        nt(zb_lo:zb_hi),t(zb_lo:zb_hi),t9(zb_lo:zb_hi), &
+    !$acc        rho(zb_lo:zb_hi),ye(zb_lo:zb_hi),y(:,zb_lo:zb_hi))
+
+    If ( itsout > 0 ) Then
+      Do izb = zb_lo, zb_hi
+        Write(lun_stdout,"(a,i6,a,i2,2(a,es10.3))") &
+          & 'Max Step',kstmx,' IDiag=',idiag, ' Start Time',tstart(izb),' Stop Time',tstop(izb)
+      EndDo
+    EndIf
+    If ( idiag >= 0 ) Flush(lun_diag)
+
     stop_timer = xnet_wtime()
     timer_setup = timer_setup + stop_timer
 
     ! Evolve abundance from tstart to tstop
-    Call full_net
+    Call full_net(kstep)
 
     ! Test how well sums of fluxes match abundances changes
     Do izb = zb_lo, zb_hi
       If ( idiag >= 3 ) Then
+        !$acc update wait(tid) &
+        !$acc host(y(:,izb))
         dyf = 0.0
         Do k = 1, mflx
           dyf(nflx(1:4,k)) = dyf(nflx(1:4,k)) + flx_int(k,izb)
@@ -297,6 +343,11 @@ Program net
   ! Close diagnostic output file
   If ( idiag >= 0 ) Close(lun_diag)
   !$omp end parallel
+
+  !$acc exit data async(tid) &
+  !$acc delete(y,yo,yt,ydot,ystart,t,tt,to,tdel,tdel_next,tdel_old,t9,t9t,t9o, &
+  !$acc        rho,rhot,rhoo,ye,yet,yeo,nt,ntt,nto,ints,intso,t9dot,cv,etae,detaedt9, &
+  !$acc        nh,nstart,tstart,tstop,tdelstart,t9start,th,t9h,rhoh,yeh,tmevnu,fluxcms)
 
   ! Wait for all nodes to finish
   Call parallel_finalize()
