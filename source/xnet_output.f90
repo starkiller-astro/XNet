@@ -12,16 +12,16 @@ Module xnet_output
 
 Contains
 
-  Subroutine ts_output(kstep,enuc,edot,mask_in)
+  Subroutine ts_output(kstep,en0,enold,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! The per timestep output routine. If the flag itsout > 0, full_net calls this routine to handle
     ! stepwise output.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, aa, nname
+    Use nuclear_data, Only: ny, aa, nname, benuc
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: rho, t, t9, tdel
     Use xnet_controls, Only: nnucout, nnucout_string, idiag, inucout, itsout, kmon, lun_diag, &
-      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive
+      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_flux, Only: flx, flx_int, flux
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_output
@@ -30,12 +30,17 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: enuc(zb_lo:zb_hi), edot(zb_lo:zb_hi)
+
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: en0(zb_lo:zb_hi)   ! Initial energy of nuclei
+    Real(dp), Intent(inout) :: enold(zb_lo:zb_hi) ! Energy of nuclei from last step
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
+    Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
+    Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
     Character(40) :: ev_format
     Integer :: i, j, k, izb, izone
     Logical, Pointer :: mask(:)
@@ -59,11 +64,35 @@ Contains
       EndIf
     EndIf
 
+    ! Calculate the total energy of the nuclei
+    If ( itsout >= 1 ) Then
+      enb = 0.0
+      enm = 0.0
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          !$acc update wait(tid) &
+          !$acc host(y(:,izb),tdel(izb))
+          Call benuc(y(:,izb),enb(izb),enm(izb))
+          If ( kstep > 0 ) Then
+            delta_en(izb) = enm(izb) - en0(izb)
+            edot = -(enm(izb) - enold(izb)) / tdel(izb)
+          Else
+            delta_en(izb) = 0.0
+            edot(izb) = 0.0
+            en0(izb) = enm(izb)
+          EndIf
+          enold(izb) = enm(izb)
+        EndIf
+      EndDo
+    EndIf
+
     If ( itsout >= 1 ) Then
       Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,2es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          !$acc update wait(tid) &
+          !$acc host(t(izb),t9(izb),rho(izb),kmon(:,izb))
 
           ! An abundance snapshot is written to the binary file
           Write(lun_ts(izb)) kstep,t(izb),t9(izb),rho(izb),tdel(izb),edot(izb),y(:,izb),flx(:,izb)
@@ -84,8 +113,13 @@ Contains
           ! For itsout>=5, output fluxes for each timestep to the diagnostic file
           If ( itsout >= 5 .and. idiag >= 0 ) Write(lun_diag,"(i5,10a5,i5,es11.3)") &
             & (k,(nname(nflx(j,k)),j=1,4),' <-> ',(nname(nflx(j,k)),j=5,8),iwflx(k),flx(k,izb),k=1,mflx)
+
+          ! Flush output
+          Flush(lun_ts(izb))
+          If ( itsout >= 2 ) Flush(lun_ev(izb))
         EndIf
       EndDo
+      If ( itsout >= 4 .and. idiag >= 0 ) Flush(lun_diag)
     EndIf
 
     stop_timer = xnet_wtime()
@@ -102,7 +136,7 @@ Contains
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: tt, tstop
     Use xnet_controls, Only: changemx, iconvc, isolv, kitmx, kstmx, ktot, lun_diag, tolc, tolm, yacc, &
-      & szbatch, zb_lo, zb_hi, lzactive, idiag
+      & szbatch, zb_lo, zb_hi, lzactive, idiag, tid
     Use xnet_flux, Only: flx_int
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_timers
@@ -134,6 +168,8 @@ Contains
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          !$acc update wait(tid) &
+          !$acc host(ktot(:,izb),tt(izb),y(:,izb))
 
           ! Write final abundances to diagnostic output (in ASCII)
           Write(lun_diag,"(a3,3i6,2es14.7)") 'End',izone,kstep,kstmx,tt(izb),tstop(izb)
@@ -158,15 +194,17 @@ Contains
       timer_output = timer_output + stop_timer
 
       ! Write timers
-      If ( idiag >= 0 ) Then
-        Write(lun_diag,"(a8,10a10)") &
-          & 'Timers: ','Total','TS','NR','Solver','Jacobian','Deriv','CrossSect','Screening','Setup','Output'
-        Write(lun_diag,"(8x,10es10.3)") &
-          & timer_xnet,timer_tstep,timer_nraph,timer_solve,timer_jacob,timer_deriv,timer_csect,timer_scrn,timer_setup,timer_output
-      EndIf
+      Write(lun_diag,"(a8,14a10)") &
+        & 'Timers: ','Total','TS','NR','Solver','Decomp','BkSub','Jacobian','Deriv', &
+        & 'CrossSect','Screening','PreScreen','EOS','Setup','Output'
+      Write(lun_diag,"(8x,14es10.3)") &
+        & timer_xnet,timer_tstep,timer_nraph,timer_solve,timer_decmp,timer_bksub,timer_jacob,timer_deriv, &
+        & timer_csect,timer_scrn,timer_prescrn,timer_eos,timer_setup,timer_output
 
       ! Use the following line to restart the timers
       If ( itimer_reset > 0 ) Call reset_timers
+
+      Flush(lun_diag)
 
     EndIf
 
