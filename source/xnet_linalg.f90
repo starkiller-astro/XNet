@@ -8,8 +8,7 @@ MODULE xnet_linalg
 
 #if defined(XNET_CUBLAS)
   Use cudaf, Only: &
-    stream, &
-    cudaStreamSynchronize
+    stream
   Use cublasf, Only: &
     cublas_handle, &
     cublasDnrm2_v2, &
@@ -30,7 +29,6 @@ MODULE xnet_linalg
 #if defined(XNET_MAGMA)
   Use magmaf, Only: &
     magma_queue, &
-    magma_queue_sync, &
     magma_dnrm2, &
     magma_daxpy, &
     magma_dgemm, &
@@ -164,7 +162,6 @@ Contains
 #if defined(XNET_CUBLAS)
       ierr = cublasDgeam &
              ( cublas_handle, itransa, itransb, m, n, alpha, da, lda, beta, db, ldb, dc, ldc )
-      ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_MAGMA)
       If ( transb  == 'N' ) Then
         Call magmablas_dlacpy &
@@ -183,7 +180,6 @@ Contains
         Call magmablas_dgeadd2 &
                ( m, n, alpha, dat, m, beta, dc, ldc, magma_queue )
       End If
-      Call magma_queue_sync( magma_queue )
 #endif
 
     Else
@@ -346,11 +342,9 @@ Contains
 #if defined(XNET_CUBLAS)
       ierr = cublasDgemm_v2 &
              ( cublas_handle, itransa, itransb, m, n, k, alpha, da, lda, db, ldb, beta, dc, ldc )
-      ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_MAGMA)
       Call magma_dgemm &
              ( itransa, itransb, m, n, k, alpha, da, lda, db, ldb, beta, dc, ldc, magma_queue )
-      Call magma_queue_sync( magma_queue )
 #endif
 
     Else
@@ -445,12 +439,10 @@ Contains
       ierr = cublasDgemmStridedBatched &
              ( cublas_handle, itransa, itransb, m, n, k, alpha, da, lda, stridea, &
                db, ldb, strideb, beta, dc, ldc, stridec, batchcount )
-      ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_MAGMA)
       Call magmablas_dgemm_batched_strided &
              ( itransa, itransb, m, n, k, alpha, da, lda, stridea, &
                db, ldb, strideb, beta, dc, ldc, stridec, batchcount, magma_queue )
-      Call magma_queue_sync( magma_queue )
 #endif
 
     Else
@@ -832,11 +824,9 @@ Contains
 #if defined(XNET_CUBLAS)
       ierr = cublasDgemv_v2 &
              ( cublas_handle, itrans, m, n, alpha, da, lda, dx, incx, beta, dy, incy )
-      ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_MAGMA)
       Call magma_dgemv &
              ( itrans, m, n, alpha, da, lda, dx, incx, beta, dy, incy, magma_queue )
-      Call magma_queue_sync( magma_queue )
 #endif
 
     Else
@@ -912,13 +902,11 @@ Contains
 #if defined(XNET_CUBLAS)
       ierr = cublasDdgmm &
              ( cublas_handle, CUBLAS_SIDE_LEFT, m, n, da, lda, dx, incx, dc, ldc )
-      ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_MAGMA)
       Call magmablas_dlacpy &
              ( MagmaGeneral, m, n, da, lda, dc, ldc, magma_queue )
       Call magmablas_dlascl2 &
              ( MagmaGeneral, m, n, dx, dc, ldc, magma_queue, info )
-      Call magma_queue_sync( magma_queue )
 #endif
 
     Else
@@ -994,10 +982,8 @@ Contains
 
 #if defined(XNET_CUBLAS)
       ierr = cublasDnrm2_v2( cublas_handle, n, dx, incx, xnorm )
-      ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_MAGMA)
       xnorm = magma_dnrm2( n, dx, incx, magma_queue )
-      Call magma_queue_sync( magma_queue )
 #endif
 
     Else
@@ -1097,10 +1083,8 @@ Contains
 
 #if defined(XNET_CUBLAS)
       ierr = cublasDaxpy_v2( cublas_handle, n, alpha, dx, incx, dy, incy )
-      ierr = cudaStreamSynchronize( stream )
 #elif defined(XNET_MAGMA)
       Call magma_daxpy( n, alpha, dx, incx, dy, incy, magma_queue )
-      Call magma_queue_sync( magma_queue )
 #endif
 
     Else
