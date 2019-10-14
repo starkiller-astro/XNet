@@ -9,6 +9,9 @@ module cudaf
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
 
+  type(c_ptr) :: stream
+  !$omp threadprivate(stream)
+
   enum, bind(c) !:: cudaMemcpyKind
     enumerator :: cudaMemcpyHostToHost = 0
     enumerator :: cudaMemcpyHostToDevice = 1
