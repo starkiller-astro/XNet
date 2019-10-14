@@ -560,6 +560,7 @@ Contains
     Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, &
       & zb_lo, zb_hi, lzactive, tid
     Use xnet_ffn, Only: ffn_rate, rffn, dlnrffndt9
+    Use xnet_linalg, Only: MatrixMatrixMultiply, MatrixVectorMultiply
     Use xnet_nnu, Only: nnu_rate, nnuspec, rnnu
     Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9, screening
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_csect
@@ -658,29 +659,29 @@ Contains
     ! Calculate the REACLIB exponent polynomials and derivatives, adding screening terms
     If ( use_blas ) Then
       If ( nzmask >= dgemm_nzbatch ) Then
-        If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
-        If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
-        If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
-        If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
+        If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
+        If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
+        If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
+        If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
 
         If ( iheat > 0 ) Then
-          If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
-          If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
-          If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
-          If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
+          If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
+          If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
+          If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
+          If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
         EndIf
       Else
         Do izb = zb_lo, zb_hi
           If ( mask(izb) ) Then
-            If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
-            If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
-            If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
-            If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
+            If ( nr1 > 0 ) Call MatrixVectorMultiply('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
+            If ( nr2 > 0 ) Call MatrixVectorMultiply('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
+            If ( nr3 > 0 ) Call MatrixVectorMultiply('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
+            If ( nr4 > 0 ) Call MatrixVectorMultiply('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
             If ( iheat > 0 ) Then
-              If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
-              If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
-              If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
-              If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
+              If ( nr1 > 0 ) Call MatrixVectorMultiply('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
+              If ( nr2 > 0 ) Call MatrixVectorMultiply('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
+              If ( nr3 > 0 ) Call MatrixVectorMultiply('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
+              If ( nr4 > 0 ) Call MatrixVectorMultiply('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
             EndIf
           EndIf
         EndDo
