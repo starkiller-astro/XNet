@@ -424,7 +424,7 @@ Contains
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
-    Use xnet_linalg, Only: LinearSolveBatched_GPU
+    Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
     Implicit None
@@ -476,6 +476,8 @@ Contains
       EndIf
     EndDo
 
+    ! Solve the linear system
+#if defined(XNET_GPU)
     !$acc serial async(tid) &
     !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx)
     i = 0
@@ -492,11 +494,17 @@ Contains
       EndIf
     EndDo
     !$acc end serial
-
-    ! Solve the linear system
     call LinearSolveBatched_GPU &
       & ( 'N', msize, 1, djacp(zb_lo), msize, dindxp(zb_lo), dindxinfo(zb_lo), &
       &   drhsp(zb_lo), msize, dwork(zb_lo), info(zb_lo), nzmask )
+#else
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        call LinearSolve_CPU &
+          & ( 'N', msize, 1, jac(1,1,izb), msize, indx(1,izb), rhs(1,izb), msize, info(izb) )
+      EndIf
+    EndDo
+#endif
 
     !$acc parallel loop gang async(tid) &
     !$acc present(mask,dy,dt9,rhs)
@@ -538,7 +546,7 @@ Contains
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
-    Use xnet_linalg, Only: LUDecompBatched_GPU
+    Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
 
@@ -564,6 +572,8 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
+    ! Calculate the LU decomposition
+#if defined(XNET_GPU)
     !$acc serial async(tid) &
     !$acc present(mask,djacp,djac,dindxp,dindx)
     i = 0
@@ -579,12 +589,18 @@ Contains
       EndIf
     EndDo
     !$acc end serial
-
-    ! Calculate the LU decomposition
     call LUDecompBatched_GPU &
       & ( msize, msize, djacp(zb_lo), msize, dindxp(zb_lo), dindxinfo(zb_lo), info(zb_lo), nzmask )
     !$acc update async(tid) &
     !$acc device(info(zb_lo))
+#else
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        call LUDecomp_CPU &
+          & ( msize, msize, jac(1,1,izb), msize, indx(1,izb), info(izb) )
+      EndIf
+    EndDo
+#endif
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
@@ -613,7 +629,7 @@ Contains
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
-    Use xnet_linalg, Only: LUBksubBatched_GPU
+    Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
     Implicit None
@@ -666,6 +682,8 @@ Contains
       EndIf
     EndDo
 
+    ! Solve the LU-decomposed triangular system via back-substitution
+#if defined(XNET_GPU)
     !$acc serial async(tid) &
     !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx)
     i = 0
@@ -682,10 +700,17 @@ Contains
       EndIf
     EndDo
     !$acc end serial
-
-    ! Solve the LU-decomposed triangular system via back-substitution
     call LUBksubBatched_GPU &
-      & ( 'N', msize, 1, djacp(zb_lo), msize, dindxp(zb_lo), drhsp(zb_lo), msize, dwork(zb_lo), info(zb_lo), nzmask )
+      & ( 'N', msize, 1, djacp(zb_lo), msize, dindxp(zb_lo), drhsp(zb_lo), msize, &
+      &   dwork(zb_lo), info(zb_lo), nzmask )
+#else
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        call LUBksub_CPU &
+          & ( 'N', msize, 1, jac(1,1,izb), msize, indx(1,izb), rhs(1,izb), msize, info(izb) )
+      EndIf
+    EndDo
+#endif
 
     !$acc parallel loop gang async(tid) &
     !$acc present(mask,dy,dt9,rhs)
