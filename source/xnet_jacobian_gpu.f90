@@ -47,7 +47,8 @@ Module xnet_jacobian
   Type(C_PTR), Allocatable, Target :: djacp(:), drhsp(:), dindxp(:)
 
   !$acc declare &
-  !$acc create(dydotdy,jac,rhs,work,indx,indxinfo,info,djac,drhs,dwork,dindx,dindxinfo,diag0,mult1, &
+  !$acc create(dydotdy,jac,rhs,work,indx,indxinfo,info, &
+  !$acc        djac,drhs,dwork,dindx,dindxinfo,diag0,mult1, &
   !$acc        djacp,drhsp,dindxp)
 
 Contains
@@ -56,11 +57,8 @@ Contains
     !-------------------------------------------------------------------------------------------------
     ! Initializes the Jacobian data.
     !-------------------------------------------------------------------------------------------------
-    Use cublasf
-    Use cudaf
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: iheat, nzevolve, nzbatchmx, tid
-    Use xnet_gpu, Only: gpu_init
     Implicit None
 
     ! Input variables
@@ -68,8 +66,6 @@ Contains
 
     ! Local variables
     Integer :: istat, izb
-
-    Call gpu_init
 
     ! Calculate array sizes
     If ( iheat > 0 ) Then
@@ -127,7 +123,8 @@ Contains
     !$acc end host_data
 
     !$acc update async(tid) &
-    !$acc device(dydotdy,jac,rhs,work,indx,indxinfo,info,djac,djacp,drhs,drhsp,dwork,dindx,dindxp,dindxinfo,diag0,mult1)
+    !$acc device(dydotdy,jac,rhs,work,indx,indxinfo,info,djac, &
+    !$acc        djacp,drhs,drhsp,dwork,dindx,dindxp,dindxinfo,diag0,mult1)
 
     Return
   End Subroutine read_jacobian_data
@@ -136,15 +133,13 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! Free the page-locked and device memory used in the dense solver.
     !-----------------------------------------------------------------------------------------------
-    Use cudaf
+    Implicit None
 
     ! Local variables
     Integer :: istat
 
     Deallocate (diag0,mult1)
-
     Deallocate (dydotdy,jac,rhs,indx,info)
-
     Deallocate (hjac,hrhs)
     Deallocate (djac,drhs,dwork,dindx,dindxinfo)
     Deallocate (djacp,drhsp,dindxp)
@@ -426,13 +421,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
-    Use cublasf
-    Use cudaf
-    Use magmaf
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
-    Use xnet_gpu, Only: handle, stream
+    Use xnet_linalg, Only: LinearSolveBatched_GPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
     Implicit None
@@ -450,7 +442,6 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Type(C_PTR) :: djac_array, drhs_array, dindxinfo_array, dwork_array, dindx_array, dinfo, hinfo
     Integer :: i, izb, izb_p, nzmask, izone, istat
     Logical, Pointer :: mask(:)
 
@@ -502,36 +493,10 @@ Contains
     EndDo
     !$acc end serial
 
-    !$acc host_data use_device(djacp,drhsp,dindxp,dwork,dindxinfo,info)
-    djac_array = c_loc( djacp(zb_lo) )
-    drhs_array = c_loc( drhsp(zb_lo) )
-    dindx_array = c_loc( dindxp(zb_lo) )
-    dwork_array = c_loc( dwork(zb_lo) )
-    dindxinfo_array = c_loc( dindxinfo(zb_lo) )
-    dinfo = c_loc( info(zb_lo) )
-    !$acc end host_data
-    !hinfo = c_loc( info(zb_lo) )
-
     ! Solve the linear system
-    !istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx(zb_lo), dinfo, nzmask)
-    !istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx(zb_lo), drhs_array, msize, hinfo, nzmask)
-    If ( pivot ) Then
-      call magma_dgetrf_batched &
-        ( msize, msize, djac_array, msize, dindx_array, dindxinfo_array, dinfo, nzmask, magma_queue )
-      !call magma_dgetrs_batched &
-      !  ( MagmaNoTrans, msize, 1, djac_array, msize, dindx_array, drhs_array, msize, nzmask, magma_queue )
-      call magma_dlaswp_rowserial_batched &
-        ( 1, drhs_array, msize, 1, msize, dindx_array, nzmask, magma_queue )
-    Else
-      call magma_dgetrf_nopiv_batched &
-        ( msize, msize, djac_array, msize, dinfo, nzmask, magma_queue )
-      !call magma_dgetrs_nopiv_batched &
-      !  ( MagmaNoTrans, msize, 1, djac_array, msize, drhs_array, msize, dinfo, nzmask, magma_queue )
-    EndIf
-    call magmablas_dtrsv_outofplace_batched &
-      ( MagmaLower, MagmaNoTrans, MagmaUnit, msize, djac_array, msize, drhs_array, 1, dwork_array, nzmask, magma_queue, 0 )
-    call magmablas_dtrsv_outofplace_batched &
-      ( MagmaUpper, MagmaNoTrans, MagmaNonUnit, msize, djac_array, msize, dwork_array, 1, drhs_array, nzmask, magma_queue, 0 )
+    call LinearSolveBatched_GPU &
+      & ( 'N', msize, 1, djacp(zb_lo), msize, dindxp(zb_lo), dindxinfo(zb_lo), &
+      &   drhsp(zb_lo), msize, dwork(zb_lo), info(zb_lo), nzmask )
 
     !$acc parallel loop gang async(tid) &
     !$acc present(mask,dy,dt9,rhs)
@@ -572,11 +537,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use cublasf
-    Use cudaf
-    Use magmaf
     Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
-    Use xnet_gpu, Only: handle, stream
+    Use xnet_linalg, Only: LUDecompBatched_GPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
 
@@ -587,7 +549,6 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Type(C_PTR) :: djac_array, dindx_array, dindxinfo_array, dinfo
     Integer :: i, j, izb, izone, izb_p, nzmask, istat
     Logical, Pointer :: mask(:)
 
@@ -619,22 +580,9 @@ Contains
     EndDo
     !$acc end serial
 
-    !$acc host_data use_device(djacp,dindxp,dindxinfo,info)
-    djac_array = c_loc( djacp(zb_lo) )
-    dindx_array = c_loc( dindxp(zb_lo) )
-    dindxinfo_array = c_loc( dindxinfo(zb_lo) )
-    dinfo = c_loc( info(zb_lo) )
-    !$acc end host_data
-
     ! Calculate the LU decomposition
-    !istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx(zb_lo), dinfo, nzmask)
-    If ( pivot ) Then
-      call magma_dgetrf_batched &
-        ( msize, msize, djac_array, msize, dindx_array, dindxinfo_array, dinfo, nzmask, magma_queue )
-    Else
-      call magma_dgetrf_nopiv_batched &
-        ( msize, msize, djac_array, msize, dinfo, nzmask, magma_queue )
-    EndIf
+    call LUDecompBatched_GPU &
+      & ( msize, msize, djacp(zb_lo), msize, dindxp(zb_lo), dindxinfo(zb_lo), info(zb_lo), nzmask )
     !$acc update async(tid) &
     !$acc device(info(zb_lo))
 
@@ -662,13 +610,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
-    Use cublasf
-    Use cudaf
-    Use magmaf
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
-    Use xnet_gpu, Only: handle, stream
+    Use xnet_linalg, Only: LUBksubBatched_GPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
     Implicit None
@@ -686,7 +631,6 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Type(C_PTR) :: djac_array, drhs_array, dwork_array, dindx_array, dinfo, hinfo
     Integer :: i, izb, izone, izb_p, nzmask, istat
     Logical, Pointer :: mask(:)
 
@@ -739,30 +683,9 @@ Contains
     EndDo
     !$acc end serial
 
-    !$acc host_data use_device(djacp,drhsp,dindxp,dwork,dindxinfo,info)
-    djac_array = c_loc( djacp(zb_lo) )
-    drhs_array = c_loc( drhsp(zb_lo) )
-    dindx_array = c_loc( dindxp(zb_lo) )
-    dwork_array = c_loc( dwork(zb_lo) )
-    dinfo = c_loc( info(zb_lo) )
-    !$acc end host_data
-    !hinfo = c_loc( info(zb_lo) )
-
     ! Solve the LU-decomposed triangular system via back-substitution
-    !istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx(zb_lo), drhs_array, msize, hinfo, nzmask)
-    If ( pivot ) Then
-      !call magma_dgetrs_batched &
-      !  ( MagmaNoTrans, msize, 1, djac_array, msize, dindx_array, drhs_array, msize, nzmask, magma_queue )
-      call magma_dlaswp_rowserial_batched &
-        ( 1, drhs_array, msize, 1, msize, dindx_array, nzmask, magma_queue )
-    Else
-      !call magma_dgetrs_nopiv_batched &
-      !  ( MagmaNoTrans, msize, 1, djac_array, msize, drhs_array, msize, dinfo, nzmask, magma_queue )
-    EndIf
-    call magmablas_dtrsv_outofplace_batched &
-      ( MagmaLower, MagmaNoTrans, MagmaUnit, msize, djac_array, msize, drhs_array, 1, dwork_array, nzmask, magma_queue, 0 )
-    call magmablas_dtrsv_outofplace_batched &
-      ( MagmaUpper, MagmaNoTrans, MagmaNonUnit, msize, djac_array, msize, dwork_array, 1, drhs_array, nzmask, magma_queue, 0 )
+    call LUBksubBatched_GPU &
+      & ( 'N', msize, 1, djacp(zb_lo), msize, dindxp(zb_lo), drhsp(zb_lo), msize, dwork(zb_lo), info(zb_lo), nzmask )
 
     !$acc parallel loop gang async(tid) &
     !$acc present(mask,dy,dt9,rhs)

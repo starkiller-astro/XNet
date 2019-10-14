@@ -121,8 +121,8 @@ else ifeq ($(PE_ENV),PGI)
     endif
 
     # generic flags
-    OPT_FLAGS     = -g -gopt -O3 $(ARCHOPT) $(INLINE)
-    DEBUG_FLAGS   = -g -gopt -O0 -Kieee -Mnofprelaxed -Mnobuiltin
+    OPT_FLAGS     = -g -O3 $(ARCHOPT) $(INLINE)
+    DEBUG_FLAGS   = -g -O0 -Kieee -Mnofprelaxed -Mnobuiltin
 
     ifeq ($(OPENMP_MODE),ON)
         OPENMP    = -mp

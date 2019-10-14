@@ -29,6 +29,7 @@ CUDA_SRC    = cudaf.f90
 CUDA_OBJ    = $(addsuffix .o,$(basename $(CUDA_SRC)))
 
 ## cuBLAS
+CUBLAS_DEF    = -DXNET_CUBLAS
 CUBLAS_INC    = $(CUDA_INC)
 CUBLAS_LIBDIR = $(CUDA_LIBDIR)
 CUBLAS_LIBS   = -lcublas $(CUDA_LIBS)
@@ -37,6 +38,7 @@ CUBLAS_OBJ    = $(addsuffix .o,$(basename $(CUBLAS_SRC)))
 
 ## MAGMA
 MAGMA_DIR   ?= $(OLCF_MAGMA_ROOT)
+MAGMA_DEF    = -DXNET_MAGMA
 MAGMA_INC    = -I$(MAGMA_DIR)/include $(CUBLAS_INC)
 MAGMA_LIBDIR = -L$(MAGMA_DIR)/lib $(CUBLAS_LIBDIR)
 MAGMA_LIBS   = -lmagma $(CUBLAS_LIBS)
@@ -49,6 +51,7 @@ PAPI_INC    = -I$(PAPI_DIR)/include
 PAPI_LIBDIR = -L$(PAPI_DIR)/lib
 PAPI_LIBS   = -lpapi
 
+GPU_LAPACK_DEF    = $($(GPU_LAPACK_VER)_DEF)
 GPU_LAPACK_INC    = $($(GPU_LAPACK_VER)_INC)
 GPU_LAPACK_LIBDIR = $($(GPU_LAPACK_VER)_LIBDIR)
 GPU_LAPACK_LIBS   = $($(GPU_LAPACK_VER)_LIBS)
@@ -113,12 +116,20 @@ ifneq ($(findstring sm70, $(GPU_TARGET)),)
     NVCCFLAGS += -gencode arch=compute_70,code=sm_70
 endif
 
-## Flags for compiling with OpenACC
+## Flags for compiling with GPU
 ifeq ($(GPU_MODE),ON)
-    FLAGS += $(OPENACC)
     ifeq ($(OPENACC_MODE),ON)
-      BASE += openaccf.o
+      GPU_DEF += -DXNET_OACC
+      GPU_OBJ += openaccf.o
+      FLAGS   += $(OPENACC)
+    else ifeq ($(OPENMP_OL_MODE),ON)
+      GPU_DEF += -DXNET_OMP_OL
+      GPU_OBJ += openmpf.o
+      FLAGS   += $(OPENMP_OL)
     endif
+    GPU_DEF += -DXNET_GPU
+    FLAGS   += $(GPU_DEF) $(GPU_LAPACK_DEF)
+    BASE    += $(GPU_OBJ)
 endif
 
 ## Flags for using a GPU solver package
@@ -127,7 +138,7 @@ ifeq ($(MATRIX_SOLVER),gpu)
   LAPACK_LIBDIR += $(GPU_LAPACK_LIBDIR)
   LAPACK_LIBS   += $(GPU_LAPACK_LIBS)
   LAPACK_OBJ    += $(GPU_LAPACK_OBJ)
-  BASE          += xnet_gpu.o
+#  BASE          += xnet_gpu.o
 endif
 
 #-------------------------------------------------------------------------------
@@ -159,9 +170,9 @@ $(GPU_LAPACK_OBJ_CU): %.o: %.cu
 	$(NVCC) $(NVCCFLAGS) $(CUDA_INC) -c $< -o $@
 
 ## Dependencies
-magmaf.o: cudaf.o
-cublasf.o: cudaf.o
-cudaf.o: cudaf.f90
+#magmaf.o: cudaf.o
+#cublasf.o: cudaf.o
+#cudaf.o: cudaf.f90
 #cudaf.f90: cudaDeviceProp.fh
 #cudaDeviceProp.fh: $(CUDA_DIR)/include/driver_types.h
 #	@sed -n '/struct.*cudaDeviceProp/,/}/ p' $(CUDA_DIR)/include/driver_types.h | \

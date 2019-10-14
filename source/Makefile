@@ -27,9 +27,11 @@ BASE = \
        xnet_evolve.o \
        xnet_ffn.o \
        xnet_flux.o \
+       xnet_gpu.o \
        xnet_integrate.o \
        xnet_integrate_bdf.o \
        xnet_integrate_be.o \
+       xnet_linalg.o \
        xnet_match.o \
        xnet_nnu.o \
        xnet_nse.o \
@@ -191,11 +193,12 @@ xnet_abundances.o: xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o
 xnet_conditions.o: xnet_controls.o xnet_types.o xnet_util.o
 xnet_constants.o: xnet_types.o
 xnet_evolve.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_integrate_bdf.o xnet_integrate_be.o xnet_output.o xnet_timers.o xnet_types.o xnet_util.o
-xnet_gpu.o: cublasf.o cudaf.o openaccf.o xnet_controls.o
+xnet_gpu.o: xnet_controls.o $(GPU_OBJ)
 xnet_integrate.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_controls.o xnet_data.o xnet_ffn.o xnet_nnu.o xnet_screening.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(LAPACK_OBJ)
 xnet_integrate_bd.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_bdf.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_be.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
+xnet_linalg.o: xnet_gpu.o xnet_types.o $(LAPACK_OBJ) $(GPU_OBJ)
 xnet_nnu.o: xnet_conditions.o xnet_controls.o xnet_types.o xnet_util.o
 xnet_nse.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_util.o $(EOS_OBJ) $(LAPACK_OBJ)
 xnet_output.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_flux.o xnet_match.o xnet_timers.o xnet_types.o
@@ -217,13 +220,13 @@ xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_d
 xnet_jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(MA48_OBJ) $(MPI_OBJ)
 xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
 xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
-xnet_jacobian_gpu.o: cublasf.o cudaf.o xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_gpu.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(GPU_OBJ)
+xnet_jacobian_gpu.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o xnet_util.o
 
 xnet_parallel_stubs.o: xnet_types.o
 xnet_parallel.o: xnet_types.o
 
 model_input_ascii.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_nnu.o xnet_nse.o xnet_types.o xnet_util.o 
-net.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_evolve.o xnet_flux.o xnet_match.o xnet_nnu.o xnet_nse.o xnet_preprocess.o xnet_screening.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(JAC_OBJ) $(MPI_OBJ)
+net.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_evolve.o xnet_flux.o xnet_gpu.o xnet_match.o xnet_nnu.o xnet_nse.o xnet_preprocess.o xnet_screening.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(JAC_OBJ) $(MPI_OBJ)
 net_setup.o: xnet_controls.o xnet_preprocess.o
 
 nse_slice.o: xnet_controls.o xnet_nse.o xnet_preprocess.o xnet_types.o $(EOS_OBJ)
