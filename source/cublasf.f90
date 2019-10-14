@@ -9,6 +9,9 @@ module cublasf
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
 
+  type(c_ptr) :: cublas_handle
+  !$omp threadprivate(cublas_handle)
+
   enum, bind(c) !:: cublasStatus_t
     enumerator :: CUBLAS_STATUS_SUCCESS = 0
     enumerator :: CUBLAS_STATUS_NOT_INITIALIZED = 1
