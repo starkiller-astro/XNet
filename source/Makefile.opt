@@ -38,7 +38,6 @@ EOS ?= BAHCALL
 ## Choose matrix solver package 
 #MATRIX_SOLVER = PARDISO
 #MATRIX_SOLVER = MA48
-#MATRIX_SOLVER = gpu
 MATRIX_SOLVER ?= dense
 
 ## Define alternative CPU LAPACK/BLAS package (Default is LIBSCI for Cray machines, NETLIB otherwise)

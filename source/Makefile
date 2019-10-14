@@ -220,7 +220,6 @@ xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_d
 xnet_jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o xnet_util.o $(MA48_OBJ) $(MPI_OBJ)
 xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
 xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
-xnet_jacobian_gpu.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o xnet_util.o
 
 xnet_parallel_stubs.o: xnet_types.o
 xnet_parallel.o: xnet_types.o
