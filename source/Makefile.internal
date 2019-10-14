@@ -225,8 +225,8 @@ else ifeq ($(PE_ENV),CRAY)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  =
 
-    F77FLAGS      = -s real64 -s integer32
-    F90FLAGS      = -s real64 -s integer32
+    F77FLAGS      = -eZ -s real64 -s integer32
+    F90FLAGS      = -eZ -s real64 -s integer32
 
     # C-specific flags
     OPT_CFLAGS    =
