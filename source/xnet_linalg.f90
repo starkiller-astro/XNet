@@ -61,11 +61,14 @@ MODULE xnet_linalg
   Public :: VectorNorm2
   Public :: VectorNorm2_Kernel
   Public :: VectorVectorAdd
+  Public :: LinearSolve_CPU
   Public :: LinearSolveBatched
   Public :: LinearSolveBatched_CPU
   Public :: LinearSolveBatched_GPU
+  Public :: LUDecomp_CPU
   Public :: LUDecompBatched_CPU
   Public :: LUDecompBatched_GPU
+  Public :: LUBksub_CPU
   Public :: LUBksubBatched_CPU
   Public :: LUBksubBatched_GPU
 
@@ -470,6 +473,23 @@ Contains
   End Subroutine MatrixMatrixMultiplyBatched
 
 
+  Subroutine LinearSolve_CPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
+
+    Character                  :: trans
+    Integer                    :: n, nrhs, lda, ldb
+    Real(dp), Dimension(lda,*) :: a
+    Real(dp), Dimension(ldb,*) :: b
+    Integer,  Dimension(*)     :: ipiv
+    Integer                    :: info
+
+    Call LUDecomp_CPU &
+      & ( n, n, a, lda, ipiv, info )
+    Call LUBksub_CPU &
+      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
+
+  End Subroutine LinearSolve_CPU
+
+
   Subroutine LinearSolveBatched( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
 
     Character                          :: trans
@@ -608,15 +628,28 @@ Contains
   End Subroutine LinearSolveBatched_GPU
 
 
+  Subroutine LUDecomp_CPU( m, n, a, lda, ipiv, info )
+
+    Integer                    :: m, n, lda
+    Real(dp), Dimension(lda,*) :: a
+    Integer,  Dimension(*)     :: ipiv
+    Integer                    :: info
+
+    Call DGETRF &
+      & ( m, n, a, lda, ipiv, info )
+
+  End Subroutine LUDecomp_CPU
+
+
   Subroutine LUDecompBatched_CPU( m, n, a, lda, ipiv, info, batchcount )
 
-    Integer                            :: m, n, lda, batchcount
-    Real(dp), Dimension(lda,*), Target :: a
-    Integer,  Dimension(*),     Target :: ipiv
-    Integer,  Dimension(*),     Target :: info
+    Integer                    :: m, n, lda, batchcount
+    Real(dp), Dimension(lda,*) :: a
+    Integer,  Dimension(*)     :: ipiv
+    Integer,  Dimension(*)     :: info
 
-    Integer                            :: ierr, i
-    Integer                            :: osa
+    Integer                    :: ierr, i
+    Integer                    :: osa
 
     Do i = 1, batchcount
       osa = (i-1) * n + 1
@@ -664,17 +697,32 @@ Contains
   End Subroutine LUDecompBatched_GPU
 
 
+  Subroutine LUBksub_CPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
+
+    Character                  :: trans
+    Integer                    :: n, nrhs, lda, ldb
+    Real(dp), Dimension(lda,*) :: a
+    Real(dp), Dimension(ldb,*) :: b
+    Integer,  Dimension(*)     :: ipiv
+    Integer                    :: info
+
+    Call DGETRS &
+      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
+
+  End Subroutine LUBksub_CPU
+
+
   Subroutine LUBksubBatched_CPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
 
-    Character                          :: trans
-    Integer                            :: n, nrhs, lda, ldb, batchcount
-    Real(dp), Dimension(lda,*), Target :: a
-    Real(dp), Dimension(ldb,*), Target :: b
-    Integer,  Dimension(*),     Target :: ipiv
-    Integer,  Dimension(*),     Target :: info
+    Character                  :: trans
+    Integer                    :: n, nrhs, lda, ldb, batchcount
+    Real(dp), Dimension(lda,*) :: a
+    Real(dp), Dimension(ldb,*) :: b
+    Integer,  Dimension(*)     :: ipiv
+    Integer,  Dimension(*)     :: info
 
-    Integer                            :: ierr, i
-    Integer                            :: osa, osb
+    Integer                    :: ierr, i
+    Integer                    :: osa, osb
 
     Do i = 1, batchcount
       osa = (i-1) * n + 1
