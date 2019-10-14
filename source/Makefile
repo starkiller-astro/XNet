@@ -194,7 +194,7 @@ xnet_conditions.o: xnet_controls.o xnet_types.o xnet_util.o
 xnet_constants.o: xnet_types.o
 xnet_evolve.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_integrate_bdf.o xnet_integrate_be.o xnet_output.o xnet_timers.o xnet_types.o xnet_util.o
 xnet_gpu.o: xnet_controls.o $(GPU_OBJ)
-xnet_integrate.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_controls.o xnet_data.o xnet_ffn.o xnet_nnu.o xnet_screening.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(LAPACK_OBJ)
+xnet_integrate.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_controls.o xnet_data.o xnet_ffn.o xnet_linalg.o xnet_nnu.o xnet_screening.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(LAPACK_OBJ)
 xnet_integrate_bd.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_bdf.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_be.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
@@ -215,11 +215,11 @@ xnet_eos_starkiller.o: actual_eos.o eos_type.o xnet_fd.o xnet_constants.o xnet_c
 actual_eos.o: eos_type.o xnet_util.o $(MPI_OBJ)
 eos_type.o: xnet_types.o xnet_util.o
 
-xnet_jacobian_dense.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ)
-xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(MA41_OBJ) $(MPI_OBJ)
-xnet_jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(MA48_OBJ) $(MPI_OBJ)
-xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
-xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(LAPACK_OBJ) $(PARDISO_OBJ) $(MPI_OBJ)
+xnet_jacobian_dense.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o xnet_util.o
+xnet_jacobian_MA41.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o xnet_util.o $(MA41_OBJ) $(MPI_OBJ)
+xnet_jacobian_MA48.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o xnet_util.o $(MA48_OBJ) $(MPI_OBJ)
+xnet_jacobian_PARDISO.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
+xnet_jacobian_PARDISO_MKL.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(PARDISO_OBJ) $(MPI_OBJ)
 xnet_jacobian_gpu.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_linalg.o xnet_timers.o xnet_types.o xnet_util.o
 
 xnet_parallel_stubs.o: xnet_types.o
