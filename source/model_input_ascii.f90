@@ -101,7 +101,7 @@ Module model_input_ascii
 
         ! Convert to appropriate units (CGS, except temperature (GK) and neutrino flux)
         !t9h(:,izb) = t9h(:,izb) * 1.0e-9
-        fluxcms(:,:,izb) = 1.0e-42 * fluxcms(:,:,izb)
+        !fluxcms(:,:,izb) = 1.0e-42 * fluxcms(:,:,izb)
       EndIf
     EndDo
 
