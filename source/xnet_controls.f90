@@ -59,6 +59,7 @@ Module xnet_controls
   Integer  :: iheat        ! If >0, then implicitly couple network to temperature (self-heating)
   Real(dp) :: changemxt    ! Relative temperature change used to guess timestep
   Real(dp) :: tolt9        ! The iterative convergence test limit
+  !$acc declare create(iheat)
 
   ! NSE Initial Conditions Controls
   Real(dp) :: t9nse = 8.0  ! Temperature maximum for switching to NSE
@@ -252,6 +253,8 @@ Contains
     Call parallel_bcast(iheat)
     Call parallel_bcast(changemxt)
     Call parallel_bcast(tolt9)
+    !$acc update async(tid) &
+    !$acc device(iheat)
 
     ! If using higher-order solver, XNet does not need to further limit the timestep size
     If ( isolv == 3 ) Then
