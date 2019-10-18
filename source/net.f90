@@ -23,7 +23,7 @@ Program net
   Use xnet_abundances, Only: ystart, yo, y, yt, ydot
   Use xnet_conditions, Only: t, tt, to, tdel, tdel_next, tdel_old, t9t, rhot, yet, t9, rho, ye, &
     & t9o, rhoo, yeo, t9dot, cv, etae, detaedt9, nt, ntt, nto, ints, intso, nstart, tstart, tstop, &
-    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx
+    & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
@@ -42,7 +42,7 @@ Program net
   Use xnet_screening, Only: screening_init
   Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_setup
   Use xnet_types, Only: dp
-  Use xnet_util, Only: name_ordered, t9rhofind1
+  Use xnet_util, Only: name_ordered
   Use model_input_ascii
   Implicit None
 
@@ -234,7 +234,7 @@ Program net
     ! Determine thermodynamic conditions at tstart
     Do izb = zb_lo, zb_hi
       If ( lzactive(izb) ) Then
-        Call t9rhofind1(0,tstart(izb),nstart(izb),t9start(izb),rhostart(izb), &
+        Call t9rhofind(0,tstart(izb),nstart(izb),t9start(izb),rhostart(izb), &
           & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
       EndIf
     EndDo

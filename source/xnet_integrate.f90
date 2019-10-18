@@ -22,11 +22,11 @@ Contains
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: y, yo, yt, ydot
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
-      & rhot, t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh
+      & rhot, t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
       & szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
-    Use xnet_util, Only: xnet_terminate, t9rhofind1
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -191,7 +191,7 @@ Contains
       !$acc present(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) .and. nh(izb) > 1 ) Then
-          Call t9rhofind1(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
+          Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
             & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
           If ( ntt(izb)-1 > nt(izb) ) Then
             !$acc loop seq
@@ -218,7 +218,7 @@ Contains
           dtherm(izb) = 0.0
           !$acc loop seq
           Do i = 1, 10
-            Call t9rhofind1(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
+            Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
               & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
             If ( t9(izb) > 0.0 ) Then
               dtherm(izb) = 10.0*abs(t9t(izb)-t9(izb))/t9(izb) + abs(rhot(izb)-rho(izb))/rho(izb)

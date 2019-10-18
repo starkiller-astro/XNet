@@ -38,9 +38,68 @@ Module xnet_conditions
   Real(dp), Allocatable :: tstart(:),tstop(:),tdelstart(:),t9start(:),rhostart(:),yestart(:)
   Real(dp), Allocatable :: th(:,:),t9h(:,:),rhoh(:,:),yeh(:,:)
 
+  Interface t9rhofind
+    Module Procedure t9rhofind1
+    Module Procedure t9rhofind2
+  End Interface
+
 Contains
 
-  Subroutine t9rhofind(kstep,tf,nf,t9f,rhof,mask_in)
+  Subroutine t9rhofind1(kstep,tf,nf,t9f,rhof,ns,ts,t9s,rhos)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculates t9 and rho as a function of time, either via interpolation or from an
+    ! analytic expression.
+    !-----------------------------------------------------------------------------------------------
+    Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
+    Use xnet_types, Only: dp
+    Implicit None
+    !$acc routine seq
+
+    ! Input variables
+    Integer, Intent(in) :: kstep, ns
+    Real(dp), Intent(in) :: tf, ts(:), t9s(:), rhos(:)
+
+    ! Input/Output variables
+    Integer, Intent(out) :: nf
+    Real(dp), Intent(out) :: t9f, rhof
+
+    ! Local variables
+    Real(dp) :: dt, rdt, dt9, drho
+    Integer :: n
+
+    ! For constant conditions (ns = 1), set temperature and density
+    If ( ns == 1 ) Then
+      t9f = t9s(1)
+      rhof = rhos(1)
+      nf = 1
+
+    ! Otherwise, calculate T9 and rho by interpolation
+    Else
+      Do n = 1, ns
+        If ( tf <= ts(n) ) Exit
+      EndDo
+      nf = n
+      If ( n > 1 .and. n <= ns ) Then
+        rdt = 1.0 / (ts(n)-ts(n-1))
+        dt = tf - ts(n-1)
+        dt9 = t9s(n) - t9s(n-1)
+        drho = rhos(n) - rhos(n-1)
+        t9f = dt*rdt*dt9 + t9s(n-1)
+        rhof = dt*rdt*drho + rhos(n-1)
+      ElseIf ( n == 1 ) Then
+        t9f = t9s(1)
+        rhof = rhos(1)
+      Else
+        t9f = t9s(ns)
+        rhof = rhos(ns)
+        Write(lun_stdout,*) 'Time beyond thermodynamic range',tf,' >',ts(ns)
+      EndIf
+    EndIf
+
+    Return
+  End Subroutine t9rhofind1
+
+  Subroutine t9rhofind2(kstep,tf,nf,t9f,rhof,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates t9 and rho as a function of time, either via interpolation or from an
     ! analytic expression.
@@ -117,6 +176,6 @@ Contains
     !$acc delete(mask)
 
     Return
-  End Subroutine t9rhofind
+  End Subroutine t9rhofind2
 
 End Module xnet_conditions
