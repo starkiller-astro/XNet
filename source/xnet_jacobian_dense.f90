@@ -42,14 +42,15 @@ Module xnet_jacobian
   Real(dp), Allocatable, Target :: diag0(:)
   Real(dp), Allocatable, Target :: mult1(:)
 
-  Logical, Parameter :: pivot = .false.
+  Real(dp), Parameter :: pivot_thresh = 1.0e-4
+  Logical, Allocatable :: pivot(:)
 
   Type(C_PTR), Allocatable, Target :: djacp(:), drhsp(:), dindxp(:)
 
   !$acc declare &
-  !$acc create(dydotdy,jac,rhs,work,indx,indxinfo,info, &
-  !$acc        djac,drhs,dwork,dindx,dindxinfo,diag0,mult1, &
-  !$acc        djacp,drhsp,dindxp)
+  !$acc create(dydotdy,jac,rhs,work,indx,indxinfo,info,djac, &
+  !$acc        djacp,drhs,drhsp,dwork,dindx,dindxp,dindxinfo, &
+  !$acc        diag0,mult1,pivot)
 
 Contains
 
@@ -76,8 +77,10 @@ Contains
 
     Allocate (diag0(nzevolve))
     Allocate (mult1(nzevolve))
+    Allocate (pivot(nzevolve))
     diag0 = 0.0
     mult1 = 1.0
+    pivot = .false.
 
     Allocate (dydotdy(msize,msize,nzevolve))
     Allocate (jac(msize,msize,nzevolve))
@@ -124,7 +127,8 @@ Contains
 
     !$acc update async(tid) &
     !$acc device(dydotdy,jac,rhs,work,indx,indxinfo,info,djac, &
-    !$acc        djacp,drhs,drhsp,dwork,dindx,dindxp,dindxinfo,diag0,mult1)
+    !$acc        djacp,drhs,drhsp,dwork,dindx,dindxp,dindxinfo, &
+    !$acc        diag0,mult1,pivot)
 
     Return
   End Subroutine read_jacobian_data
@@ -138,7 +142,7 @@ Contains
     ! Local variables
     Integer :: istat
 
-    Deallocate (diag0,mult1)
+    Deallocate (diag0,mult1,pivot)
     Deallocate (dydotdy,jac,rhs,indx,info)
     Deallocate (hjac,hrhs)
     Deallocate (djac,drhs,dwork,dindx,dindxinfo)
@@ -164,6 +168,7 @@ Contains
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
+    Real(dp) :: rsum
     Real(dp), Pointer :: diag(:), mult(:)
     Logical, Pointer :: mask(:)
 
@@ -189,37 +194,65 @@ Contains
     !$acc copyin(mask,diag,mult)
 
     !$acc parallel loop gang collapse(2) async(tid) &
-    !$acc present(mask,mult,diag,jac,dydotdy)
+    !$acc present(mask,mult,diag,jac,dydotdy,pivot) &
+    !$acc private(rsum)
     Do izb = zb_lo, zb_hi
       Do j1 = 1, msize
         If ( mask(izb) ) Then
-          !$acc loop vector
+          rsum = 0.0
+          !$acc loop vector &
+          !$acc reduction(+:rsum)
           Do i0 = 1, msize
             jac(i0,j1,izb) = mult(izb) * dydotdy(j1,i0,izb)
+            If ( i0 == j1 ) Then
+              jac(i0,j1,izb) = jac(i0,j1,izb) + diag(izb)
+            Else
+              rsum = rsum + abs(jac(i0,j1,izb))
+            EndIf
           EndDo
-          jac(j1,j1,izb) = jac(j1,j1,izb) + diag(izb)
+          pivot(izb) = ( rsum*pivot_thresh > abs(jac(j1,j1,izb)) )
         EndIf
       EndDo
     EndDo
 
-    If ( idiag >= 5 ) Then
+    If ( idiag >= 3 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
           !$acc update wait(tid) &
-          !$acc host(diag(izb),mult(izb),jac(:,:,izb))
-          Write(lun_diag,"(a9,i5,2es24.16)") 'JAC_SCALE',izone,diag(izb),mult(izb)
-          Do i = 1, ny
-            Write(lun_diag,"(3a)") 'J(',nname(i),',Y)'
-            Write(lun_diag,"(7es24.16)") (jac(i,j,izb),j=1,ny)
-          EndDo
-          If ( iheat > 0 ) Then
-            Write(lun_diag,"(3a)") 'J(Y,T9)'
-            Write(lun_diag,"(7es24.16)") (jac(i,ny+1,izb),i=1,ny)
-            Write(lun_diag,"(a)") 'J(T9,Y)'
-            Write(lun_diag,"(7es24.16)") (jac(ny+1,j,izb),j=1,ny)
-            Write(lun_diag,"(a)") 'J(T9,T9)'
-            Write(lun_diag,"(es24.16)") jac(ny+1,ny+1,izb)
+          !$acc host(pivot(izb))
+          If ( pivot(izb) ) Then
+            !$acc update wait(tid) &
+            !$acc host(jac(:,:,izb))
+            Do j = 1, msize
+              rsum = 0.0
+              Do i = 1, msize
+                If ( i /= j ) Then
+                  rsum = rsum + abs(jac(j,j,izb))
+                EndIf
+              EndDo
+              i = maxloc(abs(jac(:,j,izb)),dim=1)
+              If ( i /= j ) Then
+                Write(lun_diag,"(a,2i5,3es24.16)") 'JAC_DIAG',i,j,jac(j,j,izb),jac(i,j,izb),rsum
+              EndIf
+            EndDo
+          EndIf
+          If ( idiag >= 5 ) Then
+            !$acc update wait(tid) &
+            !$acc host(diag(izb),mult(izb),jac(:,:,izb))
+            Write(lun_diag,"(a9,i5,2es24.16)") 'JAC_SCALE',izone,diag(izb),mult(izb)
+            Do i = 1, ny
+              Write(lun_diag,"(3a)") 'J(',nname(i),',Y)'
+              Write(lun_diag,"(7es24.16)") (jac(i,j,izb),j=1,ny)
+            EndDo
+            If ( iheat > 0 ) Then
+              Write(lun_diag,"(3a)") 'J(Y,T9)'
+              Write(lun_diag,"(7es24.16)") (jac(i,ny+1,izb),i=1,ny)
+              Write(lun_diag,"(a)") 'J(T9,Y)'
+              Write(lun_diag,"(7es24.16)") (jac(ny+1,j,izb),j=1,ny)
+              Write(lun_diag,"(a)") 'J(T9,T9)'
+              Write(lun_diag,"(es24.16)") jac(ny+1,ny+1,izb)
+            EndIf
           EndIf
         EndIf
       EndDo
@@ -243,6 +276,7 @@ Contains
       & n10, n20, n30, n40
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
+    Use xnet_constants, Only: bok
     Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
       & lzactive, tid
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
@@ -347,7 +381,7 @@ Contains
             Do j1 = la(4,i0), le(4,i0)
               s4 = s4 + a4(j1) * dcsect4dt9(mu4(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
             EndDo
-            dydotdy(ny+1,i0,izb) = s1 + s2 + s3 + s4
+            dydotdy(ny+1,i0,izb) = (s1 + s2 + s3 + s4)/bok
           EndIf
         EndIf
       EndDo
@@ -367,7 +401,7 @@ Contains
             Do i0 = 1, ny
               sdot = sdot - mex(i0)*dydotdy(j1,i0,izb) / cv(izb)
             EndDo
-            dydotdy(j1,ny+1,izb) = sdot
+            dydotdy(j1,ny+1,izb) = sdot*bok
           EndIf
         EndDo
       EndDo
@@ -422,6 +456,7 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
+    Use xnet_constants, Only: bok
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
     Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
@@ -443,6 +478,7 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izb_p, nzmask, izone, istat
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -467,7 +503,7 @@ Contains
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
-        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)!*1.0e9
+        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)*bok
       Else
         !$acc loop vector
         Do i = 1, msize
@@ -479,14 +515,18 @@ Contains
     ! Solve the linear system
 #if defined(XNET_GPU)
     !$acc serial async(tid) &
-    !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx)
+    !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx,pivot) &
+    !$acc copyout(any_pivot)
     i = 0
+    any_pivot = .false.
     !$acc loop &
     !$acc private(izb_p) &
-    !$acc reduction(+:i)
+    !$acc reduction(+:i) &
+    !$acc reduction(.or.:any_pivot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         i = i + 1
+        any_pivot = ( any_pivot .or. pivot(izb) )
         izb_p = zb_lo + i - 1
         djacp(izb_p) = djac(izb)
         drhsp(izb_p) = drhs(izb)
@@ -496,7 +536,7 @@ Contains
     !$acc end serial
     call LinearSolveBatched_GPU &
       & ( 'N', msize, 1, djacp(zb_lo), msize, dindxp(zb_lo), dindxinfo(zb_lo), &
-      &   drhsp(zb_lo), msize, dwork(zb_lo), info(zb_lo), nzmask )
+      &   drhsp(zb_lo), msize, dwork(zb_lo), info(zb_lo), nzmask, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -514,7 +554,7 @@ Contains
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
-        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)!*1.0e-9
+        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)/bok
       EndIf
     EndDo
 
@@ -558,6 +598,7 @@ Contains
 
     ! Local variables
     Integer :: i, j, izb, izone, izb_p, nzmask, istat
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -575,14 +616,18 @@ Contains
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
     !$acc serial async(tid) &
-    !$acc present(mask,djacp,djac,dindxp,dindx)
+    !$acc present(mask,djacp,djac,dindxp,dindx) &
+    !$acc copyout(any_pivot)
     i = 0
+    any_pivot = .false.
     !$acc loop &
     !$acc private(izb_p) &
-    !$acc reduction(+:i)
+    !$acc reduction(+:i) &
+    !$acc reduction(.or.:any_pivot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         i = i + 1
+        any_pivot = ( any_pivot .or. pivot(izb) )
         izb_p = zb_lo + i - 1
         djacp(izb_p) = djac(izb)
         dindxp(izb_p) = dindx(izb)
@@ -590,7 +635,8 @@ Contains
     EndDo
     !$acc end serial
     call LUDecompBatched_GPU &
-      & ( msize, msize, djacp(zb_lo), msize, dindxp(zb_lo), dindxinfo(zb_lo), info(zb_lo), nzmask )
+      & ( msize, msize, djacp(zb_lo), msize, dindxp(zb_lo), dindxinfo(zb_lo), & 
+      &   info(zb_lo), nzmask, pivot = any_pivot )
     !$acc update async(tid) &
     !$acc device(info(zb_lo))
 #else
@@ -627,6 +673,7 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
+    Use xnet_constants, Only: bok
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
     Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
@@ -648,6 +695,7 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izone, izb_p, nzmask, istat
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -673,7 +721,7 @@ Contains
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
-        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)!*1.0e9
+        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)*bok
       Else
         !$acc loop vector
         Do i = 1, msize
@@ -685,14 +733,18 @@ Contains
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
     !$acc serial async(tid) &
-    !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx)
+    !$acc present(mask,djacp,djac,drhsp,drhs,dindxp,dindx) &
+    !$acc copyout(any_pivot)
     i = 0
+    any_pivot = .false.
     !$acc loop &
     !$acc private(izb_p) &
-    !$acc reduction(+:i)
+    !$acc reduction(+:i) &
+    !$acc reduction(.or.:any_pivot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         i = i + 1
+        any_pivot = ( any_pivot .or. pivot(izb) )
         izb_p = zb_lo + i - 1
         djacp(izb_p) = djac(izb)
         drhsp(izb_p) = drhs(izb)
@@ -702,7 +754,7 @@ Contains
     !$acc end serial
     call LUBksubBatched_GPU &
       & ( 'N', msize, 1, djacp(zb_lo), msize, dindxp(zb_lo), drhsp(zb_lo), msize, &
-      &   dwork(zb_lo), info(zb_lo), nzmask )
+      &   dwork(zb_lo), info(zb_lo), nzmask, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -720,7 +772,7 @@ Contains
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
-        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)!*1.0e-9
+        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)/bok
       EndIf
     EndDo
 

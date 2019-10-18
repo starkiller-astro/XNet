@@ -490,7 +490,7 @@ Contains
   End Subroutine LinearSolve_CPU
 
 
-  Subroutine LinearSolveBatched( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+  Subroutine LinearSolveBatched( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount, pivot )
 
     Character                          :: trans
     Integer                            :: n, nrhs, lda, ldb, batchcount
@@ -498,6 +498,7 @@ Contains
     Real(dp), Dimension(ldb,*), Target :: b
     Integer,  Dimension(*),     Target :: ipiv
     Integer,  Dimension(*),     Target :: info
+    Logical,  Optional                 :: pivot
 
     Integer,  Dimension(n,batchcount),      Target :: ipivinfo
     Real(dp), Dimension(n*nrhs,batchcount), Target :: work
@@ -565,7 +566,7 @@ Contains
       !$ACC UPDATE DEVICE( da, db, dipiv, dipivinfo, dwork )
 #endif
 
-      Call LinearSolveBatched_GPU( trans, n, nrhs, da, lda, dipiv, dipivinfo, db, ldb, dwork, info, batchcount )
+      Call LinearSolveBatched_GPU( trans, n, nrhs, da, lda, dipiv, dipivinfo, db, ldb, dwork, info, batchcount, pivot )
 
 #if defined(XNET_OMP_OL)
       !$OMP TARGET EXIT DATA &
@@ -613,17 +614,18 @@ Contains
   End Subroutine LinearSolveBatched_CPU
 
 
-  Subroutine LinearSolveBatched_GPU( trans, n, nrhs, da, lda, dipiv, dipivinfo, db, ldb, dwork, info, batchcount )
+  Subroutine LinearSolveBatched_GPU( trans, n, nrhs, da, lda, dipiv, dipivinfo, db, ldb, dwork, info, batchcount, pivot )
 
     Character                         :: trans
     Integer                           :: n, nrhs, lda, ldb, batchcount
     Type(C_PTR), Dimension(*), Target :: da, dipiv, dipivinfo, db, dwork
     Integer,     Dimension(*), Target :: info
+    Logical,     Optional             :: pivot
 
     Call LUDecompBatched_GPU &
-      & ( n, n, da(1), lda, dipiv(1), dipivinfo(1), info, batchcount )
+      & ( n, n, da(1), lda, dipiv(1), dipivinfo(1), info, batchcount, pivot )
     Call LUBksubBatched_GPU &
-      & ( trans, n, nrhs, da(1), lda, dipiv(1), db(1), ldb, dwork(1), info, batchcount )
+      & ( trans, n, nrhs, da(1), lda, dipiv(1), db(1), ldb, dwork(1), info, batchcount, pivot )
 
   End Subroutine LinearSolveBatched_GPU
 
@@ -660,14 +662,22 @@ Contains
   End Subroutine LUDecompBatched_CPU
 
 
-  Subroutine LUDecompBatched_GPU( m, n, da, lda, dipiv, dipivinfo, info, batchcount )
+  Subroutine LUDecompBatched_GPU( m, n, da, lda, dipiv, dipivinfo, info, batchcount, pivot )
 
     Integer                           :: m, n, lda, batchcount
     Type(C_PTR), Dimension(*), Target :: da, dipiv, dipivinfo
     Integer,     Dimension(*), Target :: info
+    Logical,     Optional             :: pivot
 
+    Logical                           :: lpiv
     Integer                           :: ierr, i
     Type(C_PTR)                       :: da_array, dipiv_array, dipivinfo_array, dinfo
+
+    If ( present(pivot) ) Then
+      lpiv = pivot
+    Else
+      lpiv = .true.
+    EndIf
 
 #if defined(XNET_OMP_OL)
     !$OMP TARGET DATA USE_DEVICE_PTR( da, dipiv, dipivinfo, info )
@@ -688,10 +698,13 @@ Contains
     ierr = cublasDgetrfBatched &
       & ( cublas_handle, m, da_array, lda, dipiv(1), dinfo, batchcount )
 #elif defined(XNET_MAGMA)
-    !Call magma_dgetrf_batched &
-    !  & ( m, n, da_array, lda, dipiv_array, dipivinfo_array, dinfo, batchcount, magma_queue )
-    Call magma_dgetrf_nopiv_batched &
-      & ( m, n, da_array, lda, dinfo, batchcount, magma_queue )
+    If ( lpiv ) Then
+      Call magma_dgetrf_batched &
+        & ( m, n, da_array, lda, dipiv_array, dipivinfo_array, dinfo, batchcount, magma_queue )
+    Else
+      Call magma_dgetrf_nopiv_batched &
+        & ( m, n, da_array, lda, dinfo, batchcount, magma_queue )
+    EndIf
 #endif
 
   End Subroutine LUDecompBatched_GPU
@@ -734,17 +747,25 @@ Contains
   End Subroutine LUBksubBatched_CPU
 
 
-  Subroutine LUBksubBatched_GPU( trans, n, nrhs, da, lda, dipiv, db, ldb, dwork, info, batchcount )
+  Subroutine LUBksubBatched_GPU( trans, n, nrhs, da, lda, dipiv, db, ldb, dwork, info, batchcount, pivot )
 
-    Character                          :: trans
-    Integer                            :: n, nrhs, lda, ldb, batchcount
-    Type(C_PTR), Dimension(*),  Target :: da, dipiv, db, dwork
-    Integer,  Dimension(*),     Target :: info
+    Character                         :: trans
+    Integer                           :: n, nrhs, lda, ldb, batchcount
+    Type(C_PTR), Dimension(*), Target :: da, dipiv, db, dwork
+    Integer,     Dimension(*), Target :: info
+    Logical,     Optional             :: pivot
 
-    Integer                            :: ierr, i
-    Integer(C_INT)                     :: itrans
-    Type(C_PTR)                        :: da_array, db_array, dipiv_array, dwork_array
-    Type(C_PTR)                        :: dinfo, hinfo
+    Logical                           :: lpiv
+    Integer                           :: ierr, i
+    Integer(C_INT)                    :: itrans
+    Type(C_PTR)                       :: da_array, db_array, dipiv_array, dwork_array
+    Type(C_PTR)                       :: dinfo, hinfo
+
+    If ( present(pivot) ) Then
+      lpiv = pivot
+    Else
+      lpiv = .true.
+    EndIf
 
     itrans = itrans_from_char( trans )
 
@@ -774,8 +795,10 @@ Contains
     !Call magma_dgetrs_nopiv_batched &
     !  & ( itrans, n, nrhs, da_array, lda, db_array, ldb, dinfo, batchcount, magma_queue )
     If ( trans == 'N' ) Then
-      !Call magma_dlaswp_rowserial_batched &
-      !  & ( nrhs, db_array, ldb, 1, n, dipiv_array, batchcount, magma_queue )
+      If ( lpiv ) Then
+        Call magma_dlaswp_rowserial_batched &
+          & ( nrhs, db_array, ldb, 1, n, dipiv_array, batchcount, magma_queue )
+      EndIf
       If ( nrhs == 1 ) Then
         Call magmablas_dtrsv_outofplace_batched &
           & ( MagmaLower, MagmaNoTrans, MagmaUnit, n, da_array, lda, db_array, 1, dwork_array, batchcount, magma_queue, 0 )
@@ -799,8 +822,10 @@ Contains
       !  Call magmablas_dtrsm_batched &
       !    & ( MagmaLeft, MagmaLower, itrans, MagmaNonUnit, n, nrhs, 1.0d0, da_array, lda, db_array, ldb, batchcount, magma_queue )
       EndIf
-      !Call magma_dlaswp_rowserial_batched &
-      !  & ( nrhs, db_array, ldb, 1, n, dipiv_array, batchcount, magma_queue )
+      If ( lpiv ) Then
+        Call magma_dlaswp_rowserial_batched &
+          & ( nrhs, db_array, ldb, 1, n, dipiv_array, batchcount, magma_queue )
+      EndIf
     EndIf
 #endif
 
