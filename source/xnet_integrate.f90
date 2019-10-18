@@ -311,7 +311,7 @@ Contains
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: t9t, rhot, yet, cv, etae, detaedt9
     Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
-    Use xnet_eos, Only: eos_interface2
+    Use xnet_eos, Only: eos_interface
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_eos
     Use xnet_types, Only: dp
     Implicit None
@@ -333,7 +333,7 @@ Contains
     start_timer = xnet_wtime()
     timer_eos = timer_eos - start_timer
 
-    Call eos_interface2(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
+    Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
       & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi),mask_in = mask)
 
     stop_timer = xnet_wtime()
