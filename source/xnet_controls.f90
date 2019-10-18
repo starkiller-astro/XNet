@@ -59,7 +59,6 @@ Module xnet_controls
   Integer  :: iheat        ! If >0, then implicitly couple network to temperature (self-heating)
   Real(dp) :: changemxt    ! Relative temperature change used to guess timestep
   Real(dp) :: tolt9        ! The iterative convergence test limit
-  !$acc declare create(iheat)
 
   ! NSE Initial Conditions Controls
   Real(dp) :: t9nse = 8.0  ! Temperature maximum for switching to NSE
@@ -89,6 +88,8 @@ Module xnet_controls
   ! Job indentifiers
   Integer :: myid, nproc, tid, nthread ! task & thread ids and counts
   !$omp threadprivate(tid)
+
+  !$acc declare create(iheat,iscrn)
 
 Contains
 
@@ -253,8 +254,6 @@ Contains
     Call parallel_bcast(iheat)
     Call parallel_bcast(changemxt)
     Call parallel_bcast(tolt9)
-    !$acc update async(tid) &
-    !$acc device(iheat)
 
     ! If using higher-order solver, XNet does not need to further limit the timestep size
     If ( isolv == 3 ) Then
@@ -375,6 +374,9 @@ Contains
     Call parallel_bcast(data_dir)
     Call parallel_bcast(inab_file)
     Call parallel_bcast(thermo_file)
+
+    !$acc update async(tid) &
+    !$acc device(iheat,iscrn)
 
     !$acc enter data async(tid) &
     !$acc create(lzactive,iweak,kmon,ktot)

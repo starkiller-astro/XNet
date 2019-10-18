@@ -59,33 +59,30 @@ Contains
     Return
   End Subroutine eos_initialize
 
-  Subroutine eos_interface1(t9,rho,y,ye,cv,etae,detaedt9)
+  Subroutine eosx(t9,rho,ye,abar,zbar,cv,etae,detaedt9)
     !-----------------------------------------------------------------------------------------------
-    ! This routine updates the equation of state for changes in temperature and density.
+    ! This routine interfaces with and calls the underlying EoS.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
-    Use xnet_abundances, Only: y_moment
-    Use xnet_constants, Only: avn, epmev, amu
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag
-    Use xnet_types, Only: dp
+    Use xnet_constants, Only: amu
+    Use xnet_controls, Only: iheat, iscrn
 
     Use actual_eos_module, Only: xnet_actual_eos
     Use eos_type_module, Only: eos_input_rt, eos_t
     Implicit None
+    !$acc routine seq
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(ny)
+    Real(dp), Intent(in) :: t9, rho, ye, abar, zbar
 
     ! Ouput variables
-    Real(dp), Intent(out) :: ye, cv, etae, detaedt9
+    Real(dp), Intent(out) :: cv, etae, detaedt9
 
     ! Local variables
-    Real(dp) :: ytot, abar, zbar, z2bar, zibar
     Type(eos_t) :: eos_state
 
-    ! Calculate Ye
-    Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
-
+    cv = 0.0
+    etae = 0.0
+    detaedt9 = 0.0
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
       ! Load input variables for the eos
@@ -99,14 +96,37 @@ Contains
       Call xnet_actual_eos(eos_input_rt,eos_state)
 
       ! Convert units from ergs/g to MeV/nucleon and K to GK
+      cv = eos_state%cv * amu * 1e9
       etae = eos_state%eta
       detaedt9 = eos_state%detadt * 1e9
-      cv = eos_state%cv * amu * 1e9
-    Else
-      etae = 0.0
-      detaedt9 = 0.0
-      cv = 0.0
     EndIf
+
+  End Subroutine eosx
+
+  Subroutine eos_interface1(t9,rho,y,ye,cv,etae,detaedt9)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine updates the equation of state for changes in temperature and density.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_abundances, Only: y_moment
+    Use xnet_controls, Only: idiag, lun_diag
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: t9, rho, y(ny)
+
+    ! Ouput variables
+    Real(dp), Intent(out) :: ye, cv, etae, detaedt9
+
+    ! Local variables
+    Real(dp) :: ytot, abar, zbar, z2bar, zibar
+
+    ! Calculate Ye
+    Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
+
+    ! Call the eos
+    Call eosx(t9,rho,ye,abar,zbar,cv,etae,detaedt9)
 
     If ( idiag >= 3 ) Write(lun_diag,"(a,6es24.16)") 'EOS',t9,rho,ye,cv,etae,detaedt9
 
@@ -119,12 +139,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_constants, Only: avn, epmev, amu
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
-
-    Use actual_eos_module, Only: xnet_actual_eos
-    Use eos_type_module, Only: eos_input_rt, eos_t
     Implicit None
 
     ! Input variables
@@ -138,7 +154,6 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Type(eos_t) :: eos_state
     Integer :: izb
     Logical, Pointer :: mask(:)
 
@@ -157,44 +172,16 @@ Contains
       & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi), &
       & z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi),mask_in = mask)
 
-    If ( iscrn > 0 .or. iheat > 0 ) Then
+    ! Call the eos
+    !$acc parallel loop gang async(tid) &
+    !$acc present(mask,t9,rho,y,ye,abar,zbar,cv,etae,detaedt9,eos_ye)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        Call eosx(t9(izb),rho(izb),ye(izb),abar(izb),zbar(izb),cv(izb),etae(izb),detaedt9(izb))
+        eos_ye(izb) = ye(izb)
+      EndIf
+    EndDo
 
-      !$acc parallel loop gang async(tid) &
-      !$acc present(mask,t9,rho,y,ye,abar,zbar,cv,etae,detaedt9,eos_ye) &
-      !$acc private(eos_state)
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-
-          ! Load input variables for the eos
-          eos_state%rho = rho(izb)
-          eos_state%T = t9(izb)*1e9
-          eos_state%y_e = ye(izb)
-          eos_state%abar = abar(izb)
-          eos_state%zbar = zbar(izb)
-
-          ! Call the eos
-          Call xnet_actual_eos(eos_input_rt,eos_state)
-
-          ! Convert units from ergs/g to MeV/nucleon and K to GK
-          etae(izb) = eos_state%eta
-          detaedt9(izb) = eos_state%detadt * 1e9
-          cv(izb) = eos_state%cv * amu * 1e9
-          eos_ye(izb) = ye(izb)
-        EndIf
-      EndDo
-    Else
-
-      !$acc parallel loop gang async(tid) &
-      !$acc present(mask,cv,etae,detaedt9,ye,eos_ye)
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          etae(izb) = 0.0
-          detaedt9(izb) = 0.0
-          cv(izb) = 0.0
-          eos_ye(izb) = ye(izb)
-        EndIf
-      EndDo
-    EndIf
     If ( idiag >= 3 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
