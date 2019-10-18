@@ -343,6 +343,7 @@ Contains
     Use xnet_controls, Only: iheat
     Use xnet_types, Only: dp
     Implicit None
+    !$acc routine seq
 
     ! Input variables
     Real(dp), Intent(in) :: eta
@@ -380,8 +381,7 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    Use fd, Only: fdm1h, fd1h, fdm3h
-    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive, tid
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -395,8 +395,6 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp) :: fermip, fermim
-    Real(dp) :: dfmdeta, dfpdeta
     Integer :: izb
     Logical, Pointer :: mask(:)
 
@@ -411,24 +409,10 @@ Contains
     !$acc copyin(mask)
 
     !$acc parallel loop gang async(tid) &
-    !$acc present(mask,eta,ratio,dratiodeta) &
-    !$acc private(fermim,fermip,dfmdeta,dfpdeta)
+    !$acc present(mask,eta,ratio,dratiodeta)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-
-        ! Calculate f_(-1/2) and f_(1/2)
-        fermim = fdm1h(eta(izb))
-        fermip = fd1h(eta(izb))
-
-        ! Evalutate the Salpeter ratio (extra factor of 1/2 from FD integral definition)
-        ratio(izb) = 0.5 * fermim/fermip
-        If ( iheat > 0 ) Then
-          dfmdeta = -0.5 * fdm3h(eta(izb))
-          dfpdeta = +0.5 * fermim
-          dratiodeta(izb) = ratio(izb) * (dfmdeta/fermim - dfpdeta/fermip)
-        Else
-          dratiodeta(izb) = 0.0
-        EndIf
+        Call salpeter_ratio1(eta(izb),ratio(izb),dratiodeta(izb))
       EndIf
     EndDo
 
