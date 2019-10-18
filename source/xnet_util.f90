@@ -303,6 +303,36 @@ Contains
     Return
   End Subroutine ye_norm
 
+  Subroutine plasma(t9,rho,ytot,ye,zbar,zibar,ztilde,zinter,lambda0,gammae)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculate various plasma quantities
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_constants, Only: avn, bok, e2, pi, third, thbim2, twm2bi
+    Use xnet_types, Only: dp
+    Implicit None
+    !$acc routine seq
+
+    ! Input variables
+    Real(dp), Intent(in) :: t9, rho, ytot, ye, zbar, zibar, ztilde
+
+    ! Output variables
+    Real(dp), Intent(out) :: zinter, lambda0, gammae
+
+    ! Local variables
+    Real(dp) :: ae, bkt, nb, ni, ne
+
+    bkt = bok*t9
+    nb = avn*rho
+    ni = nb*ytot
+    ne = nb*ye
+    lambda0 = sqrt(4.0*pi*ni) * (e2/bkt)**1.5 ! DGC, Eq. 3
+    ae = (3.0 / (4.0*pi*ne))**third ! electron-sphere radius
+    gammae = e2 / (ae*bkt) ! electron Coulomb coupling parameter
+    zinter = zibar / (ztilde**thbim2 * zbar**twm2bi) ! GDC, Table 4
+
+    Return
+  End Subroutine plasma
+
   Subroutine name_ordered(base_string,n,nmax)
     !-----------------------------------------------------------------------------------------------
     ! This routine appends the integer n (padded with "0"s up to the size of the integer nmax) to
