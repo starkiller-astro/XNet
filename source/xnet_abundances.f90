@@ -17,9 +17,14 @@ Module xnet_abundances
   Real(dp), Allocatable :: yt(:,:)     ! Abundances at trial time
   Real(dp), Allocatable :: ydot(:,:)   ! Abundance time derivatives at trial time
 
+  Interface y_moment
+    Module Procedure y_moment1
+    Module Procedure y_moment2
+  End Interface
+
 Contains
 
-  Subroutine y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
+  Subroutine y_moment1(y,ye,ytot,abar,zbar,z2bar,zibar)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates moments of the abundance distribution for the EOS.
     !-----------------------------------------------------------------------------------------------
@@ -49,7 +54,7 @@ Contains
     If ( idiag >= 3 ) Write(lun_diag,"(a4,6es23.15)") 'YMom',ytot,abar,zbar,z2bar,zibar,ye
 
     Return
-  End Subroutine y_moment
+  End Subroutine y_moment1
 
   Subroutine y_moment2(y,ye,ytot,abar,zbar,z2bar,zibar,mask_in)
     !-----------------------------------------------------------------------------------------------
