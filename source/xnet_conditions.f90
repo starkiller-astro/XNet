@@ -120,7 +120,6 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp) :: dt, rdt, dt9, drho
     Integer :: n, izb
     Logical, Pointer :: mask(:)
 
@@ -135,8 +134,7 @@ Contains
     !$acc copyin(mask)
 
     !$acc parallel loop gang async(tid) &
-    !$acc present(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh) &
-    !$acc private(rdt,dt,dt9,drho)
+    !$acc present(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Call t9rhofind1(kstep,tf(izb),nf(izb),t9f(izb),rhof(izb), &
