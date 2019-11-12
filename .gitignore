@@ -1,0 +1,40 @@
+# compiler output
+pgipar*
+*.mod
+*.o
+*.lst
+*.ptx
+*.dSYM
+
+# executables
+xnet
+xnet[dmp]
+xnet_nse
+net_setup
+
+# misc
+.DS_Store
+
+# compiled python
+*.pyc
+
+# HSL source
+MA4[18].f
+
+# network data binaries
+match_data
+match_read
+matr_shape
+net_diag
+netneutr
+nets[34]
+nuc_data
+sparse_ind
+
+# xnet output files
+ts*
+ev*
+net_diag*
+
+# core dumps
+core*
