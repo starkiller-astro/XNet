@@ -1,0 +1,30 @@
+#!/bin/bash -l
+#BSUB -P AST136
+#BSUB -W 02:00
+#BSUB -nnodes 1
+#BSUB -J output_xnet
+#BSUB -o output_xnet.%J.out
+#BSUB -e output_xnet.%J.err
+#BSUB -alloc_flags "gpumps smt1"
+
+cd $LSB_OUTDIR
+
+module load pgi cuda essl netlib-lapack
+#module load magma
+
+export NNODES=$(($(cat $LSB_DJOB_HOSTFILE | uniq | wc -l)-1))
+export NCORES_PER_NODE=42
+export NGPU_PER_NODE=6
+export NRS_PER_NODE=6
+export NMPI_PER_RS=7
+export NCORES_PER_RS=$(($NCORES_PER_NODE/$NRS_PER_NODE))
+export NCORES_PER_MPI=$(($NCORES_PER_RS/$NMPI_PER_RS))
+export NGPU_PER_RS=$(($NGPU_PER_NODE/$NRS_PER_NODE))
+export NRS=$(($NNODES*$NRS_PER_NODE))
+
+export OMP_NUM_THREADS=1
+#export OMP_NUM_THREADS=$((4*$NCORES_PER_MPI))
+#export OMP_SCHEDULE="dynamic"
+#export OMP_STACKSIZE="256M"
+
+stdbuf -o0 jsrun -n ${NRS} -r ${NRS_PER_NODE} -a ${NMPI_PER_RS} -g ${NGPU_PER_RS} -c ${NCORES_PER_RS} -b packed:${NCORES_PER_MPI} -d packed ./xnet

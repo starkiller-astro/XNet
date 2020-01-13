@@ -1,0 +1,48 @@
+## Problem Description
+2000 timesteps
+diagnostic level 1
+New parameters
+## Job Controls 
+1         Initial Zone
+672       # of Zones
+1         Include Weak Reactions (yes=1,no=0,only=-1)
+1         Include Screening (yes=1)
+0         Process Nuclear Data at Run Time (yes=1,no=0)
+## Neutrinos 
+0         Include Neutrino Reactions (yes=1, no=0)
+## NSE Initial Conditions 
+11.0      Temperature in GK to use NSE initial conditions instead of file
+## Integration Controls
+1         Choice of integration Scheme (1=Backward Euler, 2= Bader-Deufelhard)
+9999      Max. number of timesteps before quit
+5         Max. iterations per step
+1         Rebuild the jacobian every ijac iterations after the first
+0         Convergence Condition (Mass Cons.=0, (dY/Y small)=1)
+1.00E-01  Max. Abundance Change per timestep 
+1.00E-07  Smallest Abundance used in timestep calculation
+1.00E-06  Mass Conservation Limit
+1.00E-04  Convergence Criterion
+1.00E-30  Lower Abundance limit, smaller abundances = 0
+2.00E+00  Max. Factor to change dt in a timestep
+## Self-heating Controls
+1         Include self-heating (yes=1,no=0)
+1.00E-02  Max. Temperature Change per timestep
+1.00E-04  Temperature Convergence Criterion
+## Zone Batching Controls
+16        Blocking size for zone loop
+
+## Output Controls
+0         Diagnostic Output Level
+0         Per Timestep Output Level
+# ASCII output filename root, network will append zone number
+Results/ev_batch_torch47_
+# Binary output filename root, network will append zone number
+Results/ts_batch_torch47_
+# Species to output in ASCII output (format 14a5): 14
+    p  he4  c12  o16 ne20 mg24 si28  s32 ca40 ti44 cr48 fe52 co55 ni56
+## Input Controls
+# Nuclear Data Directory
+Data_torch47
+# Initial Abundance and Thermodynamic Trajectory Files
+Data_torch47/ab_batch/ab_
+th_batch/th_

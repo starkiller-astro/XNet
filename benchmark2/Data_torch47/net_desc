@@ -1,0 +1,22 @@
+Data_torch47                                                                    
+Number of Nuclear Species=   47
+Reaction Count for the 11 different types
+         1         1        22
+         2        23       153
+         3       154       156
+         4         1       133
+         5       134       337
+         6       338       345
+         7       346       349
+         8         1         3
+         9         4        11
+        10         1         4
+        11       157       156
+Necessary dimensions
+  nreac(1,2,3,4)=     156     349      11       4
+    nan(1,2,3,4)=     441    1234      36      18
+Reaction Count for non-REACLIB rates
+  nffn=      16   nnu=       0
+Matrix Sparseness parameters
+Border Widths      25   25
+Diagonal Widths     4    4(j<i,j>i)
