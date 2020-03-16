@@ -145,12 +145,6 @@ Contains
           delta_en(izb) = enm(izb) - en0(izb)
           edot(izb) = -(enm(izb)-enold(izb)) / tdel(izb)
 
-          ! If this zone reaches the stop time, flag it to remove from loop
-          If ( t(izb) >= tstop(izb) ) Then
-            mykstep(izb) = kstep
-            its(izb) = -1
-          EndIf
-
         ! If reduced timesteps fail to successfully integrate, warn and flag to remove from loop
         ElseIf ( its(izb) == 1 ) Then
           If ( idiag >= 0 ) Write(lun_diag,"(a,2(i5,a))") 'KStep ',kstep,' Zone ',izone,' Inter!!!'
@@ -160,6 +154,16 @@ Contains
 
       lzoutput = ( lzsolve .and. its <= 0 )
       Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
+
+      Do izb = zb_lo, zb_hi
+        izone = izb + szbatch - zb_lo
+
+          ! If this zone reaches the stop time, flag it to remove from loop
+          If ( t(izb) >= tstop(izb) ) Then
+            mykstep(izb) = kstep
+            its(izb) = -1
+          EndIf
+      EndDo
 
       ! Test if all zones have stopped
       lzsolve = ( its == 0 )
