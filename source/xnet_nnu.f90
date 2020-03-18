@@ -27,6 +27,9 @@ Module xnet_nnu
   Real(dp), Allocatable :: tmevnu(:,:,:)  ! Neutrino temperature [MeV]
   Real(dp), Allocatable :: fluxcms(:,:,:) ! Neutrino fluxes [cm^-2 s^-1]
 
+  Integer, Allocatable :: irl(:)          ! Reaclib Chapter 1 index of reaction
+  Integer, Allocatable :: nuspec(:)       ! The neutrino species involved in the reaction
+
   Real(dp), Dimension(:,:), Allocatable :: sigmanu ! dim(nnnu,ntnu)
 
 Contains
@@ -55,6 +58,44 @@ Contains
 
     Return
   End Subroutine read_nnu_data
+
+  Subroutine nnu_match(nnnu,nr,iwk,innu)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine finds placement in the REACLIB list of each neutrino reaction.
+    ! From this, the neutrino species involved is determined.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: idiag, lun_diag
+    Implicit None
+
+    ! Input variables
+    Integer, Intent(in) :: nnnu, nr, iwk(nr),innu(nr)
+
+    ! Local variables
+    Integer :: i, j
+
+    Allocate(irl(nnnu),nuspec(nnnu))
+
+    Do j = 1, nr
+      If(innu(j)>0) Then
+        irl(innu(j)) = j
+        If(iwk(j).eq.7) Then
+          nuspec(innu(j))=1
+        ElseIf(iwk(j).eq.8) Then
+          nuspec(innu(j))=2
+        Else
+          Write(6,*) 'nnu match error',j,innu(j),iwk(j)
+        EndIf
+      EndIf
+    EndDo
+
+    If(idiag==6) Then
+      Write(lun_diag,"(a)") 'i,IRL,Nuspec'
+      Write(lun_diag,"(3i6)") (i,irl(i),nuspec(i),i=1,nnnu)
+    EndIf
+
+    Return
+
+  End Subroutine nnu_match
 
   Subroutine nnu_rate(nnnu,time,rate,mask_in)
     !-----------------------------------------------------------------------------------------------
@@ -154,7 +195,13 @@ Contains
                 rdltnu = (ltnu-ltnu1) / (ltnu2-ltnu1)
                 rcsnu(k) = safe_exp( rdltnu*lsigmanu2 + (1.0-rdltnu)*lsigmanu1 )
               EndIf
-              rate(k,j,izb) = flux(j)*rcsnu(k)
+
+              ! Calculate rate only for neutrino specie involved in reaction
+              If (nuspec(k) == j) Then
+                rate(k,j,izb) = flux(j)*rcsnu(k)
+              Else
+                rate(k,j,izb) = 0.0
+              EndIf
             EndDo
           EndDo
         EndIf
@@ -167,9 +214,8 @@ Contains
           izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,i5)") 'NNU',izone
           Write(lun_diag,"(a,2i5)") 'Nuspec,Nnnu',nnuspec,nnnu
-          Write(lun_diag,"(a,4es23.15)") 'Flux',flux
-          Write(lun_diag,"(i5,5es13.5)") &
-            & (k, rcsnu(k), rate(k,:,izb), k=1,nnnu)
+          Write(lun_diag,"(a,4es23.15)") 'Nu Flux',flux
+          Write(lun_diag,"(i5,5es13.5)") (k, rcsnu(k), rate(k,:,izb), k=1,nnnu)
         EndIf
       EndDo
     EndIf

@@ -531,7 +531,7 @@ Contains
     Use xnet_constants, Only: five3rd
     Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve
     Use xnet_ffn, Only: ffnsum, ffnenu, ngrid, read_ffn_data
-    Use xnet_nnu, Only: read_nnu_data, ntnu, nnuspec, sigmanu
+    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -682,6 +682,9 @@ Contains
       iffn = 0
       innu = 0
     EndWhere
+
+    ! Calculate reverse pointers for non-REACLIB data
+    Call nnu_match(nnnu,nr1,iwk1,innu)
 
     ! Allocate and read extended reaction->nuclei arrays linking nuclei to the reactions which affect them
     nan = le(:,ny)
