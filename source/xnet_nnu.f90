@@ -66,7 +66,7 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: nzevolve, zb_lo, zb_hi, lzactive, ineutrino
+    Use xnet_controls, Only: nzevolve, zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -82,11 +82,11 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp) :: ltnu, flux
+    Real(dp) :: ltnu, flux(nnuspec)
     Real(dp) :: lsigmanu1, lsigmanu2
-    Real(dp) :: rcsnu
+    Real(dp) :: rcsnu(nnnu)
     Real(dp) :: rdt, rdltnu, ltnu1, ltnu2
-    Integer :: izb, it, i, j, k, n
+    Integer :: izb, it, i, j, k, n, izone
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -125,15 +125,15 @@ Contains
             ! Linear interpolation in log-space
             If ( n == 1 ) Then
               ltnu = log(tmevnu(1,j,izb))
-              flux = fluxcms(1,j,izb)
+              flux(j) = fluxcms(1,j,izb)
             ElseIf ( n > nh(izb) ) Then
               ltnu = log(tmevnu(nh(izb),j,izb))
-              flux = fluxcms(nh(izb),j,izb)
+              flux(j) = fluxcms(nh(izb),j,izb)
             Else
               rdt = (time(izb)-th(n-1,izb)) / (th(n,izb)-th(n-1,izb))
               ltnu = rdt*log(tmevnu(n,j,izb)) + (1.0-rdt)*log(tmevnu(n-1,j,izb))
-              flux = safe_exp( rdt*log(fluxcms(n,j,izb)) + (1.0-rdt)*log(fluxcms(n-1,j,izb)) )
-            EndIf
+              flux(j) = safe_exp( rdt*log(fluxcms(n,j,izb)) + (1.0-rdt)*log(fluxcms(n-1,j,izb)) )
+          EndIf
             Do i = 1, ntnu
               If ( ltnu <= ltnugrid(i) ) Exit
             EndDo
@@ -143,20 +143,33 @@ Contains
 
               ! Log interpolation
               If ( it == 1 ) Then
-                rcsnu = sigmanu(k,1)
+                rcsnu(k) = sigmanu(k,1)
               ElseIf ( it > ntnu ) Then
-                rcsnu = sigmanu(k,ntnu)
+                rcsnu(k) = sigmanu(k,ntnu)
               Else
                 ltnu1 = ltnugrid(it-1)
                 ltnu2 = ltnugrid(it)
                 lsigmanu1 = log(sigmanu(k,it-1))
                 lsigmanu2 = log(sigmanu(k,it))
                 rdltnu = (ltnu-ltnu1) / (ltnu2-ltnu1)
-                rcsnu = safe_exp( rdltnu*lsigmanu2 + (1.0-rdltnu)*lsigmanu1 )
+                rcsnu(k) = safe_exp( rdltnu*lsigmanu2 + (1.0-rdltnu)*lsigmanu1 )
               EndIf
-              rate(k,j,izb) = flux*rcsnu
+              rate(k,j,izb) = flux(j)*rcsnu(k)
             EndDo
           EndDo
+        EndIf
+      EndDo
+    EndIf
+
+    If ( idiag >= 6 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a,i5)") 'NNU',izone
+          Write(lun_diag,"(a,2i5)") 'Nuspec,Nnnu',nnuspec,nnnu
+          Write(lun_diag,"(a,4es23.15)") 'Flux',flux
+          Write(lun_diag,"(i5,5es13.5)") &
+            & (k, rcsnu(k), rate(k,:,izb), k=1,nnnu)
         EndIf
       EndDo
     EndIf
