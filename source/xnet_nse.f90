@@ -1229,7 +1229,7 @@ Contains
         hnse(j) = s0
       EndDo
 
-      If ( idiag >= 5 ) Write(lun_diag,'(a5,3i6,7es23.15)') &
+      If ( idiag >= 5 ) Write(lun_diag,'(a5,3i6,6es23.15)') &
         & ('HNSE',iz1,iz2(j-1),j,lambda12(j-1),h0(j-1),hw(j-1),hi(j-1),hs(j-1),hnse(j),j=2,izmax)
 
     EndIf
