@@ -105,8 +105,8 @@ def read_ts_file(file_name, debug=False, last = False, print_positions=False):
     
         record_length1   =np.fromfile(file_id,dtype='uint32',count=1)
         nflx             =np.fromfile(file_id,dtype='int32',count=1)[0]
+        flx_end      =np.zeros((nflx,2),dtype='int32')
         if nflx>0:
-            flx_end      =np.zeros((nflx,2),dtype='int32')
             flx_end[:,0] =np.fromfile(file_id,dtype='int32',count=nflx)
             flx_end[:,1] =np.fromfile(file_id,dtype='int32',count=nflx)
         record_length2   =np.fromfile(file_id,dtype='uint32',count=1)
@@ -115,24 +115,33 @@ def read_ts_file(file_name, debug=False, last = False, print_positions=False):
             print(file_id.tell())
     
     # Size data arrays
-    
-        time        = np.zeros(kstmx,dtype='float64')
-        temperature = np.zeros(kstmx,dtype='float64')
-        density     = np.zeros(kstmx,dtype='float64')
-        timestep    = np.zeros(kstmx,dtype='float64')
-        edot        = np.zeros(kstmx,dtype='float64')
-        xmf         = np.zeros((kstmx,ny),dtype='float64')
-        if nflx>0 :
-            flx     = np.zeros((kstmx,nflx))
+        if last:
+           kstmx_size = 1
+        else:
+           kstmx_size = kstmx
+        time        = np.zeros(kstmx_size,dtype='float64')
+        temperature = np.zeros(kstmx_size,dtype='float64')
+        density     = np.zeros(kstmx_size,dtype='float64')
+        timestep    = np.zeros(kstmx_size,dtype='float64')
+        edot        = np.zeros(kstmx_size,dtype='float64')
+        xmf         = np.zeros((kstmx_size,ny),dtype='float64')
+        flx     = np.zeros((kstmx_size,nflx))
         if print_positions:
             print("Position after sizing data arrays")
             print(file_id.tell())
 
     # Read data from each timestep
+        # size of data (Byte) for one timestep:
+        entry_size=nflx*8  + ny*8   +  3*4    + 5*8
+        #          float64   float64   int32   float64
         if last:
-            file_id.seek(-1252, 2)
+            file_id.seek(-entry_size, 2)
+            if print_positions:
+               print("Reading last entry starting at position")
+               print(file_id.tell())
 
         for k in range(kstmx-1):
+        
             record_length1 =np.fromfile(file_id,dtype='uint32',count=1)
     
     # If end of file, exit
