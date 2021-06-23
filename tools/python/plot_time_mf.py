@@ -28,6 +28,7 @@ def massfractionvtime(datafile, end, num_plots = 1, min_mf = .00000001, time_spa
     
     file_type = fft.find_file_type(datafile)
     
+    
     #Set up grid layout
     total_height = h_ratio[0] + h_ratio[1]
     gs = gridspec.GridSpec(total_height, 1)
@@ -78,12 +79,12 @@ def massfractionvtime(datafile, end, num_plots = 1, min_mf = .00000001, time_spa
         #Assign each species a random color.
         colors_array = []
         for counter in np.arange(1, num_species_total+1):
-	    item1 = np.random.rand(counter)[0]
-	    item2 = np.random.rand(counter)[0]
-	    item3 = np.random.rand(counter)[0]
-	    colors_array.append(item1)
-	    colors_array.append(item2)
-	    colors_array.append(item3)
+            item1 = np.random.rand(counter)[0]
+            item2 = np.random.rand(counter)[0]
+            item3 = np.random.rand(counter)[0]
+            colors_array.append(item1)
+            colors_array.append(item2)
+            colors_array.append(item3)
         colors_array = np.asarray(colors_array)
         colors_array = colors_array.reshape((num_species_total,3))
         print ("Colors assigned.")
@@ -105,16 +106,18 @@ def massfractionvtime(datafile, end, num_plots = 1, min_mf = .00000001, time_spa
                         ax1.set_position([box.x0, box.y0, box.width * 0.995, box.height])
                         ax1.legend(loc = 'center left', bbox_to_anchor = (1, 0.5), fontsize = 10)
                         zz_wanted.remove(zz[counter])
-
-                else:
-                    if np.amax(xmf[:, counter]) >= min_mf: #Plot all species over specified threshold.
-                        plt.plot(time, xmf[:, counter])
-
+                
+                elif nuc_names_wanted != 'None': #Listed nuclear names switch plotting mechanism.
+                        break
+                        
+                elif np.amax(xmf[:, counter]) >= min_mf: #Plot all species over specified threshold.
+                    plt.plot(time, xmf[:, counter])
+                        
             if nuc_names_wanted != 'None': #Sort through list to find mass fraction of named species, and plot.
                 for counter in np.arange(0, len(nuc_names_wanted)):
                     species_number = nuc_name.index(nuc_names_wanted[counter])
                     species_number = int(species_number)
-                    plt.plot(time, xmf[:, species_number], color = colors[species_number], label = nuc_name[species_number])
+                    plt.plot(time, xmf[:, species_number], color = colors_array[species_number], label = nuc_name[species_number])
                     box = ax1.get_position()
                     ax1.set_position([box.x0, box.y0, box.width * 0.995, box.height])
                     ax1.legend(loc = 'center left', bbox_to_anchor = (1, 0.5), fontsize = 10)

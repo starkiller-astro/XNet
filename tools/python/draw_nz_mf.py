@@ -40,7 +40,7 @@ def draw_nz_mf(datafile, k, num_species, colors = False):
         else:
             s = plt.scatter(nn, zz[counter], s = 50, marker = 's')
 
-    if colors = True:
+    if colors == True:
         cb = plt.colorbar(s) #Plot colorbar as legend.
         cb.set_label('Log of Mass Fraction')
 

@@ -21,7 +21,6 @@ def massfractionvtime2(datafile1, datafile2, end, num_plots = 1, min_mf = .00000
     import matplotlib.ticker as plticker
     import matplotlib.gridspec as gridspec
     import find_file_type as fft
-    import read_ev_file as ref
     import read_ts_file as rtf
     import random
         

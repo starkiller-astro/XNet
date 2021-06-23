@@ -16,7 +16,7 @@ def find_file_type(datafile):
             file_type = 'ts'
             break
         else: #if neither of these conditions are met, print a warning message and assume it's a ts file
-            print "In the future, please include 'ev' or 'ts' somewhere in the file name. We're just going to assume that you've given us a ts file now."
+            print("In the future, please include 'ev' or 'ts' somewhere in the file name. We're just going to assume that you've given us a ts file now.")
             file_type = 'ts'
 
     return file_type
