@@ -1,4 +1,4 @@
-def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_mf = .00000001, time_spacing = .2, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', nuc_names_wanted = 'None'):
+def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_mf = .00000001, time_spacing = 10, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', nuc_names_wanted = 'None'):
     
     '''
         Inputs: datafile = ts file
@@ -92,7 +92,6 @@ def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_
     plt.ylim(min_mf, 1.5)
     plt.ylabel("Mass Fraction")
     
-    plt.xscale('log')
     plt.xlim(time[0], time[end])
     plt.xlabel ("Time (s)")
     
@@ -109,11 +108,10 @@ def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_
     #Plot temperature vs time, format axis.
     temp_line = plt.plot(time1, temperature1, color = 'r', label = "Temperature")
     plt.yscale('linear')
-    plt.ylim(0, 10)
+    plt.ylim(0, 1)
     plt.ylabel("Temperature (GK)")
     
     #Format x axis.
-    plt.xscale('log')
     plt.xlim(time[0], time[end])
     plt.xlabel("Time (s)")
     
@@ -131,7 +129,6 @@ def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_
     ax3.yaxis.set_major_locator(loc)
     
     #Format x axis (repeated so that it does not go to default settings)
-    plt.xscale('log')
     plt.xlim(time[0], time[end])
     plt.xlabel("Time (s)")
     

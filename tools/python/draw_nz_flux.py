@@ -1,4 +1,4 @@
-def draw_nz_mf(datafile, k, num_species, x_limit='None', colors):
+def draw_nz_mf(datafile, k, num_species, colors, x_limit='None'):
 
     '''
         1. Scatter plot color coded by mass fractions at a specified timestep.
@@ -18,7 +18,6 @@ def draw_nz_mf(datafile, k, num_species, x_limit='None', colors):
     import matplotlib.cm as cm
     import matplotlib.ticker as plticker
     import matplotlib.colors
-    import draw_nz_background as back
 
 #-------------------------------------------------------------------------------
 #   MASS FRACTION SCATTERPLOT

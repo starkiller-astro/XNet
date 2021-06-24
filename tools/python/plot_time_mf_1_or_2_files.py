@@ -1,4 +1,4 @@
-def massfractionvtime(datafile, end, datafile2 = 'None', min_mf = .00000001, time_spacing = .2, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', aa_wanted2 = 'None', nuc_names_wanted = 'None', nuc_names_wanted2 = 'None'):
+def massfractionvtime(datafile, end, datafile2 = 'None', min_mf = .00000001, time_spacing = 10, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', aa_wanted2 = 'None', nuc_names_wanted = 'None', nuc_names_wanted2 = 'None'):
     
     '''
         Inputs: datafile = ts file
