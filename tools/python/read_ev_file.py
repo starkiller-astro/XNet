@@ -16,7 +16,16 @@ def read_ev_file(datafile):
     import numpy as np
     
     #Read the data file
-    data = np.genfromtxt(datafile, names=True)
+    col_headers = np.genfromtxt(datafile, max_rows = 1, dtype = str)
+    
+    if len(col_headers) != 22:
+        col_headers[20] = 'I'
+        col_headers = np.append(col_headers, 't')
+        col_headers_list = col_headers.tolist()
+        data = np.genfromtxt(datafile, skip_header = 1, dtype = float, names = col_headers_list)
+    
+    else:
+        data = np.genfromtxt(datafile, names=True)
     
     #Sort columns of data by name. Store in a list.
     columns = []

@@ -1,4 +1,4 @@
-def t9rhovtime(datafile, end, num_species = 14, time_spacing = .2):
+def t9rhovtime(datafile, end, num_species = 14, time_spacing = 10):
     
     '''
         Inputs: datafile = ev or ts file
@@ -57,7 +57,7 @@ def t9rhovtime(datafile, end, num_species = 14, time_spacing = .2):
     
     #Format x axis.
     plt.xscale('linear')
-    print type(end)
+    print(type(end))
     plt.xlim(.2, time[end])
     plt.xlabel("Time (s)")
     

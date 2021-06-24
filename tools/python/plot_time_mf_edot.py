@@ -1,4 +1,4 @@
-def massfractionedot(datafile1, end, num_plots = 2, num_species = 14, min_mf = .00000001, time_spacing = .2, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', nuc_names_wanted = 'None'):
+def massfractionedot(datafile1, end, num_plots = 2, num_species = 14, min_mf = .00000001, time_spacing = 10, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', nuc_names_wanted = 'None'):
     
     '''
         Inputs: datafile1 = ts file
@@ -92,7 +92,6 @@ def massfractionedot(datafile1, end, num_plots = 2, num_species = 14, min_mf = .
     plt.ylim(min_mf, 1.5)
     plt.ylabel("Mass Fraction")
     
-    plt.xscale('log')
     plt.xlim(time[0], time[end])
     plt.xlabel ("Time (s)")
     
@@ -109,11 +108,10 @@ def massfractionedot(datafile1, end, num_plots = 2, num_species = 14, min_mf = .
     #Plot edot vs time, format axis.
     edot_line = plt.plot(time1, edot1, color = 'r', label = "dE/dt")
     plt.yscale('log')
-    plt.ylim(10E10, 10E25)
+    plt.ylim(10E2, 10E15)
     plt.ylabel("Energy Production (erg/g/s)")
     
     #Format x axis.
-    plt.xscale('log')
     plt.xlim(time[0], time[end])
     plt.xlabel("Time (s)")
     

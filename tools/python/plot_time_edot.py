@@ -1,4 +1,4 @@
-def edotvtime(datafile, end, num_species = 14, time_spacing = .2):
+def edotvtime(datafile, end, num_species = 14, time_spacing = 10):
     
     '''
         Inputs: datafile = ev or ts file
@@ -31,16 +31,15 @@ def edotvtime(datafile, end, num_species = 14, time_spacing = .2):
         zz, aa, xmf, time, temperature, density, timestep, edot, flx_end, flx = rtf.read_ts_file(datafile)
 
     #Plot edot vs time, and add a legend.
-        ax = plt.subplot(1, 1, 1)
-        plt.plot(time, edot, color = 'r', label = "dE/dt")
-        plt.gca().legend(loc='upper right', fontsize = 10)
+    ax = plt.subplot(1, 1, 1)
+    plt.plot(time, edot, color = 'r', label = "dE/dt")
+    plt.gca().legend(loc='upper right', fontsize = 10)
  
 #Format and label axes.
     plt.yscale('log')
-    plt.ylim(10E10, 10E25)
+    plt.ylim(10E2, 10E15)
     plt.ylabel("Energy Production (erg/g/s)")
 
-    plt.xscale('log')
     plt.xlim(time[0], time[end])
     plt.xlabel("Time (s)")
 

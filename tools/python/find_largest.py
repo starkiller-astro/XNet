@@ -56,7 +56,7 @@ def absolute_largest(datafile1, datafile2, print_values = True):
     #Either print or return results.
     if print_values == True:
         for counter in np.arange(0, n):
-            print "%s      %s      %s" % (counter + 1, names[counter], largest[counter], names2[counter], largest2[counter])
+            print("%s      %s      %s" % (counter + 1, names[counter], largest[counter], names2[counter], largest2[counter]))
 
     else:
         return names, largest, names2, largest2
