@@ -1,4 +1,4 @@
-def write_final_abundances(directory_files, file_name = "test.txt", appending = False, print_positions=False, last=False):
+def write_final_abundances(directory_files, file_name = "test.txt", appending = False, print_positions=False, last=False, latex_nuc_name=False):
     
     '''
         Inputs: directory_files: the full String pathway to the desired files, suggested ending is /ts_final_*
@@ -36,7 +36,7 @@ def write_final_abundances(directory_files, file_name = "test.txt", appending = 
 
 	 #Read data file, use variable names.
         zz, aa, xmf, time, temperature, density, timestep, edot, flx_end, flx = rtf.read_ts_file(datafile,last=last,print_positions=print_positions)
-        nuc_name = rtf.build_isotope_symbol(zz, aa)
+        nuc_name = rtf.build_isotope_symbol(zz, aa, latex=latex_nuc_name)
 
         #Set certain parameters based on the size of the data.
         num_species_total = np.shape(xmf)[1]

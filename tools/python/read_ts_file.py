@@ -211,7 +211,7 @@ def build_element_symbol():
 
     return element
     
-def build_isotope_symbol(zz,aa):
+def build_isotope_symbol(zz,aa,latex=True):
     """
     Builds isotope symbols, with superscripts
     Input < zz, proton number for each isotope in the network
@@ -225,7 +225,10 @@ def build_isotope_symbol(zz,aa):
     n_iso=np.size(zint)
     nuc_name=[None] * n_iso
     for k in range(n_iso):
-        nuc_name[k] = "$^{%u}$" % aint[k]
-        nuc_name[k] = nuc_name[k] + element[zint[k]]
+        if latex:
+           nuc_name[k] = "$^{%u}$" % aint[k]
+           nuc_name[k] = nuc_name[k] + element[zint[k]]
+        else:  
+           nuc_name[k] = str(element[zint[k]]).lower().strip()+str(aint[k])
 
     return nuc_name
