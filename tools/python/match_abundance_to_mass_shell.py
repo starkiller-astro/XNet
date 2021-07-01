@@ -1,4 +1,4 @@
-def write_final_abundances(directory_files, file_name = "test.txt", appending = False, print_positions=False, last=False, latex_nuc_name=False):
+def write_final_abundances_mass_shell(directory_files, propertiesfile, file_name = "test.txt", appending = False, print_positions=False, last=False):
     
     '''
         Inputs: directory_files: the full String pathway to the desired files, suggested ending is /ts_final_*
@@ -7,12 +7,11 @@ def write_final_abundances(directory_files, file_name = "test.txt", appending = 
                 print_positions: boolean where True prints file positions to screen (mostly for debug), defaults to False
                 last : boolean where True skips to the end of the file to just read the final abundances, defaults to False
                 print_positions and last are passed to read_ts_file
-        Output: a new file, "file_name", or an expanded file, with final abundance data for each species
+        Output: a new file, "file_name", or an expanded file, with final abundance data for each species and mass shell data from particle properties file
         '''
     import numpy as np
     import read_ts_file as rtf
     import glob as g
-    import find_file_type_temp as fft
     
     #Open a new file, or open a previous one to add to.
     if appending == False:
@@ -29,16 +28,39 @@ def write_final_abundances(directory_files, file_name = "test.txt", appending = 
     files = g.glob(directory_files)
     number_of_files = len(files)
     print(number_of_files)
+    
+    #Read in Properties File
+    col_headers = ["Shell_Number", "Radius(cm)", "Mass_coord(M_sun)", "dm(g)"]
+    properties = np.genfromtxt(propertiesfile, names = col_headers)
 
     non_ejecta = []
     for datafile in files:
 
-       	print(datafile)
-        filetype = fft.find_file_type(datafile)
-        print(filetype)
+        #Find file types of each file. Note that these if statements are used instead of find_file_type because file names in the NERSC directory
+        #do not work well with the find_file_type tool, such as names having "ev" or "ts_307_png", and because the output message is unneccessary
+        for item in np.arange(0, len(datafile)): #count through letters in datafile
+            if datafile[item] == 't' and datafile[item + 1] == 'x' and datafile[item + 2] == 't': 
+                file_type = 'other'
+                break
         
-        if filetype == 'ts': 
+            elif datafile[item] == 't' and datafile[item + 1] == 's' and datafile[item + 2] == '_': #if 't' and 's' and '_' appear consecutively, it's a ts file
+                if datafile[-1] == 'g' and datafile[-2] == 'n':
+                    file_type = 'other'
+                else:
+                    file_type = 'ts'
+                    break
+        
+            else: 
+                file_type = 'other'
+        
+        if file_type == 'ts':
+            print(datafile)
+            #Add mass shell data 
             print ("%s" % counter)
+            mass_shell = datafile[-3] + datafile[-2] + datafile[-1]
+            print(mass_shell)
+            mass_shell_int = int(mass_shell)
+            mass_shell_properties = properties[mass_shell_int - 2]
 
 	    #Read data file, use variable names.
             zz, aa, xmf, time, temperature, density, timestep, edot, flx_end, flx = rtf.read_ts_file(datafile,last=last,print_positions=print_positions)
@@ -50,11 +72,11 @@ def write_final_abundances(directory_files, file_name = "test.txt", appending = 
             timesteps_total = np.shape(xmf)[0]
             print(timesteps_total)
             
-            #Write header with species names only as a first line.
+            #Write header with column headers and species names as a first line.
             if counter == 1:
                 # set size of padding based on first filename
-                padding = len(datafile)+5
-                line = " ".ljust(padding)
+                padding = len(datafile) + 5
+                line = "Shell_Number" + "   " + "Radius(cm)" + "   " + "Mass_coord(M_sun)" + "   " + "dm(g)" + "   " + "filename" + "   "
                 for item in nuc_name:
                     line = line + item.ljust(14)
                 f.write( line + "\n" )
@@ -72,10 +94,15 @@ def write_final_abundances(directory_files, file_name = "test.txt", appending = 
                     xmf_list.append(foo)
 
                 #Write datafile name, each final abundance from xmf_list, and go to a new line at the end of the file.
+                
+                for item in mass_shell_properties:
+                    line = str("%.5e" % item).ljust(14)
+                    f.writelines(line)
+                padding = len(datafile) + 5
                 line = datafile.ljust(padding)
                 for item in xmf_list:
                     line = line + str("%.5e" % item).ljust(14)
-                f.writelines (line+"\n")
+                f.writelines(line +"\n")
 
                 #Makes the header print only once.
                 counter += 1
@@ -85,3 +112,5 @@ def write_final_abundances(directory_files, file_name = "test.txt", appending = 
             
     #Tie up loose ends and close the file when finished.
     f.close()
+    
+    

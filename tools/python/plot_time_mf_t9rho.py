@@ -108,7 +108,7 @@ def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_
     #Plot temperature vs time, format axis.
     temp_line = plt.plot(time1, temperature1, color = 'r', label = "Temperature")
     plt.yscale('linear')
-    plt.ylim(0, 1)
+    plt.ylim(0, 5)
     plt.ylabel("Temperature (GK)")
     
     #Format x axis.
