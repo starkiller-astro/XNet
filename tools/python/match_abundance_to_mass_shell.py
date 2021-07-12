@@ -55,22 +55,19 @@ def write_final_abundances_mass_shell(directory_files, propertiesfile, file_name
         
         if file_type == 'ts':
             print(datafile)
-            #Add mass shell data 
+            #Add mass shell data from Properties File 
             print ("%s" % counter)
             mass_shell = datafile[-3] + datafile[-2] + datafile[-1]
-            print(mass_shell)
             mass_shell_int = int(mass_shell)
             mass_shell_properties = properties[mass_shell_int - 2]
 
 	    #Read data file, use variable names.
             zz, aa, xmf, time, temperature, density, timestep, edot, flx_end, flx = rtf.read_ts_file(datafile,last=last,print_positions=print_positions)
-            #nuc_name = rtf.build_isotope_symbol(zz, aa, latex=latex_nuc_name)
             nuc_name = rtf.build_isotope_symbol(zz, aa)
 
             #Set certain parameters based on the size of the data.
             num_species_total = np.shape(xmf)[1]
             timesteps_total = np.shape(xmf)[0]
-            print(timesteps_total)
             
             #Write header with column headers and species names as a first line.
             if counter == 1:
@@ -78,7 +75,7 @@ def write_final_abundances_mass_shell(directory_files, propertiesfile, file_name
                 padding = len(datafile) + 5
                 line = "Shell_Number" + "   " + "Radius(cm)" + "   " + "Mass_coord(M_sun)" + "   " + "dm(g)" + "   " + "filename" + "   "
                 for item in nuc_name:
-                    line = line + item.ljust(14)
+                    line = line + item + "   "
                 f.write( line + "\n" )
                 counter +=1
 
@@ -93,13 +90,13 @@ def write_final_abundances_mass_shell(directory_files, propertiesfile, file_name
                     foo = xmf[-1][counter2]
                     xmf_list.append(foo)
 
-                #Write datafile name, each final abundance from xmf_list, and go to a new line at the end of the file.
-                
+                #Write mass shell properties, datafile name, each final abundance from xmf_list, and go to a new line at the end of the file.
                 for item in mass_shell_properties:
                     line = str("%.5e" % item).ljust(14)
                     f.writelines(line)
-                padding = len(datafile) + 5
+                padding = len(datafile) + 3
                 line = datafile.ljust(padding)
+                
                 for item in xmf_list:
                     line = line + str("%.5e" % item).ljust(14)
                 f.writelines(line +"\n")

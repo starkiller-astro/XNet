@@ -1,4 +1,4 @@
-def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_mf = .00000001, time_spacing = 10, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', nuc_names_wanted = 'None'):
+def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, figurename = 'figure.png', min_mf = .00000001, time_spacing = 10, h_ratio = [3, 1], zz_wanted = 'None', zz_wanted2 = 'None', aa_wanted = 'None', nuc_names_wanted = 'None'):
     
     '''
         Inputs: datafile = ts file
@@ -151,4 +151,5 @@ def massfractiont9rhovtime(datafile1, end, num_plots = 2, num_species = 14, min_
     ax2.legend(lines, labs, fontsize = 10, loc= 'upper right')
 
     #Show graph
-    plt.show()
+    #plt.show()
+    plt.savefig(figurename, bbox_inches = "tight")
