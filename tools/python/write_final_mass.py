@@ -18,6 +18,7 @@ def write_final_mass(final_mf_file, final_mass_file, nuc_names_wanted = "None"):
         
         #Create a new file to write final species masses in
         file = open(final_mass_file, 'w')
+        file.writelines('species:   mass(g)   mass(solar_mass)\n')
         
         #If all final species masses are wanted, loop through every column of data:
         if nuc_names_wanted == "None":
@@ -26,8 +27,11 @@ def write_final_mass(final_mf_file, final_mass_file, nuc_names_wanted = "None"):
                 data["tempcol"] = data[column]*data["dm(g)"]
                 mass_sum = data["tempcol"].sum()
                 
+                #Divide by mass of sun
+                mass_sum_solar = mass_sum/1.98847e33
+                
                 #Write final mass to file, along with species name
-                file.writelines(column + ":    " + str(mass_sum) + '\n')
+                file.writelines(column + ":    " + str(mass_sum) + "    " + str(mass_sum_solar) + '\n')
         
         #Loop through only desired nuclear species
         else: 
@@ -40,9 +44,13 @@ def write_final_mass(final_mf_file, final_mass_file, nuc_names_wanted = "None"):
                 data["tempcol"] = data[item]*data["dm(g)"]
                 mass_sum = data["tempcol"].sum()
                 
+                #Divide by mass of sun
+                mass_sum_solar = mass_sum/1.98847e33                
+                
                 #Write final mass to file, along with species name
-                file.writelines(item + ":   " + str(mass_sum) + '\n')
+                file.writelines(item + "   " + str(mass_sum) + "   " + str(mass_sum_solar) + '\n')
         
         #Close File
         file.close()
+        print('Mass file written')
         

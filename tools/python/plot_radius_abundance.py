@@ -1,4 +1,4 @@
-def plot_radius_abundance(filename, nuc_names_wanted = "None", figurename = "figure.png", nuc_names_add = 'None', endab_file = 'None', xaxis = "mass_coordinate", xmin_max = [0, 10], ymin_max = [10e-8, 10e-3], yscalelog = True):
+def plot_radius_abundance(filename = 'None', nuc_names_wanted = "None", figurename = "None", nuc_names_add = 'None', endab_file = 'None', xaxis = "mass_coordinate", xmin_max = [0, 10], ymin_max = [10e-8, 10e-3], yscalelog = True):
         """
             Inputs: filename = name of file with final mass abundances and properties of mass shells, formatted as a list of strings
                     nuc_names_wanted = nuclear species to be plotted, entered as a list (formatted in Latex, ex: "$^{4}$He")
@@ -28,15 +28,14 @@ def plot_radius_abundance(filename, nuc_names_wanted = "None", figurename = "fig
         #Choose data to be plotted on x axis
         if xaxis == "radius":
             xdata = "Radius(cm)"
-        
         else:
             xdata = "Mass_coord(M_sun)"
-        
         print("xdata assigned")
-        
         
         #Loop through files in filename list to plot data
         for file in filename:
+            if filename == 'None':
+                break
             #Read in Data
             data = pd.read_csv(file, sep = '   ', skipfooter = 1, engine = 'python')
             
@@ -69,6 +68,9 @@ def plot_radius_abundance(filename, nuc_names_wanted = "None", figurename = "fig
                     #Add data from other species to species to be plotted
                     total_for_plot = ordered_data[counter]
                     for counter2 in nuc_names_add[counting_num]:
+                        if counter2 not in ordered_data.columns:
+                            counter2 = " " + counter2
+                        
                         total_for_plot += ordered_data[counter2]
                     
                     ordered_data[counter] = total_for_plot
@@ -84,6 +86,7 @@ def plot_radius_abundance(filename, nuc_names_wanted = "None", figurename = "fig
                                       grid = True)
                     print(file + " plotted")
                     counting_num += 1
+        
         #Plot Files that were created without using match_abundance_to_mass_shell
         for item in endab_file:
             #Check for endab files
@@ -91,7 +94,12 @@ def plot_radius_abundance(filename, nuc_names_wanted = "None", figurename = "fig
                 break
                 
             #Read in Data
-            ordered_data = pd.read_csv(item, engine = 'python', skipfooter = 1, sep = '\s+')
+            data = pd.read_csv(item, engine = 'python', skipfooter = 1, sep = '\s+')
+            
+            #Account for offset of data created by lack of first shell data in old files
+            row_zero = [0]*len(data.columns)
+            data.loc[-1] = row_zero
+            ordered_data = data.sort_values(by = "interior_mass")
             print(item + " file read")
             
             count_num = 0
@@ -119,7 +127,7 @@ def plot_radius_abundance(filename, nuc_names_wanted = "None", figurename = "fig
                                       ylim = ymin_max,
                                       grid = True,
                                       title = "Species Mass Fractions")
-                    print(file + " plotted")
+                    print(item + " plotted")
                     count_num += 1
                 
                 #If plot includes decaying species:
@@ -160,19 +168,25 @@ def plot_radius_abundance(filename, nuc_names_wanted = "None", figurename = "fig
         ylabel = "Species Mass Fraction"
         ax1.set_position([box.x0, box.y0, box.width * 0.995, box.height])
         
+        
         #Create Legend
         label_list = []
         for file in filename:
             for counter3 in nuc_names_wanted:
-            
                 label_list.append(file + ": " + counter3)
         
         for file in endab_file:
             for counter3 in nuc_names_wanted:
                 label_list.append(file + ": " + counter3)
         
+        #Plot Legend
         ax1.legend(loc = 'center left', bbox_to_anchor = (1, 0.5), fontsize = 10, labels = label_list)
         
-        
-        plt.savefig(figurename, bbox_inches = "tight")
+        #Save or show figure
+        if figurename == 'None':
+            plt.show()
+            print("Plot shown.")
+        else:
+            plt.savefig(figurename, bbox_inches = "tight")
+            print("Plot saved.")
             
