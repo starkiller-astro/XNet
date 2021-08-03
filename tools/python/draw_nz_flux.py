@@ -1,4 +1,4 @@
-def draw_nz_mf(datafile, k, num_species, colors, flux, x_limit=40.0, y_limit = 40.0, z_max = 30, figurename = 'nz_flux_test.pdf'):
+def draw_nz_mf(datafile, k, num_species, colors, flux, x_limit=40.0, y_limit = 40.0, z_max = 30, figurename = 'None'):
 
     '''
         1. Scatter plot color coded by mass fractions at a specified timestep.
@@ -34,19 +34,31 @@ def draw_nz_mf(datafile, k, num_species, colors, flux, x_limit=40.0, y_limit = 4
     zz, aa, xmf, time, temperature, density, timestep, edot, flx_end, flx = rtf.read_ts_file(datafile)
     print('Data read')
     
+    #Plot all species if 'all' is chosen
     num_species_total = numpy.shape(xmf)[1]
     if num_species == 'all':
         num_species = num_species_total
     
-    #Plot proton number vs neutron number and color code for mass fraction (log).
+    #Create lists of variable to be plotted
+    zz_plot = []
+    nn_plot = []
+    xmf_plot = []
+    
+    #Fill in lists with data from file
     for counter in numpy.arange(0, num_species):
-        nn = aa[counter] - zz[counter]
-        nn = int(round(nn))
-        if colors == True:
-            s = plt.scatter(nn, zz[counter], s = 25, c = xmf[k, counter], norm = matplotlib.colors.LogNorm(vmin=xmf[k].min(), vmax=xmf[k].max()), cmap = 'YlOrBr', marker = 's')
+        #If mass fraction is 0, skip data point, as colors.LogNorm requires values > 0
+        if xmf[k, counter] > 0:
+            zz_plot.append(zz[counter])
+            nn_plot.append(aa[counter] - zz[counter])
+            xmf_plot.append(xmf[k, counter])
             
-        else:
-            s = plt.scatter(nn, zz[counter], s = 5, c = 'w')
+    
+    #Plot proton number vs neutron number and color code for mass fraction (log).
+    if colors == True:
+        s = plt.scatter(nn_plot, zz_plot, c = xmf_plot, norm = matplotlib.colors.LogNorm(vmin = min(xmf_plot), vmax = max(xmf_plot)), cmap = 'YlOrBr', marker = 's')
+            
+    else:
+        s = plt.scatter(nn_plot, zz_plot, s = 5, c = 'w')
     print('Mass fraction plotted')
     
     #Make nn back to an array
