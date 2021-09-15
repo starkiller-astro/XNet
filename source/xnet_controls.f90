@@ -18,7 +18,7 @@ Module xnet_controls
   ! Job Controls
   Integer              :: szone      ! starting zone
   Integer              :: nzone      ! Number of zones
-  Integer              :: zone_id(4) ! Current zone index quadruplet (ix,iy,iz,block)
+  Integer, Allocatable :: zone_id(:,:) ! Current zone index map (ix,block)
   Integer, Allocatable :: iweak(:)   ! If >0, strong and weak reactions are used
                                      ! If =0, weak reactions are ignored
                                      ! If <0, only weak reactions are used
@@ -26,7 +26,6 @@ Module xnet_controls
   Integer              :: iscrn      ! If =0, screening is ignored
   Integer              :: iprocess   ! If =0, assume network has been pre-processed.
                                      ! If >0, then run network pre-processing (slows calculation)
-  !$omp threadprivate(zone_id)
 
   ! Zone Batching Controls
   Integer  :: nzevolve                ! Number of zones being simultaneously evolved
@@ -83,11 +82,16 @@ Module xnet_controls
   Character(80), Allocatable :: inab_file(:)        ! Initial abundance files for each zone
   Character(80), Allocatable :: thermo_file(:)      ! Thermo trajectory files for each zone
   Integer       :: lun_th, lun_ab                   ! Logical units for input files
+  Integer, Allocatable :: iaux(:)                   ! Logical units for use of aux nucleus 
   !$omp threadprivate(lun_th,lun_ab)
 
   ! Job indentifiers
   Integer :: myid, nproc, mythread, nthread ! task & thread ids and counts
   !$omp threadprivate(mythread)
+
+  ! Sweep identifier
+  Character(LEN=1) :: sweep ! Current hydro sweep: x, y, z
+  !$omp threadprivate(sweep)
 
 Contains
 
@@ -197,6 +201,7 @@ Contains
     EndIf
     Call parallel_bcast(nzbatchmx)
     nzevolve = nzbatchmx * nthread
+    Allocate (zone_id(3,nzevolve))
     Allocate (lzactive(nzevolve))
     Allocate (iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
     Allocate (kmon(2,nzevolve),ktot(5,nzevolve))

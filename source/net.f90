@@ -20,7 +20,7 @@ Program net
   Use xnet_parallel, Only: parallel_finalize, parallel_initialize, parallel_myproc, parallel_nprocs, &
     & parallel_IOProcessor
   Use reaction_data, Only: read_reaction_data
-  Use xnet_abundances, Only: ystart, yo, y, yt, ydot
+  Use xnet_abundances, Only: ystart, yo, y, yt, ydot, xext, zext, aext
   Use xnet_conditions, Only: t, tt, to, tdel, tdel_next, tdel_old, t9t, rhot, yet, t9, rho, ye, &
     & t9o, rhoo, yeo, t9dot, cv, etae, detaedt9, nt, ntt, nto, ints, intso, nstart, tstart, tstop, &
     & tdelstart, t9start, rhostart, yestart, nh, th, t9h, rhoh, yeh, nhmx, t9rhofind
@@ -28,7 +28,7 @@ Program net
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
     & lun_diag, lun_ev, lun_stdout, lun_ts, mythread, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
-    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls
+    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, iaux
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
   Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
@@ -145,6 +145,7 @@ Program net
 
   ! Set sizes of abundance arrays
   Allocate (y(ny,nzevolve),yo(ny,nzevolve),yt(ny,nzevolve),ydot(ny,nzevolve),ystart(ny,nzevolve))
+  Allocate (xext(nzevolve),aext(nzevolve),zext(nzevolve),iaux(nzevolve))
 
   ! Allocate conditions arrays
   Allocate (t(nzevolve),tt(nzevolve),to(nzevolve), &
@@ -188,8 +189,6 @@ Program net
     start_timer = xnet_wtime()
     timer_setup = timer_setup - start_timer
 
-    ! Load the zone ID quadruplet
-    zone_id(1) = ibatch ; zone_id(2) = 1 ; zone_id(3) = 1 ; zone_id(4) = 1
 
     ! Determine which zones are in this batch
     szbatch = szone + (ibatch-1)*nzbatchmx
@@ -222,6 +221,9 @@ Program net
       rho(izb)  = rhostart(izb)
       ye(izb)   = yestart(izb)
       y(:,izb)  = ystart(:,izb)
+      zone_id(1,izb)=izb
+      zone_id(2,izb)=1
+      zone_id(3,izb)=1
     EndDo
 
     ! Open the evolution file

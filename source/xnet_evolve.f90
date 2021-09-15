@@ -21,15 +21,15 @@ Contains
     ! Integration is performed by a choice of methods controlled by the isolv flag.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname, benuc
-    Use xnet_abundances, Only: yo, y, yt, ydot
+    Use xnet_abundances, Only: yo, y, yt, ydot, xext, aext, zext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
-      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9rhofind
+      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9rhofind, t9start, rhostart, yestart
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
-      & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi
+      & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id
     Use xnet_integrate, Only: timestep
     Use xnet_integrate_be, Only: solve_be
     Use xnet_integrate_bdf, Only: solve_bdf
-    Use xnet_output, Only: final_output, ts_output
+    Use xnet_output, Only: final_output, ts_output, write_xnet_th, write_xnet_inab
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_xnet
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -40,9 +40,13 @@ Contains
     Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
     Real(dp) :: enold(zb_lo:zb_hi), en0(zb_lo:zb_hi)
     Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
+    Real(dp) :: yout(ny+1)
     Integer :: k, izb, izone, kstep, nstep_est, idiag0
     Integer :: its(zb_lo:zb_hi), mykstep(zb_lo:zb_hi)
+    Integer :: ierr
     Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
+    Character(5) :: nname_out(ny+1)
+    Character(128) :: ab_fname, th_fname
 
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
@@ -51,7 +55,7 @@ Contains
     kstep = 0
     Do izb = zb_lo, zb_hi
       kmon(:,izb) = 0
-      ktot(:,izb) = 0
+!      ktot(:,izb) = 0
     EndDo
 
     ! Set reaction controls not read in from control
@@ -61,7 +65,7 @@ Contains
     Call t9rhofind(0,t,nt,t9,rho)
     Do izb = zb_lo, zb_hi
       tdel_old(izb) = tdel(izb)
-      tdel_next(izb) = tdel(izb)
+  !    tdel_next(izb) = tdel(izb)
       nto(izb) = nt(izb)
       ntt(izb) = nt(izb)
       to(izb) = t(izb)
@@ -181,10 +185,21 @@ Contains
           nstep_est = int( min((tstop(izb)-t(izb))/tdel(izb), real(huge(nstep_est),dp) ) )
           Write(lun_stdout,"(a,i12,a)") &
             & 'Approximately ',nstep_est,' more steps needed'
+
+          nname_out(1:ny) = nname(1:ny)
+          nname_out(ny+1) = '  Aux'
+          yout(1:ny) = yo(:,izb) 
+          yout(ny+1) = xext(izb)
+          Write(ab_fname,"(3(a,i3.3))") 'ab_fail_',zone_id(1,izb),'_',zone_id(2,izb),'_',zone_id(3,izb)
+          Call write_xnet_inab(ab_fname,ab_fname,nname_out,yout,ierr)
+          Write(th_fname,"(3(a,i3.3))") 'th_fail_',zone_id(1,izb),'_',zone_id(2,izb),'_',zone_id(3,izb)
+          Call write_xnet_th(th_fname,th_fname,tstart(izb),tstop(izb),t9start(izb),rhostart(izb),yestart(izb),ierr)
+
           Call xnet_terminate('[XNet] Evolution failed to converge')
         EndIf
       EndIf
     EndDo
+    kstep = max(1, maxval(mykstep))
 
     stop_timer = xnet_wtime()
     timer_xnet = timer_xnet + stop_timer

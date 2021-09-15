@@ -127,11 +127,12 @@ Module model_input_ascii
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
     Use xnet_conditions, Only: nstart, tstart, t9start, rhostart, yestart, nh, th, yeh
-    USe xnet_abundances, Only: y_moment, ystart
+    USe xnet_abundances, Only: y_moment, ystart, xext, aext, zext
     Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, nzevolve, szbatch, zb_lo, zb_hi, &
-      lzactive
+      lzactive, iaux
     Use xnet_nse, Only: nse_solve, ynse
     Use xnet_types, Only: dp
+    Use xnet_util, Only: norm
     Implicit None
 
     ! Input variables
@@ -147,7 +148,7 @@ Module model_input_ascii
     ! Local variables
     Real(dp) :: yein, yin(ny)
     Real(dp) :: rdt, dt, dye
-    Real(dp) :: ytot, abar, zbar, z2bar, zibar
+    Real(dp) :: ytot, abar, zbar, z2bar, zibar, aext_loc, zext_loc, xext_loc, xnorm
     Integer :: i, izb, izone
     Logical, Pointer :: mask(:)
 
@@ -160,16 +161,19 @@ Module model_input_ascii
 
     ! Initialize
     ierr = 0
-    
+    ! Allow auxiliary nucleus
+    ! Set to 0 to force normalization of abundances
+    ! and exclude aux nuclear species
+    iaux = 1
     Do izb = zb_lo, zb_hi
-      yestart(izb) = 0.0
+      yestart(izb) = 0.0     
       ystart(:,izb) = 0.0
     EndDo
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         izone = izb + szbatch - zb_lo
-
+        
         ! Interpolate electron fraction from thermo file
         If ( nstart(izb) > 1 .and. nstart(izb) <= nh(izb) ) Then
           rdt = 1.0 / ( th(nstart(izb),izb) - th(nstart(izb)-1,izb) )
@@ -183,12 +187,25 @@ Module model_input_ascii
         EndIf
 
         ! Read the initial abundance file if not in NSE or if invalid Ye from thermo file
+       
         If ( t9start(izb) <= t9nse .or. yestart(izb) <= 0.0 .or. yestart(izb) >= 1.0 ) Then
-          Call read_inab_file(inab_file(izone),abund_desc(izb),yein,yin,ierr)
-
+          Call read_inab_file(inab_file(izone),abund_desc(izb),yein,yin,xext_loc,aext_loc,zext_loc,xnorm,ierr)
+          If ( iaux(izb)==0 ) then ! Turn off aux nucleus
+              yin = yin/xnorm
+              Write(lun_diag,"(a)") 'Normalizing initial abundances.'
+              xext(izb) = 0.0
+              aext(izb) = 1.0
+              zext(izb) = 0.0
+          Else    
+              xext(izb) = xext_loc
+              aext(izb) = aext_loc
+              zext(izb) = zext_loc
+          Endif
           ! If Ye is not provided in the initial abundance file explicitly, calculate it here
-          If ( yein <= 0.0 .or. yein >= 1.0 ) Call y_moment(yin,yein,ytot,abar,zbar,z2bar,zibar)
+          If ( yein <= 0.0 .or. yein >= 1.0 ) &
+          &    Call y_moment(yin,yein,ytot,abar,zbar,z2bar,zibar,izb)
           yestart(izb) = yein
+
 
           ! Log abundance file and description
           If ( idiag >= 0 ) Then
@@ -205,6 +222,10 @@ Module model_input_ascii
           If ( idiag >= 0 ) Write(lun_diag,"(a)") 'Initial abundances from NSE'
           Call nse_solve(rhostart(izb),t9start(izb),yestart(izb))
           ystart(:,izb) = ynse(:)
+          iaux(izb) = 0
+          xext(izb) = 0.d0
+          aext(izb) = 1.d0
+          zext(izb) = 1.d0
         Else
           ystart(:,izb) = yin(:)
         EndIf
@@ -217,7 +238,7 @@ Module model_input_ascii
     Return
   End Subroutine load_initial_abundances
 
-  Subroutine read_inab_file( inab_file, abund_desc, yein, yin, ierr )
+  Subroutine read_inab_file( inab_file, abund_desc, yein, yin, xext, aext, zext, xnet,ierr )
     !-----------------------------------------------------------------------------------------------
     ! This routine reads initial abundances from a supplied input file.
     !-----------------------------------------------------------------------------------------------
@@ -235,18 +256,21 @@ Module model_input_ascii
     Character(80), Intent(out) :: abund_desc
     Real(dp), Intent(out) :: yein
     Real(dp), Intent(out) :: yin(ny)
+    Real(dp), Intent(out) :: xext, aext, zext, xnet ! xnorm=xnet
     Integer, Intent(out) :: ierr
 
     ! Local variables
     Integer, Parameter :: nread_max = 4 ! Maximum number of abundance entries to read at once
     Character(5) :: char_tmp(nread_max), namein
-    Real(dp) :: real_tmp(nread_max), xnet, znet, yext, xext, aext, zext
+    Real(dp) :: real_tmp(nread_max),  znet, yext
     Integer :: i, inuc
 
     ! Initialize
     yein = 0.0
     yin = 0.0
     yext = 0.0
+    aext = 1.0
+    zext = 0.0
 
     !$omp critical(ab_read)
     Open(newunit=lun_ab, file=trim(inab_file), action='read', status='old', iostat=ierr)
@@ -313,17 +337,29 @@ Module model_input_ascii
       ! Total mass fraction inside network
       xnet = sum(yin*aa)
       znet = sum(yin*zz)
+
       If ( idiag >= 1 ) Write(lun_diag,"(a,4es15.7)") 'ynet, xnet, anet, znet: ',sum(yin(:)),xnet,xnet,znet
 
-      ! Normalize so total mass fraction is one
-      yin = yin / xnet
 
       ! Calculate properties of matter not in network
       If ( yext > 0.0 ) Then
         xext = 1.0 - xnet
         aext = xext / yext
-        zext = ( yein - znet ) * aext / xext
+        If ( yein <= 0.0 .or. yein >= 1.0 ) then
+           zext = 0.0d0
+           Write(lun_diag,"(a)") 'WARNING: There are nuclei outside of the network, but Ye was not provided.'
+           Write(lun_diag,"(a)") 'Assuming Z=0 for external nucleus. Please provide total Ye for acurate results.'
+        Else
+           zext = ( yein - znet ) * aext / xext
+        EndIf
+
         If ( idiag >= 1 ) Write(lun_diag,"(a,4es15.7)") 'yext, xext, aext, zext: ',yext,xext,aext,zext
+      Else  
+         xext = 0.0
+         aext = 1.0
+         zext = 0.0
+!         Normalize so total mass fraction is one
+         yin = yin / xnet
       EndIf
     EndIf
     !$omp end critical(ab_read)

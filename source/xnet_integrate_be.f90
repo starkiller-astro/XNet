@@ -20,7 +20,7 @@ Contains
     ! the iteration, yt(i) is the trial abundance at the end of the timestep, ydot(i) is the time
     ! derivative of the trial abundance calculated from reaction rates and tdel is the timestep.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_abundances, Only: y, yo, yt
+    Use xnet_abundances, Only: y, yo, yt, xext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, t9, t9o, t9t, rho, rhoo, rhot, &
       yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
@@ -173,7 +173,7 @@ Contains
     ! If successful, inr = 1
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, nname
-    Use xnet_abundances, Only: y, ydot, yt
+    Use xnet_abundances, Only: y, ydot, yt, xext
     Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
       & szbatch, zb_lo, zb_hi, iscrn
@@ -209,7 +209,7 @@ Contains
     ! Calculate initial total mass fraction
     Do izb = zb_lo, zb_hi
       If ( iterate(izb) ) Then
-        xtot_init(izb) = sum(aa*y(:,izb)) - 1.0
+        xtot_init(izb) = sum(aa*y(:,izb)) + xext(izb) - 1.0
         rdt(izb) = 1.0 / tdel(izb)
         mult(izb) = -1.0
       Else
@@ -244,7 +244,7 @@ Contains
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           yrhs(:,izb) = (y(:,izb)-yt(:,izb))*rdt(izb) + ydot(:,izb)
-          If ( iheat > 0 ) t9rhs(izb) = (t9(izb)-t9t(izb))*rdt(izb) + t9dot(izb)
+          If ( iheat > 0 ) t9rhs(izb) = (t9(izb)*rdt(izb)-t9t(izb)*rdt(izb)) + t9dot(izb)
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
@@ -305,7 +305,7 @@ Contains
           !-----------------------------------------------------------------------------------------
           testc  = sum(reldy)
           testc2 = sum(aa*dy(:,izb))
-          xtot   = sum(aa*yt(:,izb)) - 1.0
+          xtot   = sum(aa*yt(:,izb)) + xext(izb) - 1.0
           testm  = xtot(izb) - xtot_init(izb)
           If ( idiag >= 3 ) Write(lun_diag,"(a,3i5,3es14.6)") 'NR',kstep,izone,kit,testm,testc,testc2
 

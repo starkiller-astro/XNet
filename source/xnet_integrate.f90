@@ -51,7 +51,6 @@ Contains
 
     ! Retain old values of timestep and thermo and calculate remaining time
     changeth = 0.1
-    changest = 0.01
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel_old(izb) = tdel(izb)
@@ -68,7 +67,13 @@ Contains
         tdel_stop = tstop(izb) - t(izb)
         tdel_fine = 0.0
         tdel_t9 = 0.0
-        tdel_init = min(changest*tdelstart(izb),tdel_stop)
+        If ( tdelstart(izb) < 0.0 ) Then
+          changest = 0.5
+        Else
+          changest = 0.01
+        EndIf
+
+        tdel_init = min(changest*abs(tdelstart(izb)),tdel_stop)
 
         ! If this is not the initial timestep, calculate timestep from changes in last timestep.
         If ( tdel_old(izb) > 0.0 ) Then
@@ -115,7 +120,7 @@ Contains
             ! tdel_deriv may produce large jumps from zero abundance in the first
             ! timestep. While generally inconsequential, tdel_fine limits these
             ! to the accuracy abundance limit.
-            tdel_fine = changest*min(0.1,changemx)/ydotoy(ints(izb))
+            tdel_fine = changest*min(0.1d0,changemx)/ydotoy(ints(izb))
 
             ! If derivatives are zero, take a small step.
           Else
@@ -123,7 +128,7 @@ Contains
             tdel_fine = tdel_stop
           EndIf
           If ( iheat > 0 ) Then
-            tdel_t9 = changest*min(0.01,changemxt) * abs(t9(izb)/t9dot(izb))
+            tdel_t9 = changest*min(0.01d0,changemxt) * abs(t9(izb)/t9dot(izb))
           Else
             tdel_t9 = tdel_stop
           EndIf
@@ -137,7 +142,7 @@ Contains
           tdel(izb) = -tdel_old(izb)
         EndIf
 
-        If ( idiag >= 2 ) Write(lun_diag,"(a4,2i5,7es12.4,i5)") &
+        If ( idiag >= 2 ) Write(lun_diag,"(a4,2i5,7es23.8,i5)") &
           & 'tdel',kstep,izone,tdel(izb),tdel_deriv,tdel_old(izb),tdel_stop,tdel_next(izb),tdel_fine,tdel_t9,ints(izb)
         !If ( idiag >= 2 ) Write(lun_diag,"(a5,i4,2es12.4)") (nname(k),k,y(k,izb),ydotoy(k),k=1,ny)
 
@@ -296,7 +301,7 @@ Contains
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        call eos_interface(t9t(izb),rhot(izb),yt(:,izb),yet(izb),cv(izb),etae(izb),detaedt9(izb))
+        call eos_interface(t9t(izb),rhot(izb),yt(:,izb),yet(izb),cv(izb),etae(izb),detaedt9(izb),izb)
       EndIf
     EndDo
 
@@ -396,7 +401,7 @@ Contains
           ! Surprisingly, this seems to perform better than the DGEMV below
           s1 = 0.0
           Do i0 = 1, ny
-            s1 = s1 + mex(i0)*ydot(i0,izb)
+              s1 = s1 + mex(i0)*ydot(i0,izb)
           EndDo
           t9dot(izb) = -s1 / cv(izb)
         EndIf

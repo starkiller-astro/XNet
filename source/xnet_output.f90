@@ -10,6 +10,11 @@ Module xnet_output
   !-------------------------------------------------------------------------------------------------
   Implicit None
 
+  interface write_xnet_th
+    module procedure write_xnet_th_history
+    module procedure write_xnet_th_point
+  end interface write_xnet_th
+
 Contains
 
   Subroutine ts_output(kstep,enuc,edot,mask_in)
@@ -172,5 +177,173 @@ Contains
 
     Return
   End Subroutine final_output
+
+  Subroutine write_xnet_inab( fname, header, nname, y, ierr )
+    Use xnet_controls, Only: lun_stderr
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: fname
+    Character(*), Intent(in) :: header
+    Character(5), Intent(in) :: nname(:)
+    real(dp), Intent(in) :: y(:)
+
+    ! Output variables
+    Integer, Intent(out) :: ierr
+
+    ! Local variables
+    Integer :: lun_inab
+    Integer :: i
+
+    ierr = 0
+
+    ! open file
+    open (newunit=lun_inab,file=trim(fname),iostat=ierr)
+    if ( ierr /= 0 ) then
+      write (lun_stderr,'(3a,i3,a)') '[write_xnet_inab] ERROR: Problem opening file: ',trim(fname),'(',ierr,')'
+      return
+    end if
+
+    ! write header
+    write (lun_inab,'(a)',iostat=ierr) trim(header)
+    if ( ierr /= 0 ) then
+      write (lun_stderr,'(a,i3,a)') '[write_xnet_inab] ERROR: Problem writing header (',ierr,')'
+      close (lun_inab)
+      return
+    end if
+
+    ! write abundances
+    write (lun_inab,'(a5,es23.15)',iostat=ierr) (adjustr(nname(i)), y(i), i=1,size(y))
+    if ( ierr /= 0 ) then
+      write (lun_stderr,'(a,i3,a)') '[write_xnet_inab] ERROR: Problem writing data (',ierr,')'
+      close (lun_inab)
+      return
+    end if
+
+    ! close file
+    close (lun_inab)
+
+    return
+  End Subroutine write_xnet_inab
+
+  Subroutine write_xnet_th_history( fname, header, time, t9, rho, ye, ierr )
+    Use xnet_controls, Only: lun_stderr
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: fname
+    Character(*), Intent(in) :: header
+    Real(dp), Intent(in) :: time(:) ! First three values are for header
+    Real(dp), Intent(in) :: t9(size(time)-3)
+    Real(dp), Intent(in) :: rho(size(time)-3)
+    Real(dp), Intent(in) :: ye(size(time)-3)
+
+    ! Output variables
+    Integer, Intent(out) :: ierr
+
+    ! Local variables
+    Integer :: lun_th
+    Integer :: tmp_ierr(4)
+    Integer :: i
+
+    ierr = 0
+    tmp_ierr = 0
+
+    if ( size(time) < 5 ) then
+      write (lun_stderr,'(a)') '[write_xnet_th] ERROR: Not enough data points'
+      ierr = 1
+      return
+    end if
+
+    ! open file
+    open (newunit=lun_th,file=trim(fname),iostat=ierr)
+    if ( ierr /= 0 ) then
+      write (lun_stderr,'(3a,i3,a)') '[write_xnet_th] ERROR: Problem opening file: ',trim(fname),'(',ierr,')'
+      return
+    end if
+
+    ! write header
+    write (lun_th,'(a)',iostat=tmp_ierr(1)) trim(header)
+    write (lun_th,'(es23.15,a)',iostat=tmp_ierr(2)) time(1),' start time'
+    write (lun_th,'(es23.15,a)',iostat=tmp_ierr(3)) time(2),' stop time'
+    write (lun_th,'(es23.15,a)',iostat=tmp_ierr(4)) time(3),' initial timestep'
+    if ( any( tmp_ierr /= 0 ) ) then
+      ierr = maxval(tmp_ierr)
+      write (lun_stderr,'(a,i3,a)') '[write_xnet_th] ERROR: Problem writing header (',ierr,')'
+      close (lun_th)
+      return
+    end if
+
+    write (lun_th,'(4es23.15)',iostat=ierr) (time(i+3),t9(i),rho(i),ye(i),i=1,size(t9))
+    if ( ierr /= 0 ) then
+      write (lun_stderr,'(a,i3,a)') '[write_xnet_th] ERROR: Problem writing data (',ierr,')'
+      close (lun_th)
+      return
+    end if
+
+    close (lun_th)
+
+    return
+  End Subroutine write_xnet_th_history
+
+  Subroutine write_xnet_th_point( fname, header, tstart, tstop, t9, rho, ye, ierr )
+    Use xnet_controls, Only: lun_stderr
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: fname
+    Character(*), Intent(in) :: header
+    Real(dp), Intent(in) :: tstart
+    Real(dp), Intent(in) :: tstop
+    Real(dp), Intent(in) :: t9
+    Real(dp), Intent(in) :: rho
+    Real(dp), Intent(in) :: ye
+
+    ! Output variables
+    Integer, Intent(out) :: ierr
+
+    ! Local variables
+    Integer :: lun_th
+    Integer :: tmp_ierr(4)
+    Integer :: i
+
+    ierr = 0
+    tmp_ierr = 0
+
+    ! open file
+    open (newunit=lun_th,file=trim(fname),iostat=ierr)
+    if ( ierr /= 0 ) then
+      write (lun_stderr,'(3a,i3,a)') '[write_xnet_th] ERROR: Problem opening file: ',trim(fname),'(',ierr,')'
+      return
+    end if
+
+    ! write header
+    write (lun_th,'(a)',iostat=tmp_ierr(1)) trim(header)
+    write (lun_th,'(es23.15,a)',iostat=tmp_ierr(2)) tstart,' start time'
+    write (lun_th,'(es23.15,a)',iostat=tmp_ierr(3)) tstop,' stop time'
+    write (lun_th,'(es23.15,a)',iostat=tmp_ierr(4)) (tstop-tstart)*1.0e-4_dp,' initial timestep'
+    if ( any( tmp_ierr /= 0 ) ) then
+      ierr = maxval(tmp_ierr)
+      write (lun_stderr,'(a,i3,a)') '[write_xnet_th] ERROR: Problem writing header (',ierr,')'
+      close (lun_th)
+      return
+    end if
+
+    write (lun_th,'(4es23.15)',iostat=ierr) tstop, t9, rho, ye
+    write (lun_th,'(4es23.15)',iostat=ierr) tstop, t9, rho, ye
+    if ( ierr /= 0 ) then
+      write (lun_stderr,'(a,i3,a)') '[write_xnet_th] ERROR: Problem writing data (',ierr,')'
+      close (lun_th)
+      return
+    end if
+
+    flush (lun_th)
+    close (lun_th)
+
+    return
+  End Subroutine write_xnet_th_point
 
 End Module xnet_output
