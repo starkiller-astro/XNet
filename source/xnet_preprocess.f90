@@ -518,7 +518,7 @@ Contains
     Character(*), Intent(in) :: data_desc ! Description of data directory
 
     ! Local variables
-    Integer, Parameter :: ndesc = 169 ! Number of unique REACLIB rate labels
+    Integer, Parameter :: ndesc = 171 ! Number of unique REACLIB rate labels
     Integer      :: n, i, j, k, l, jj ! Loop indicies
     Integer      :: nk1, nk2, nk3, nk4
     Integer      :: ni(nmax), ki(nmax), ierr
@@ -553,7 +553,7 @@ Contains
       &   'ld11','hd08','ua08','ol11','ls09','ia08','dc11','mb07', &
       &   'wc17','mo97','ks03','nac2','mp17','cb09','li12','ma10', &
       &   'mm11','si13','sa12','ks12','hg12','rk12','ac12','gl12', &
-      &   'mv09'/)
+      &   'mv09','lhnn','lhna'/)
 
     nnew_desc = 1
     desc_new(1) = '    '
@@ -570,7 +570,7 @@ Contains
 
     ! Read and reformat the reaction data
     Write(lun_out,"('Reading and reformating reactions data')")
-    Read(lun_su,"(2i5)") nffn, nnnu
+    Read(lun_su,"(i5,i6)") nffn, nnnu
     la(:) = 1
     le(:) = 0
     nk1 = 1
@@ -660,6 +660,10 @@ Contains
           iec = 7
         Case (126,128)        ! electron antineutrino capture
           iec = 8
+        Case (170)            ! neutrino-induced spallation
+          iec = 9
+        Case (171)            ! antineutrino-induced spallation           
+          iec = 10
         Case Default
           iec = 0             ! not a weak rate
         End Select

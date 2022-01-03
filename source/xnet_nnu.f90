@@ -74,14 +74,20 @@ Contains
     Integer :: i, j
 
     Allocate(irl(nnnu),nuspec(nnnu))
-
     Do j = 1, nr
       If(innu(j)>0) Then
+        If (idiag>5) Then
+            write(lun_diag,*) "[NU]",j,iwk(j)
+        Endif
         irl(innu(j)) = j
         If(iwk(j).eq.7) Then
           nuspec(innu(j))=1
         ElseIf(iwk(j).eq.8) Then
           nuspec(innu(j))=2
+        ElseIf(iwk(j).eq.9 ) Then
+          nuspec(innu(j))=3
+        ElseIf(iwk(j).eq.10) Then
+          nuspec(innu(j))=4
         Else
           Write(6,*) 'nnu match error',j,innu(j),iwk(j)
         EndIf
@@ -126,7 +132,8 @@ Contains
     Real(dp) :: ltnu, flux(nnuspec)
     Real(dp) :: lsigmanu1, lsigmanu2
     Real(dp) :: rcsnu(nnnu)
-    Real(dp) :: rdt, rdltnu, ltnu1, ltnu2
+    Real(dp) :: rdt, rdltnu, ltnu1, ltnu2, lfl1,lfl2
+    Real(dp) :: xrate
     Integer :: izb, it, i, j, k, n, izone
     Logical, Pointer :: mask(:)
 
@@ -173,7 +180,14 @@ Contains
             Else
               rdt = (time(izb)-th(n-1,izb)) / (th(n,izb)-th(n-1,izb))
               ltnu = rdt*log(tmevnu(n,j,izb)) + (1.0-rdt)*log(tmevnu(n-1,j,izb))
-              flux(j) = safe_exp( rdt*log(fluxcms(n,j,izb)) + (1.0-rdt)*log(fluxcms(n-1,j,izb)) )
+              
+              If ( fluxcms(n,j,izb) ==0. .and. fluxcms(n-1,j,izb)==0. ) then
+                      flux(j) = 0.
+              Else If ( fluxcms(n,j,izb) ==0. .or. fluxcms(n-1,j,izb)==0. ) then
+                      flux(j) = rdt*fluxcms(n,j,izb) + (1.0-rdt)*fluxcms(n-1,j,izb)
+              Else
+                      flux (j) = safe_exp( rdt*log(fluxcms(n,j,izb)) + (1.0-rdt)*log(fluxcms(n-1,j,izb)) )
+              Endif
           EndIf
             Do i = 1, ntnu
               If ( ltnu <= ltnugrid(i) ) Exit
@@ -197,8 +211,16 @@ Contains
               EndIf
 
               ! Calculate rate only for neutrino specie involved in reaction
-              If (nuspec(k) == j) Then
-                rate(k,j,izb) = flux(j)*rcsnu(k)
+              If (nuspec(k) == j .or. (nuspec(k)==3 .and. j==1) .or. (nuspec(k)==4 .and. j==2) ) Then
+                xrate = flux(j)*rcsnu(k)*1e-42
+                If (xrate > 1.d-80) Then
+                   rate(k,j,izb) = xrate
+                Else
+                   rate(k,j,izb) = 0.0d0
+                Endif
+               
+!                write(*,*) "[NU rate]",k,j,nuspec(k),flux(j),rcsnu(k)
+!                write(lun_diag,*) "[NU rate]",k,j,flux(j),rcsnu(k)
               Else
                 rate(k,j,izb) = 0.0
               EndIf
