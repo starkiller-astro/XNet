@@ -31,9 +31,12 @@ OPENMP_MODE ?= OFF
 GPU_MODE    ?= OFF
 
 ## Choose EOS for screening; HELMHOLTZ (requires separate download) or BAHCALL
-#EOS = STARKILLER
+EOS = STARKILLER
 #EOS = HELMHOLTZ
-EOS ?= BAHCALL
+#EOS ?= BAHCALL
+
+## SELECT EC table, Default=OFF
+USE_LOGFT = ON
 
 ## Choose matrix solver package 
 #MATRIX_SOLVER = PARDISO

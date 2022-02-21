@@ -675,7 +675,7 @@ Contains
     Where ( iwk1 == 2 .or. iwk1 == 3 ) ! FFN reaction
       iffn = nint(rc1(1,:))
       innu = 0
-    ElseWhere ( iwk1 == 7 .or. iwk1 == 8 .or. iwk1 == 9 .or. iwk1 == 10) ! NNU reaction
+    ElseWhere ( iwk1 == 7 .or. iwk1 == 8 ) ! NNU reaction
       iffn = 0
       innu = nint(rc1(1,:))
     ElseWhere

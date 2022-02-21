@@ -360,6 +360,23 @@ LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.f %.F,$(LAPACK_SRC))))
 LAPACK_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(LAPACK_SRC))))
 LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp %.cxx,$(LAPACK_SRC))))
 
+## QUADPACK
+
+QUADPACK_DIR=../tools/quadpack
+QUADPACK_SRC_FILES := $(wildcard $(QUADPACK_DIR)/*.f)
+#QUADPACK_SRC_FILES := d1mach.o  dqagi.o   dqagie.o \
+#			dqelg.o   dqk15i.o  dqpsrt.o  fdump.o   i1mach.o  j4save.o  s88fmt.o \
+#		       	xerabt.o  xerctl.o  xerprt.o  xerror.o  xerrwv.o  xersav.o  xgetua.o
+QUADPACK_OBJ := d1mach.o  dqagi.o   dqagie.o \
+			dqelg.o   dqk15i.o  dqpsrt.o  fdump.o   i1mach.o  j4save.o  s88fmt.o \
+		       	xerabt.o  xerctl.o  xerprt.o  xerror.o  xerrwv.o  xersav.o  xgetua.o
+QUADPACK_OBJ_FILES := $(patsubst $(QUADPACK_DIR)/%.f,$(QUADPACK_DIR)/%.o,$(QUADPACK_SRC_FILES))
+
+ifeq ($(USE_LOGFT),ON)
+    LAPACK_LIBS   = $($(LAPACK_VER)_LIBS) $(QUADPACK_OBJ)
+endif
+
+
 ## PARDISO
 ifneq ($(LAPACK_VER),MKL)
     PARDISO        = PARDISO

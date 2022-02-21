@@ -25,7 +25,6 @@ BASE = \
        xnet_conditions.o \
        xnet_constants.o \
        xnet_evolve.o \
-       xnet_ffn.o \
        xnet_flux.o \
        xnet_integrate.o \
        xnet_integrate_bdf.o \
@@ -38,6 +37,19 @@ BASE = \
        xnet_timers.o \
        xnet_types.o \
        xnet_util.o
+## FFN table or logft
+ifeq ($(USE_LOGFT),ON)
+  XNET_FFN=xnet_ffn_logft.o
+  FFN_OBJ = xnet_ffn_logft.o \
+       xnet_integ_phase.o \
+       xnet_effphase.o 
+  QUADPACK_OBJ_FILES := $(patsubst $(QUADPACK_DIR)/%.f,$(QUADPACK_DIR)/%.o,$(QUADPACK_SRC_FILES))
+else
+  XNET_FFN=xnet_ffn.o
+  FFN_OBJ = xnet_ffn.o
+  QUADPACK_OBJ_FILES :=
+endif
+BASE += $(FFN_OBJ)
 
 ## Choose Driver
 DRIVER = model_input_ascii.o net.o
@@ -149,6 +161,9 @@ xnet_integrate_bdf.o: xnet_integrate_bdf.f90
 xnet_jacobian_$(SOLVER).o: xnet_jacobian_$(SOLVER).f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $@
 
+$(QUADPACK_OBJ_FILES): %.o: %.f
+	$(FC) $(OPT_FLAGS) -c $< -o $(notdir $@)
+
 $(LAPACK_OBJ_F90): %.o: %.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $(notdir $@)
 $(LAPACK_OBJ_F): %.o: %.f
@@ -183,8 +198,9 @@ print-%:
 #
 
 xnet_controls.o: xnet_constants.o xnet_types.o xnet_util.o $(MPI_OBJ)
-xnet_data.o: xnet_constants.o xnet_controls.o xnet_ffn.o xnet_nnu.o xnet_types.o xnet_util.o $(MPI_OBJ)
+xnet_data.o: xnet_constants.o xnet_controls.o $(XNET_FFN) xnet_nnu.o xnet_types.o xnet_util.o $(MPI_OBJ)
 xnet_ffn.o: xnet_constants.o xnet_controls.o xnet_types.o
+xnet_ffn_logft.o: xnet_constants.o xnet_controls.o xnet_types.o xnet_integ_phase.o xnet_conditions.o $(QUADPACK_OBJ_FILES)
 xnet_flux.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_match.o xnet_timers.o xnet_types.o
 xnet_match.o: xnet_controls.o xnet_data.o xnet_types.o
 xnet_abundances.o: xnet_controls.o xnet_data.o xnet_types.o
@@ -196,7 +212,7 @@ xnet_integrate.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_cont
 xnet_integrate_bd.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_bdf.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_be.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
-xnet_nnu.o: xnet_conditions.o xnet_controls.o xnet_timers.o xnet_types.o xnet_util.o
+xnet_nnu.o: xnet_conditions.o xnet_controls.o xnet_types.o xnet_util.o
 xnet_nse.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_util.o $(EOS_OBJ) $(LAPACK_OBJ)
 xnet_output.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_flux.o xnet_match.o xnet_timers.o xnet_types.o
 xnet_preprocess.o: xnet_constants.o xnet_data.o xnet_types.o xnet_util.o $(MPI_OBJ)
