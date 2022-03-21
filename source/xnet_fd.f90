@@ -309,6 +309,55 @@ Contains
     Return
   End Function fdm1h
 
+  Real(dp) Function fd0h(y)
+    ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=0
+    ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
+    ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
+    Implicit None
+    Real(dp) y,x,ex,t,w,s,fd
+    x=-abs(y)
+    If(x<-2.d0) Then
+      ex=exp(x)
+      t=ex*7.38905609893065023d0
+      fd=ex*(1.d0 &
+        -ex*(22696.2126132366633d0 &
+        +t*(5222.0667923565138d0 &
+        +t*(357.623326425354522d0 &
+        +t*(6.9167792879948140d0 &
+        +t*0.00200096064827815813d0 &
+        ))))/(45392.4252264733267d0 &
+        +t*(14539.5980679273792d0 &
+        +t*(1611.36476693109675d0 &
+        +t*(71.072178562726798d0 &
+        +t)))))
+    ElseIf(x<=0.d0) Then
+      s=-0.5d0*x
+      t=1.d0-s
+      fd=(159.601717762460980d0 &
+        +t*(23.7193942338278703d0 &
+        +t*(0.377783268730614356d0 &
+        +t*(10.5181677709577503d0 &
+        +t*(3.78181326142271599d0 &
+        +t*(-0.441998676614933572d0 &
+        +t*(-0.450072959113928254d0 &
+        +t*(-0.0734798777056723512d0 &
+        +t*0.000915454570009894267d0 &
+        ))))))))/(284.26032127745967d0 &
+        +s*(315.2592651624449d0 &
+        +s*(310.2713981221035d0 &
+        +s*(206.21640678892182d0 &
+        +s*(96.77898293084927d0 &
+        +s*(35.456591489081173d0 &
+        +s*(8.1762315442738975d0 &
+        +s)))))))
+    EndIf
+    If(y>0.d0) Then
+      fd=fd+y
+    EndIf
+    fd0h=fd
+    Return
+  End Function fd0h
+
   Real(dp) Function fd1h(x)
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=1/2
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
@@ -453,5 +502,253 @@ Contains
     fd1h=fd
     Return
   End Function fd1h
+
+  Real(dp) Function fd2h(y)
+    ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=1
+    ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
+    ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
+    Implicit None
+    Real(dp) y,x,ex,t,w,s,fd
+    x=-abs(y)
+    If(x<-2.d0) Then
+      ex=exp(x)
+      t=ex*7.38905609893065023d0
+      fd=ex*(1.d0 &
+        -ex*(22189.1070807945062d0 &
+        +t*(4915.92700908746777d0 &
+        +t*(322.901386168881348d0 &
+        +t*(5.9897442965804548d0 &
+        +t*0.00397641173774375092d0 &
+        ))))/(88756.428323178025d0 &
+        +t*(25002.3197546553836d0 &
+        +t*(2389.06277237306633d0 &
+        +t*(88.376214553692756d0 &
+        +t)))))
+    ElseIf(x<=0.d0) Then
+      s=-0.5d0*x
+      t=1.d0-s
+      fd=(145.488167182330098d0 &
+        +t*(251.392824471576922d0 &
+        +t*(56.6537141912783024d0 &
+        +t*(17.9918985363509694d0 &
+        +t*(20.1369115558099802d0 &
+        +t*(7.09659390228556164d0 &
+        +t*(0.199701180197912643d0 &
+        +t*(-0.403173132925886253d0 &
+        -t*0.0792966701498222697d0 &
+        ))))))))/(606.0757707716040d0 &
+        +s*(374.1806357435014d0 &
+        +s*(252.1367051536344d0 &
+        +s*(27.2746245830016d0 &
+        +s*(-61.57766112137513d0 &
+        +s*(-53.72117554363975d0 &
+        +s*(-25.678454878692950d0 &
+        +s*(-7.1995819520154718d0 &
+        -s))))))))
+    EndIf
+    If(y>0.d0) Then
+      fd=-fd+1.64493406684822644d0 &
+        +0.5d0*y*y
+    EndIf
+    fd2h=fd
+    Return
+  End Function fd2h
+
+  Real(dp) function fd4h(y)
+    ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=2
+    ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
+    ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
+    Implicit None
+    Real(dp) y,x,ex,t,w,s,fd
+    x=-abs(y)
+    If(x<-2.d0) Then
+      ex=exp(x)
+      t=ex*7.38905609893065023d0
+      fd=ex*(2.d0 &
+        -ex*(1914.06748184935743d0 &
+        +t*(273.085756700981399d0 &
+        +t*(8.5861610217850095d0 &
+        +t*0.0161890243763741414d0 &
+        )))/(7656.2699273974454d0 &
+        +t*(1399.35442210906621d0 &
+        +t*(72.929152915475392d0 &
+        +t))))
+    ElseIf(x<=0.d0) Then
+      s=-0.5d0*x
+      t=1.d0-s
+      fd=(2711.49678259128843d0 &
+        +t*(1299.85460914884154d0 &
+        +t*(222.606134197895041d0 &
+        +t*(172.881855215582924d0 &
+        +t*(112.951038040682055d0 &
+        +t*(24.0376482128898634d0 &
+        +t*(-2.68393549333878715d0 &
+        +t*(-2.14077421411719935d0 &
+        -t*0.326188299771397236d0 &
+        ))))))))/(2517.1726659917047d0 &
+        +s*(3038.7689794575778d0 &
+        +s*(2541.7823512372631d0 &
+        +s*(1428.0589853413436d0 &
+        +s*(531.62378035996132d0 &
+        +s*(122.54595216479181d0 &
+        +s*(8.395768655115050d0 &
+        +s*(-3.9142702096919080d0 &
+        -s))))))))
+    EndIf
+    If(y>0.d0) Then
+      fd=fd+y*(3.28986813369645287d0 &
+        +0.333333333333333333d0*y*y)
+    EndIf
+    fd4h=fd
+    Return
+  End Function fd4h
+
+  Real(dp) function fd6h(y)
+    ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=3
+    ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
+    ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
+    Implicit None
+    Real(dp) y,x,ex,t,w,s,fd,y2
+    x=-abs(y)
+    If(x<-2.d0) Then
+      ex=exp(x)
+      t=ex*7.38905609893065023d0
+      fd=ex*(6.d0 &
+        -ex*(5121.6401850302408d0 &
+        +t*(664.28706260743472d0 &
+        +t*(19.0856927562699544d0 &
+        +t*0.0410982603688952131d0 &
+        )))/(13657.7071600806539d0 &
+        +t*(2136.54222460571183d0 &
+        +t*(92.376788603062645d0 &
+        +t))))
+    ElseIf(x<=0.d0) Then
+      s=-0.5d0*x
+      t=1.d0-s
+      fd=(7881.24597452900838d0 &
+        +t*(4323.07526636309661d0 &
+        +t*(1260.13125873282465d0 &
+        +t*(653.359212389160499d0 &
+        +t*(354.630774329461644d0 &
+        +t*(113.373708671587772d0 &
+        +t*(19.9559488532742796d0 &
+        +t*1.59407954898394322d0 &
+        )))))))/(2570.7250703533430d0 &
+        +s*(2972.7443644211129d0 &
+        +s*(2393.9995533270879d0 &
+        +s*(1259.0724833462608d0 &
+        +s*(459.86413596901097d0 &
+        +s*(112.60906419590854d0 &
+        +s*(16.468882811659000d0 &
+        +s)))))))
+    EndIf
+    If(y>0.d0) Then
+      y2=y*y
+      fd=-fd+11.3643939539669510d0 &
+        +y2*(4.93480220054467931d0 &
+        +y2*0.25d0)
+    EndIf
+    fd6h=fd
+    Return
+  End Function fd6h
+
+  Real(dp) function fd8h(y)
+    ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=4
+    ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
+    ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
+    Implicit None
+    Real(dp) y,x,ex,t,w,s,fd,y2
+    x=-abs(y)
+    If(x<-2.d0) Then
+      ex=exp(x)
+      t=ex*7.38905609893065023d0
+      fd=ex*(24.d0 &
+        -ex*(18247.2542465629199d0 &
+        +t*(2120.56302902849207d0 &
+        +t*(54.659507299984584d0 &
+        +t*0.121876197098273914d0 &
+        )))/(24329.6723287505678d0 &
+        +t*(3261.01909656925521d0 &
+        +t*(117.071576489684022d0 &
+        +t))))
+    ElseIf(x<=0.d0) Then
+      s=-0.5d0*x
+      t=1.d0-s
+      fd=(33093.9102025608137d0 &
+        +t*(19031.4783357798975d0 &
+        +t*(5431.08357152245897d0 &
+        +t*(2393.94262931609398d0 &
+        +t*(1268.40017257978070d0 &
+        +t*(418.662172475927160d0 &
+        +t*(77.4108960876508190d0 &
+        +t*6.67374311450268357d0 &
+        )))))))/(2645.4885670047153d0 &
+        +s*(3236.2237702166948d0 &
+        +s*(2500.5977847175497d0 &
+        +s*(1278.0109577275445d0 &
+        +s*(448.99020896813485d0 &
+        +s*(105.86020755838874d0 &
+        +s*(15.216887271751039d0 &
+        +s)))))))
+    EndIf
+    If(y>0.d0) Then
+      y2=y*y
+      fd=fd+y*(45.4575758158678040d0 &
+        +y2*(6.57973626739290575d0 &
+        +y2*0.2d0))
+    EndIf
+    fd8h=fd
+    Return
+  End Function fd8h
+
+  Real(dp) function fd10h(y)
+    ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=5
+    ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
+    ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
+    Implicit None
+    Real(dp) y,x,ex,t,s,fd,y2
+    x=-abs(y)
+    If(x<-2.d0) Then
+      ex=exp(x)
+      t=ex*7.38905609893065023d0
+      fd=ex*(120.d0 &
+        -ex*(81190.938912603315d0 &
+        +t*(8368.4990332049831d0 &
+        +t*(190.753830813273698d0 &
+        +t*0.413800735538960261d0 &
+        )))/(43301.8340867217726d0 &
+        +t*(4977.68099709243407d0 &
+        +t*(148.484432990224213d0 &
+        +t))))
+    ElseIf(x<=0.d0) Then
+      s=-0.5d0*x
+      t=1.d0-s
+      fd=(159651.547840031111d0 &
+        +t*(96307.2005742063042d0 &
+        +t*(26923.5693307648389d0 &
+        +t*(9274.54751848368696d0 &
+        +t*(4445.76333033698006d0 &
+        +t*(1461.45267097859337d0 &
+        +t*(272.164427980501432d0 &
+        +t*23.6526046298891619d0 &
+        )))))))/(2522.7839609396783d0 &
+        +s*(3244.5527999477567d0 &
+        +s*(2403.0532924519756d0 &
+        +s*(1176.7202478443275d0 &
+        +s*(397.7596246691212d0 &
+        +s*(91.84661231161838d0 &
+        +s*(13.491911254479298d0 &
+        +s)))))))
+    EndIf
+    If(y>0.d0) Then
+      y2=y*y
+      fd=-fd+236.532261911384425d0 &
+        +y2*(113.643939539669510d0 &
+        +y2*(8.22467033424113218d0 &
+        +y2*0.166666666666666667d0))
+    EndIf
+    fd10h=fd
+    Return
+  End Function fd10h
 
 End Module fd
