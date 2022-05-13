@@ -570,7 +570,7 @@ Contains
 
     ! If there are FFN rates, read in the FFN data and set FFN array sizes
     If ( nffn > 0) Then
-      If ( parallel_IOProcessor() ) Then
+      If ( parallel_IOProcessor() ) Then               
         Call read_ffn_data(nffn,data_dir)
       Else
         Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
