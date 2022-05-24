@@ -529,8 +529,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve
-    Use xnet_ffn, Only: ffnsum, ffnenu, ngrid, read_ffn_data
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0
+    Use xnet_ffn, Only: ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, ngrid, read_ffn_data
     Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
@@ -574,11 +574,27 @@ Contains
         Call read_ffn_data(nffn,data_dir)
       Else
         Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
+        If (iweak0 == 2) Then
+        !Additional data for logft rates
+           Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
+           Allocate (ffn_qval(nffn))
+        Endif
       EndIf
       Call parallel_bcast(ffnsum)
       Call parallel_bcast(ffnenu)
+      If (iweak0 == 2) Then
+        !Additional data for logft rates
+        Call parallel_bcast(ffn_ec)
+        Call parallel_bcast(ffn_beta)
+        Call parallel_bcast(ffn_qval)
+      Endif
     Else
       Allocate(ffnsum(1,ngrid),ffnenu(1,ngrid))
+      !Additional arrays for logft rates
+      If (iweak0 == 2) Then
+         Allocate (ffn_ec(1,ngrid),ffn_beta(1,ngrid))
+         Allocate (ffn_qval(1))
+      Endif
     Endif
 
     ! If there are NNU rates, read in the NNU data and set NNU array sizes
