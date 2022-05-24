@@ -35,9 +35,6 @@ EOS = STARKILLER
 #EOS = HELMHOLTZ
 #EOS ?= BAHCALL
 
-## SELECT EC table, Default=OFF
-USE_LOGFT = ON
-
 ## Choose matrix solver package 
 #MATRIX_SOLVER = PARDISO
 #MATRIX_SOLVER = MA48
