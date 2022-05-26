@@ -332,6 +332,10 @@ NETLIB_DIR    ?= ../tools/LAPACK
 BLAS_LVL1_SRC  = ddot.f dlamch.f dnrm2.f dscal.f dswap.f idamax.f lsame.f xerbla.f
 BLAS_LVL2_SRC  = dger.f dgemv.f
 BLAS_LVL3_SRC  = dgemm.f dtrsm.f
+ifeq ($(MATRIX_SOLVER),MA48)
+BLAS_LVL1_SRC += daxpy.f
+BLAS_LVL2_SRC += dtrsv.f
+endif
 LAPACK_UTL_SRC = ieeeck.f iparmq.f
 LAPACK_AUX_SRC = dgetrf2.f dlaswp.f ilaenv.f
 NETLIB_SRC     = $(addprefix $(NETLIB_DIR)/, \

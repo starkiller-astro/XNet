@@ -25,6 +25,7 @@ BASE = \
        xnet_conditions.o \
        xnet_constants.o \
        xnet_evolve.o \
+       xnet_fd.o \
        xnet_ffn.o \
        xnet_flux.o \
        xnet_integrate.o \
@@ -57,10 +58,10 @@ else ifeq ($(EOS),HELMHOLTZ)
   ifndef HELMHOLTZ_PATH
     $(error HELMHOLTZ_PATH variable must be set for EOS=HELMHOLTZ)
   endif
-  EOS_OBJ = xnet_eos_helm.o xnet_fd.o helmholtz.o
+  EOS_OBJ = xnet_eos_helm.o helmholtz.o
   VPATH += $(HELMHOLTZ_PATH)
 else ifeq ($(EOS),STARKILLER)
-  EOS_OBJ = actual_eos.o eos_type.o xnet_fd.o xnet_eos_starkiller.o
+  EOS_OBJ = actual_eos.o eos_type.o xnet_eos_starkiller.o
   STARKILLER_HELMHOLTZ_PATH ?= ../tools/starkiller-helmholtz
   VPATH += $(STARKILLER_HELMHOLTZ_PATH)
 endif
@@ -120,17 +121,17 @@ xnet_PARDISO: $(BASE) xnet_jacobian_$(PARDISO).o $(PARDISO_OBJ) $(LAPACK_OBJ) $(
 	    $(PARDISO_LIBDIR) $(PARDISO_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 endif
 
-net_setup: xnet_conditions.o xnet_controls.o xnet_data.o net_setup.o xnet_constants.o xnet_ffn.o xnet_nnu.o xnet_preprocess.o xnet_util.o $(MPI_OBJ)
+net_setup: xnet_conditions.o xnet_controls.o xnet_data.o net_setup.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_nnu.o xnet_preprocess.o xnet_util.o $(MPI_OBJ)
 	$(LDR) $(LDFLAGS) -o net_setup \
-	    xnet_conditions.o xnet_controls.o xnet_data.o net_setup.o xnet_constants.o xnet_ffn.o xnet_nnu.o xnet_preprocess.o xnet_util.o $(MPI_OBJ)
+	    xnet_conditions.o xnet_controls.o xnet_data.o net_setup.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_nnu.o xnet_preprocess.o xnet_util.o $(MPI_OBJ)
 
 xinab: xnet_data.o init_abund.o 
 	$(LDR) $(LDFLAGS) -o xinab \
 	    init_abund.o xnet_data.o 
 
-xnse: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_ffn.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o
+xnse: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o
 	$(LDR) $(LDFLAGS) -o xnse$(MPI_SFX) \
-	    xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_ffn.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o \
+	    xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o \
 	    $(notdir $(LAPACK_OBJ)) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 #
