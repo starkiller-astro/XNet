@@ -562,7 +562,7 @@ Contains
         iye(:) = i_ni56
       ElseIf ( iguess == 3 ) Then
         iye(1) = i_he4
-        iye(2) = iye_za_u
+        iye(2) = i_pp
       ElseIf ( iguess == 4 ) Then
         iye(1) = i_ni56
         iye(2) = iye_za_u
