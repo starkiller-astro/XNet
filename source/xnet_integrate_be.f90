@@ -303,10 +303,10 @@ Contains
           ! testc2 which measures total abundance changes, and
           ! testm which tests mass conservation.
           !-----------------------------------------------------------------------------------------
-          testc  = sum(reldy)
-          testc2 = sum(aa*dy(:,izb))
-          xtot   = sum(aa*yt(:,izb)) + xext(izb) - 1.0
-          testm  = xtot(izb) - xtot_init(izb)
+          testc     = sum(reldy)
+          testc2    = sum(aa*dy(:,izb))
+          xtot(izb) = sum(aa*yt(:,izb)) + xext(izb) - 1.0
+          testm     = xtot(izb) - xtot_init(izb)
           If ( idiag >= 3 ) Write(lun_diag,"(a,3i5,3es14.6)") 'NR',kstep,izone,kit,testm,testc,testc2
 
           !-----------------------------------------------------------------------------------------
