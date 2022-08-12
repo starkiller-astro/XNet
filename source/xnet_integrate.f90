@@ -24,7 +24,7 @@ Contains
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, rhot, &
       & t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iweak, lun_diag, yacc, &
-      & szbatch, zb_lo, zb_hi, lzactive, iscrn
+      & szbatch, zb_lo, zb_hi, lzactive, iscrn, ymin
     Use xnet_types, Only: dp
     Implicit None
 
@@ -79,6 +79,8 @@ Contains
         If ( tdel_old(izb) > 0.0 ) Then
           Where ( y(:,izb) > yacc )
             ydotoy = abs((y(:,izb)-yo(:,izb))/y(:,izb))
+          ElseWhere ( y(:,izb) > ymin )
+            ydotoy = abs((y(:,izb)-yo(:,izb))/yacc)
           ElseWhere
             ydotoy = 0.0
           EndWhere
@@ -107,6 +109,8 @@ Contains
 
           Where ( y(:,izb) > yacc )
             ydotoy = abs(ydot(:,izb)/y(:,izb))
+          ElseWhere ( y(:,izb) > ymin )
+            ydotoy = abs(ydot(:,izb)/yacc)
           ElseWhere
             ydotoy = 0.0
           EndWhere
