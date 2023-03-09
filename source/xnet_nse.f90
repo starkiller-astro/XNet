@@ -506,11 +506,13 @@ Contains
     Real(dp) :: za_ye(2)
     Integer :: i, ii, iye(2)
 
-    If ( iguess <= 1 .and. ( (rhonse <= 1.0e5_dp .and. t9nse >= 7.0_dp) .or. &
-      &                      (rhonse <= 1.0e6_dp .and. t9nse >= 8.0_dp) .or. &
-      &                      (rhonse <= 1.0e7_dp .and. t9nse >= 9.0_dp) .or. &
-      &                      (rhonse <= 1.0e8_dp .and. t9nse >= 11.0_dp) .or. &
-      &                      (rhonse <= 1.0e9_dp .and. t9nse >= 14.0_dp) ) ) Then
+    If ( iguess <= 1 .and. ( (rhonse <= 1.0e5_dp  .and. t9nse >= 7.0_dp ) .or. &
+      &                      (rhonse <= 1.0e6_dp  .and. t9nse >= 8.0_dp ) .or. &
+      &                      (rhonse <= 1.0e7_dp  .and. t9nse >= 9.0_dp ) .or. &
+      &                      (rhonse <= 1.0e8_dp  .and. t9nse >= 11.0_dp) .or. &
+      &                      (rhonse <= 1.0e9_dp  .and. t9nse >= 14.0_dp) .or. &
+      &                      (rhonse <= 1.0e10_dp .and. t9nse >= 17.0_dp) .or. &
+      &                      (                          t9nse >= 20.0_dp) ) ) Then
       iye(1) = i_nn
       iye(2) = i_pp
     ElseIf ( yense < za_min ) Then
