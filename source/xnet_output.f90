@@ -23,10 +23,10 @@ Contains
     ! stepwise output.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, nname
-    Use xnet_abundances, Only: y
-    Use xnet_conditions, Only: rho, t, t9, tdel
+    Use xnet_abundances, Only: y, yo, ydot
+    Use xnet_conditions, Only: rho, t, t9, tdel, t9o, t9dot
     Use xnet_controls, Only: nnucout, nnucout_string, idiag, inucout, itsout, kmon, lun_diag, &
-      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive
+      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive, itrain, lun_train
     Use xnet_flux, Only: flx, flx_int, flux
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_output
@@ -62,6 +62,19 @@ Contains
       Else
         flx_int = 0.0
       EndIf
+    EndIf
+
+    If ( itrain >= 1 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+
+          ! Snapshot of potential training data for integrator
+          Write(lun_train(izb)) kstep,t(izb),t9(izb),rho(izb),tdel(izb),edot(izb),y(:,izb), &
+            & yo(:,izb),ydot(:,izb),t9(izb),t9o(izb),t9dot(izb)
+
+        EndIf
+      EndDo
     EndIf
 
     If ( itsout >= 1 ) Then
