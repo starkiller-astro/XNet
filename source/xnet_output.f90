@@ -71,7 +71,7 @@ Contains
 
           ! Snapshot of potential training data for integrator
           Write(lun_train(izb)) kstep,t(izb),t9(izb),rho(izb),tdel(izb),edot(izb),y(:,izb), &
-            & yo(:,izb),ydot(:,izb),t9(izb),t9o(izb),t9dot(izb)
+            & yo(:,izb),ydot(:,izb),t9o(izb),t9dot(izb)
 
         EndIf
       EndDo
