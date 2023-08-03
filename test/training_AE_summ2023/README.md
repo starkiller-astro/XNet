@@ -36,9 +36,10 @@ This repository contains a collection of Python scripts and data used during my 
 
 ## Note
 
-Before running any of the scripts, ensure that you have the required Python libraries (NumPy and Matplotlib) installed. Modify the file paths and variables in each script as per your system setup and specific use case. Adittionall, make sure that the file names are the same or feel free to change them at your liking.
+Before running any of the scripts, ensure that you have the required Python libraries (NumPy and Matplotlib) installed. Modify the file paths and variables in each script as per your system setup and specific use case. Additionally, make sure that the file names are the same or feel free to change them at your liking.
 
 ## Acknowledgments
 
-Thank you for using these scripts during your summer internship project. We hope they assist you in your data analysis and contribute to your understanding of the subject matter. Happy coding!
+I would like to extend my thanks and appreciation to my mentor Dr. Harris, for their invaluable guidance and support throughout this project.
+
 
