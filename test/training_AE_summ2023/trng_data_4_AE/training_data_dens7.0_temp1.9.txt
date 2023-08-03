@@ -1,0 +1,6 @@
+  Initial conditions for constant burn
+  0.000000E+00    Start Time
+  1.000000E+03    Stop Time
+  1.000000E-12    Init Del t
+0.0E+00 1.900000E+00 1.000000E+07 0.5
+1.0E+03 1.900000E+00 1.000000E+07 0.5
