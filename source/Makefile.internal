@@ -163,7 +163,7 @@ else ifeq ($(PE_ENV),NVIDIA)
         ARCHOPT   =
     endif
     ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-        INLINE    = -Mipa=fast,inline,safe
+        INLINE    =# -Mipa=fast,inline,safe
     else
         INLINE    =
     endif
