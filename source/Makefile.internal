@@ -12,7 +12,9 @@ else
     MACHINE=$(shell echo $${HOSTNAME%%.*} | sed 's/\(-[a-zA-Z0-9]*\)\?[0-9]*$$//')
 endif
 CRAY_MACHINE = \
+               frontier \
                titan \
+               perlmutter \
                edison \
                cori \
                chester \
@@ -131,6 +133,52 @@ else ifeq ($(PE_ENV),PGI)
     endif
     ifeq ($(OPENACC_MODE),ON)
         OPENACC   = -acc -ta=tesla:cc70,cuda10.1,ptxinfo -Minfo=accel
+    else
+        OPENACC   = -acclibs
+    endif
+
+    # Fortran-specific flags
+    OPT_FFLAGS    =
+    DEBUG_FFLAGS  = -Ktrap=fp -Mbounds -Mchkptr -Mdclchk
+
+    F77FLAGS      = -r8 -i4 -Mfixed
+    F90FLAGS      = -r8 -i4
+
+    # C-specific flags
+    OPT_CFLAGS    =
+    DEBUG_CFLAGS  =
+
+    # Linker flags
+    OPT_LDFLAGS   = -pgc++libs
+    DEBUG_LDFLAGS = -pgc++libs
+
+else ifeq ($(PE_ENV),NVIDIA)
+
+    ifneq ($(FC),ftn)
+        FC        = nvfortran
+        CC        = nvcc
+        CXX       = nvc++
+        LDR       = nvfortran
+
+        ARCHOPT   =
+    endif
+    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+        INLINE    = -Mipa=fast,inline,safe
+    else
+        INLINE    =
+    endif
+
+    # generic flags
+    OPT_FLAGS     = -g -gopt -fast $(ARCHOPT) $(INLINE)
+    DEBUG_FLAGS   = -g -gopt -O0 -traceback
+
+    ifeq ($(OPENMP_MODE),ON)
+        OPENMP    = -mp=multicore
+    else
+        OPENMP    = -mp=multicore -Mnoopenmp
+    endif
+    ifeq ($(OPENACC_MODE),ON)
+        OPENACC   = -acc -gpu=ptxinfo -Minfo=accel
     else
         OPENACC   = -acclibs
     endif

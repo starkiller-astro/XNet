@@ -22,16 +22,27 @@ else
         CUDA_DIR ?= /opt/nvidia/cudatoolkit/default
     endif
 endif
+
+ifeq ($(PE_ENV),NVIDIA)
+CUDA_INC    =
+CUDA_LIBDIR =
+CUDA_LIBS   =
+else
 CUDA_INC    = -I$(CUDA_DIR)/include
 CUDA_LIBDIR = -L$(CUDA_DIR)/lib64
 CUDA_LIBS   = -lcudart -lcuda
+endif
 CUDA_SRC    = cudaf.f90
 CUDA_OBJ    = $(addsuffix .o,$(basename $(CUDA_SRC)))
 
 ## cuBLAS
 CUBLAS_INC    = $(CUDA_INC)
 CUBLAS_LIBDIR = $(CUDA_LIBDIR)
+ifeq ($(PE_ENV),NVIDIA)
+CUBLAS_LIBS   = -cudalib=cublas
+else
 CUBLAS_LIBS   = -lcublas $(CUDA_LIBS)
+endif
 CUBLAS_SRC    = cublasf.f90 $(CUDA_SRC)
 CUBLAS_OBJ    = $(addsuffix .o,$(basename $(CUBLAS_SRC)))
 
