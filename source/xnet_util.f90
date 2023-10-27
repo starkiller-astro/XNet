@@ -141,7 +141,7 @@ Contains
     i2 = len_trim(string)
 
     ! initial values
-    If ( pos > i2 ) Then
+    If ( pos < 1 .or. pos > i2 ) Then
       pos = 0
       xx = 0
       Return
@@ -223,7 +223,7 @@ Contains
     i2 = len_trim(string)
 
     ! initial values
-    If ( pos > i2 ) Then
+    If ( pos < 1 .or. pos > i2 ) Then
       pos = 0
       xx = 0.0
       Return
