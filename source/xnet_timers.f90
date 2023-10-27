@@ -23,11 +23,18 @@ Module xnet_timers
   Real(dp) :: timer_scrn   = 0.0  ! Screening and EOS time
   Real(dp) :: timer_eos    = 0.0  ! Screening and EOS time
   Real(dp) :: timer_nse    = 0.0  ! NSE timer
+  Real(dp) :: timer_nseinit= 0.0  ! NSE init timer
+  Real(dp) :: timer_nsesolv= 0.0  ! NSE solver timer
+  Real(dp) :: timer_nsenrap= 0.0  ! NSE Newton Raphson timer
+  Real(dp) :: timer_nsels  = 0.0  ! NSE line search timer
+  Real(dp) :: timer_nseeval= 0.0  ! NSE function evaluation timer
+  Real(dp) :: timer_nsescrn= 0.0  ! NSE screening timer
   Real(dp) :: timer_output = 0.0  ! Output time
   Real(dp) :: start_timer  = 0.0  ! cpu time at the beginning of the timer block
   Real(dp) :: stop_timer   = 0.0  ! cpu time at the end of the timer block
   !$omp threadprivate(timer_burner,timer_xnet,timer_setup,timer_csect,timer_deriv,timer_jacob,timer_decmp, &
-  !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_eos,timer_output,start_timer,stop_timer)
+  !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_eos,timer_output,start_timer,stop_timer, &
+  !$omp   timer_nse,timer_nseinit,timer_nsesolv,timer_nsenrap,timer_nsels,timer_nseeval,timer_nsescrn))
 
 Contains
 
@@ -69,6 +76,13 @@ Contains
     timer_solve = 0.0
     timer_scrn  = 0.0
     timer_eos   = 0.0
+    timer_nse    = 0.0
+    timer_nseinit= 0.0
+    timer_nsesolv= 0.0
+    timer_nsenrap= 0.0
+    timer_nsels  = 0.0
+    timer_nseeval= 0.0
+    timer_nsescrn= 0.0
 
     Return
   End Subroutine reset_timers
