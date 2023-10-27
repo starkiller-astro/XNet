@@ -518,7 +518,7 @@ Contains
     ! Input variables
     Integer, Intent(in) :: iguess
 
-    ! /Output variables
+    ! Output variables
     Real(dp), Intent(out) :: uvec(2)
 
     ! Optional variables
@@ -1272,9 +1272,9 @@ Contains
       hs = fhs(iz1) + fhs(iz2) - fhs(izc)
 
       ! Select screening factor
-      theta12iw = max( 0.0, min( 1.0, (lambda12 - lam_1) / (lam_2 - lam_1) ) )
-      theta12is = max( 0.0, min( 1.0, (lambda12 - lam_5) / (lam_6 - lam_5) ) )
-      theta12si = max( 0.0, min( 1.0, (lambda12 - lam_3) / (lam_4 - lam_3) ) )
+      theta12iw = max( 0.0_dp, min( 1.0_dp, (lambda12 - lam_1) / (lam_2 - lam_1) ) )
+      theta12is = max( 0.0_dp, min( 1.0_dp, (lambda12 - lam_5) / (lam_6 - lam_5) ) )
+      theta12si = max( 0.0_dp, min( 1.0_dp, (lambda12 - lam_3) / (lam_4 - lam_3) ) )
       Where ( iz2 == 0 )
         h0 = 0.0_dp
       ElseWhere ( lambda12 < lam_1 )
