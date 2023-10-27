@@ -34,6 +34,8 @@ Module xnet_nse
   Integer, Parameter :: nritmax = 200 ! Maximum number of Newton-Raphson iterations
   Integer, Parameter :: lsitmax = 30  ! Maximum number of line-search iterations
 
+  Integer, Parameter :: iguess_max = 6 ! Maximum number of different initial guesses to try
+
   ! NSE solution variables
   Real(dp), Allocatable, Public :: unse(:) ! Chemical potentials for each species
   Real(dp), Allocatable, Public :: xnse(:) ! Mass fractions
@@ -55,7 +57,8 @@ Module xnet_nse
   !$omp threadprivate(typu,typfvec,scaleu,scalefvec)
 
   ! Counters
-  Integer :: knrtot(3), knr(3)
+  Integer, Public :: knrtot(3)
+  Integer :: knr(3)
   Logical :: use_CP98
   !$omp threadprivate(knrtot,knr,use_CP98)
 
@@ -65,6 +68,7 @@ Module xnet_nse
   !$omp threadprivate(hnse)
 
   ! Network indices for some characteristic nuclei
+  Integer, Public :: i_nn, i_pp, i_he4, i_si28, i_ni56
   Integer :: ibe                           ! Maximally bound nucleus
   Integer :: iza_min, iza_max              ! min/max Z/A (A>1)
   Integer :: iye_za, iye_za_l, iye_za_u    ! closest Z/A to Ye from above and below (A>1)
@@ -72,7 +76,6 @@ Module xnet_nse
   Integer :: iye_hvy, iye_hvy_l, iye_hvy_u ! closest Z/A to Ye from abbove and below (Z>=20)
   Integer :: ife_min, ife_max              ! min/max Z/A (common Fe/Ni isotopes)
   Integer :: iye_fe, iye_fe_l, iye_fe_u    ! closest Z/A to Ye from above and below (common Fe/Ni isotopes)
-  Integer :: i_nn, i_pp, i_he4, i_si28, i_ni56
   Real(dp) :: zatst, za_min, za_max
   !$omp threadprivate(iye_za,iye_za_l,iye_za_u,iye_hvy,iye_hvy_l,iye_hvy_u,iye_fe,iye_fe_l,iye_fe_u,zatst)
 
@@ -145,6 +148,7 @@ Contains
 
     start_timer = xnet_wtime()
     timer_nse = timer_nse - start_timer
+    timer_nseinit = timer_nseinit - start_timer
 
     !$omp parallel default(shared)
     ! Allocate NSE composition arrays
@@ -224,6 +228,7 @@ Contains
 
     stop_timer = xnet_wtime()
     timer_nse = timer_nse + stop_timer
+    timer_nseinit = timer_nseinit + stop_timer
 
     Return
   End Subroutine nse_initialize
@@ -305,7 +310,7 @@ Contains
     Return
   End Subroutine nse_inuc
 
-  Subroutine nse_solve(rho,t9,ye)
+  Subroutine nse_solve(rho,t9,ye,uvec_in)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the NSE composition by solving for the neutron and proton chemical
     ! potentials which satisfy the Saha equation under the constraints of mass and charge
@@ -318,19 +323,26 @@ Contains
     ! Input variables
     Real(dp), Intent(in) :: rho, t9, ye
 
+    ! Optional variables
+    Real(dp), Optional, Intent(in) :: uvec_in(2)
+
     ! Local variables
     Real(dp) :: uvec(2), uvec0(2)
     Integer :: i, ii
     Logical :: check
-    Integer :: info, info0, iguess, iguess0
+    Integer :: info, info0, iguess, iguess0, iguess_start
 
     start_timer = xnet_wtime()
     timer_nse = timer_nse - start_timer
+    timer_nsesolv = timer_nsesolv - start_timer
 
     ! Reset counters
     knrtot(:) = 0
 
     ! Initialize NSE variables
+    info = 0
+    info0 = 0
+    use_CP98 = .false.
     rhonse = rho
     t9nse = t9
     yense = ye
@@ -339,14 +351,21 @@ Contains
     ! Identify species in network that are close in Z/A to Ye
     Call nse_inuc
 
+    ! Use supplied initial guess if one is provided
+    If ( present(uvec_in) ) Then
+      iguess_start = 0
+    Else
+      iguess_start = 1
+    EndIf
+
     ! Start with easy screening to get a good guess
     use_CP98 = .true.
-    Call nse_screen_CP98
-    Do iguess = 1, 6
+    Call nse_screen_CP98(hnse)
+    Do iguess = iguess_start, iguess_max
       unse(:) = 0.0_dp
       xnse(:) = 0.0_dp
       ynse(:) = 0.0_dp
-      Call nse_guess(iguess,uvec)
+      Call nse_guess(iguess,uvec,uvec_in)
       Call nse_nr(uvec,check,info)
       If ( info > 0 ) Exit
     EndDo
@@ -361,27 +380,26 @@ Contains
     ! Now use XNet's screening to match network
     If ( iscrn > 0 ) Then
       use_CP98 = .false.
-      If ( info > 0 ) Then
-        iguess = 0
+      If ( info0 > 0 ) Then
+        iguess = -iguess0
 
-        ! Iterate a few times to make sure screening and composition are consistent
-        Do i = 1, 3
-          Call nse_screen
+        !! Iterate a few times to make sure screening and composition are consistent
+        !Do i = 1, 3
+          !Call nse_screen
           Call nse_nr(uvec,check,info)
           If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
           & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
-        EndDo
+        !EndDo
       EndIf
 
       ! Try different guesses if both screening approaches fail
       If ( info <= 0 ) Then
-        Do iguess = 1, 6
+        Do iguess = iguess_start, iguess_max
           unse(:) = 0.0_dp
           xnse(:) = 0.0_dp
           ynse(:) = 0.0_dp
           hnse(:) = 0.0_dp
-          Call nse_guess(iguess,uvec)
-          Call nse_screen
+          Call nse_guess(iguess,uvec,uvec_in)
           Call nse_nr(uvec,check,info)
           If ( info > 0 ) Exit
         EndDo
@@ -427,7 +445,7 @@ Contains
     ElseIf ( info0 > 0 ) Then
       use_CP98 = .true.
       uvec(:) = uvec0(:)
-      Call nse_screen_CP98
+      Call nse_screen_CP98(hnse)
       Call nse_eval(uvec)
       knrtot(3) = knrtot(3) + 1
     EndIf
@@ -444,11 +462,12 @@ Contains
 
     stop_timer = xnet_wtime()
     timer_nse = timer_nse + stop_timer
+    timer_nsesolv = timer_nsesolv + stop_timer
 
     Return
   End Subroutine nse_solve
 
-  Subroutine nse_guess(iguess,uvec)
+  Subroutine nse_guess(iguess,uvec,uvec_in)
     !-----------------------------------------------------------------------------------------------
     ! This routine provides the initial guess for the neutron and chemical potentials. The guess is
     ! determined by assuming a composition of only two nuclei in the network and solving the inverse
@@ -457,6 +476,8 @@ Contains
     ! necessary to converge at all. Different initial guesses are returned depending on the value
     ! of iguess. The order of these guesses reflects their predicted likelihood to quickly converge:
     !
+    ! iguess = 0 will use user-provided initial guess for uvec
+    ! 
     ! iguess = 1 and low density and high temperature, assume free nucleons:
     !               iye(1) = n                          ; iye(2) = p
     ! iguess > 6,
@@ -497,8 +518,11 @@ Contains
     ! Input variables
     Integer, Intent(in) :: iguess
 
-    ! Output variables
+    ! /Output variables
     Real(dp), Intent(out) :: uvec(2)
+
+    ! Optional variables
+    Real(dp), Optional, Intent(in) :: uvec_in(2)
 
     ! Local variables
     Real(dp), Parameter :: xmax = 1.0_dp, xmin = 0.0_dp
@@ -506,17 +530,35 @@ Contains
     Real(dp) :: za_ye(2)
     Integer :: i, ii, iye(2)
 
-    If ( iguess <= 1 .and. ( (rhonse <= 1.0e5_dp  .and. t9nse >= 7.0_dp ) .or. &
-      &                      (rhonse <= 1.0e6_dp  .and. t9nse >= 8.0_dp ) .or. &
-      &                      (rhonse <= 1.0e7_dp  .and. t9nse >= 9.0_dp ) .or. &
-      &                      (rhonse <= 1.0e8_dp  .and. t9nse >= 11.0_dp) .or. &
-      &                      (rhonse <= 1.0e9_dp  .and. t9nse >= 14.0_dp) .or. &
-      &                      (rhonse <= 1.0e10_dp .and. t9nse >= 17.0_dp) .or. &
-      &                      (                          t9nse >= 20.0_dp) ) ) Then
+    If ( present(uvec_in) ) Then
+      uvec(:) = uvec_in(:)
+    Else
+      uvec(:) = 0.0_dp
+    EndIf
+
+    ! If iguess < 0, assume we have a full composition, so update the guess by picking the
+    ! most abundant species with Z/A closest to Ye (i.e. the least wrong nuclei)
+    If ( iguess < 0 ) Then
+      iye(:) = minloc( (zz(:)*xnse(:)/aa(:) - yense)**2 + (xnse(:)-1.0_dp)**2, 1 )
+
+    ! If iguess = 0, initial guess is already supplied for uvec
+    ElseIf ( iguess == 0 ) Then
+      iye(1) = i_nn
+      iye(2) = i_pp
+
+    ! If iguess > 0, pick two nuclei for the composition and calculate mass fractions
+    ! consistent with Ye and nuclei in guess
+    ElseIf ( iguess == 1 .and. ( (rhonse <= 1.0e5_dp  .and. t9nse >= 7.0_dp ) .or. &
+      &                          (rhonse <= 1.0e6_dp  .and. t9nse >= 8.0_dp ) .or. &
+      &                          (rhonse <= 1.0e7_dp  .and. t9nse >= 9.0_dp ) .or. &
+      &                          (rhonse <= 1.0e8_dp  .and. t9nse >= 11.0_dp) .or. &
+      &                          (rhonse <= 1.0e9_dp  .and. t9nse >= 14.0_dp) .or. &
+      &                          (rhonse <= 1.0e10_dp .and. t9nse >= 17.0_dp) .or. &
+      &                          (                          t9nse >= 20.0_dp) ) ) Then
       iye(1) = i_nn
       iye(2) = i_pp
     ElseIf ( yense < za_min ) Then
-      If ( iguess <= 1 ) Then
+      If ( iguess == 1 ) Then
         iye(1) = iye_hvy_l
         iye(2) = i_nn
       ElseIf ( iguess == 2 ) Then
@@ -536,7 +578,7 @@ Contains
         iye(2) = i_pp
       EndIf
     ElseIf ( yense >= za_min .and. yense < 0.5_dp ) Then
-      If ( iguess <= 1 ) Then
+      If ( iguess == 1 ) Then
         iye(1) = iye_fe_l
         iye(2) = iye_fe_u
       ElseIf ( iguess == 2 ) Then
@@ -557,7 +599,7 @@ Contains
         iye(2) = i_pp
       EndIf
     ElseIf ( yense >= 0.501_dp ) Then
-      If ( iguess <= 1 ) Then
+      If ( iguess == 1 ) Then
         iye(1) = i_ni56
         iye(2) = i_pp
       ElseIf ( iguess == 2 ) Then
@@ -578,7 +620,7 @@ Contains
         iye(2) = i_pp
       EndIf
     Else
-      If ( iguess <= 1 ) Then
+      If ( iguess == 1 ) Then
         iye(:) = i_ni56
       ElseIf ( iguess == 2 ) Then
         iye(:) = iye_fe_l
@@ -597,56 +639,56 @@ Contains
     EndIf
     za_ye(:) = zz(iye(:))/aa(iye(:))
 
-    ! Calculate mass fractions consistent with Ye and nuclei above
-    If ( iguess /= 0 ) Then
-      If ( iye(1) == iye(2) ) Then
-        xnse(iye(1)) = xmax
-      ElseIf ( abs(za_ye(1) - za_ye(2)) < tiny(0.0_dp) ) Then
-        xnse(iye(1)) = xmax
-        xnse(iye(2)) = xmin
-      Else
-        xnse(iye(1)) = max( min( ( yense - za_ye(2) ) / ( za_ye(1) - za_ye(2) ), xmax ), xmin )
-        xnse(iye(2)) = max( min( 1.0_dp - xnse(iye(1)), xmax ), xmin )
-      EndIf
-      ynse(iye) = xnse(iye) / (mm(iye)*avn)
-
-    ! If iguess = 0, assume we have a full composition, so update the guess by picking the
-    ! most abundant species with Z/A closest to Ye (i.e. the least wrong nuclei)
-    Else
-      iye(:) = minloc( (zz(:)*xnse(:)/aa(:) - yense)**2 + (xnse(:)-1.0_dp)**2, 1 )
-!     iye(1) = i_nn
-!     iye(2) = i_pp
-    EndIf
-
-    ! Update screening corrections
-    Call nse_screen
+    ! If iguess = 0, calculate the full composition from the supplied gueess
+    If ( iguess == 0 ) Then
+      Call nse_composition(uvec)
 
     ! Calculate the initial guess (un and up)
-    bkt = t9nse*bok*epmev
-    c1 = bkt / (2.0_dp*pi*hbar*hbar*epmev*epmev)
-
-    ! Assume un = up if only using 1 species
-    If ( iye(1) == iye(2) .or. any( xnse(iye(:)) <= 0.0_dp ) ) Then
-
-      ii = maxloc( xnse(iye(:)), 1 )
-      i = iye(ii)
-      c2 = mm52(i) * angm(i)*ggnse(i) * c1 * sqrt(c1) / rhonse
-      uvec(1) = (bkt*(log(xnse(i)/c2) - hnse(intz(i))) - be(i)*epmev) / aa(i)
-      uvec(2) = uvec(1)
-
-    ! Solve for un and up
     Else
-      Do ii = 1, 2
+
+      ! Calculate mass fractions consistent with Ye and nuclei above
+      If ( iguess > 0 ) Then
+        If ( iye(1) == iye(2) ) Then
+          xnse(iye(1)) = xmax
+        ElseIf ( abs(za_ye(1) - za_ye(2)) < tiny(0.0_dp) ) Then
+          xnse(iye(1)) = xmax
+          xnse(iye(2)) = xmin
+        Else
+          xnse(iye(1)) = max( min( ( yense - za_ye(2) ) / ( za_ye(1) - za_ye(2) ), xmax ), xmin )
+          xnse(iye(2)) = max( min( 1.0_dp - xnse(iye(1)), xmax ), xmin )
+        EndIf
+        ynse(iye) = xnse(iye) / (mm(iye)*avn)
+      EndIf
+
+      ! Update screening corrections
+      Call nse_screen
+
+      bkt = t9nse*bok*epmev
+      c1 = bkt / (2.0_dp*pi*hbar*hbar*epmev*epmev)
+
+      ! Assume un = up if only using 1 species
+      If ( iye(1) == iye(2) .or. any( xnse(iye(:)) <= 0.0_dp ) ) Then
+
+        ii = maxloc( xnse(iye(:)), 1 )
         i = iye(ii)
         c2 = mm52(i) * angm(i)*ggnse(i) * c1 * sqrt(c1) / rhonse
-        lhs(ii,1) = nn(i)
-        lhs(ii,2) = zz(i)
-        rhs(ii) = bkt*(log(xnse(i)/c2) - hnse(intz(i))) - be(i)*epmev
-      EndDo
-      det = lhs(1,1)*lhs(2,2) - lhs(1,2)*lhs(2,1)
-      uvec(1) = rhs(1)*lhs(2,2) - rhs(2)*lhs(1,2)
-      uvec(2) = rhs(2)*lhs(1,1) - rhs(1)*lhs(2,1)
-      uvec(:) = uvec(:) / det
+        uvec(1) = (bkt*(log(xnse(i)/c2) - hnse(intz(i))) - be(i)*epmev) / aa(i)
+        uvec(2) = uvec(1)
+
+      ! Solve for un and up
+      Else
+        Do ii = 1, 2
+          i = iye(ii)
+          c2 = mm52(i) * angm(i)*ggnse(i) * c1 * sqrt(c1) / rhonse
+          lhs(ii,1) = nn(i)
+          lhs(ii,2) = zz(i)
+          rhs(ii) = bkt*(log(xnse(i)/c2) - hnse(intz(i))) - be(i)*epmev
+        EndDo
+        det = lhs(1,1)*lhs(2,2) - lhs(1,2)*lhs(2,1)
+        uvec(1) = rhs(1)*lhs(2,2) - rhs(2)*lhs(1,2)
+        uvec(2) = rhs(2)*lhs(1,1) - rhs(1)*lhs(2,1)
+        uvec(:) = uvec(:) / det
+      EndIf
     EndIf
 
     If ( itsout >= 2 ) Then
@@ -701,6 +743,9 @@ Contains
     xnse(:) = max( 0.0_dp, min( 1.0_dp, xnse(:) ) )
     ynse(:) = xnse(:) / (mm(:)*avn)
 
+    ! Update screening to be consistent with the new composition
+    Call nse_screen
+
     Return
   End Subroutine nse_composition
 
@@ -716,6 +761,9 @@ Contains
     ! Local variables
     Real(dp) :: temp(ny)
 
+    start_timer = xnet_wtime()
+    timer_nseeval = timer_nseeval - start_timer
+
     ! Update the NSE composition variables, unse, xnse, ynse
     Call nse_composition(uvec)
 
@@ -728,6 +776,9 @@ Contains
 !   fvec(2) = sum( temp(:)*xnse(:) ) - yense
 
     knr(3) = knr(3) + 1
+
+    stop_timer = xnet_wtime()
+    timer_nseeval = timer_nseeval + stop_timer
 
     Return
   End Subroutine nse_eval
@@ -817,6 +868,9 @@ Contains
       info = 1
       Return
     EndIf
+
+    start_timer = xnet_wtime()
+    timer_nsenrap = timer_nsenrap - start_timer
 
     ! Calculate maximum relative step length
     unorm = l2norm( scaleu(:)*uvec(:) )
@@ -922,6 +976,9 @@ Contains
     knr(1) = nrit
     knrtot(1) = knrtot(1) + min( nrit, nritmax )
 
+    stop_timer = xnet_wtime()
+    timer_nsenrap = timer_nsenrap + stop_timer
+
     Return
   End Subroutine nse_nr
 
@@ -967,6 +1024,9 @@ Contains
       info = -4
       Return
     EndIf
+
+    start_timer = xnet_wtime()
+    timer_nsels = timer_nsels - start_timer
 
     ! Determine minimum allowable step length
     plength = maxval( abs(pvec(:)) / merge( abs(uvec0(:)), typu(:), abs(uvec0(:))>typu(:) ), 1 )
@@ -1093,6 +1153,9 @@ Contains
     EndIf
     knr(2) = lsit
 
+    stop_timer = xnet_wtime()
+    timer_nsels = timer_nsels + stop_timer
+
     Return
   End Subroutine nse_lnsrch
 
@@ -1169,6 +1232,9 @@ Contains
     Real(dp) :: fhs(0:izmax+1), fhi(0:izmax+1), gammaz(0:izmax+1)
     Real(dp) :: cv, etae, detaedt9, ztot, ztilde, zinter, lambda0, gammae, dztildedt9, s0
 
+    start_timer = xnet_wtime()
+    timer_nsescrn = timer_nsescrn - start_timer
+
     If ( iscrn <= 0 ) Then
       hnse = 0.0_dp
     ElseIf ( .not. use_CP98 ) Then
@@ -1236,14 +1302,20 @@ Contains
 
     EndIf
 
+    stop_timer = xnet_wtime()
+    timer_nsescrn = timer_nsescrn + stop_timer
+
     Return
   End Subroutine nse_screen
 
-  Subroutine nse_screen_CP98
+  Subroutine nse_screen_CP98(hnse)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates a simpler Coulomb correction term as a backup if XNet screening fails.
     !-----------------------------------------------------------------------------------------------
     Implicit None
+
+    ! Output variables
+    Real(dp), Intent(out) :: hnse(ny)
 
     ! Local variables
     Integer, Parameter :: iz1 = 1
@@ -1257,6 +1329,9 @@ Contains
     Real(dp) :: fh0(izmax+1)
     Real(dp) :: ztot, ztilde, zinter, lambda0, gammae, dztildedt9
     Real(dp) :: gz, z, sqrtgz, ae
+
+    start_timer = xnet_wtime()
+    timer_nsescrn = timer_nsescrn - start_timer
 
     If ( iscrn <= 0 ) Then
       hnse = 0.0_dp
@@ -1288,6 +1363,9 @@ Contains
         & ('HNSE',iz1,iz2(j-1),j,sum(h0(1:(j-1))),hnse(j),j=2,izmax)
 
     EndIf
+
+    stop_timer = xnet_wtime()
+    timer_nsescrn = timer_nsescrn + stop_timer
 
     Return
   End Subroutine nse_screen_CP98
