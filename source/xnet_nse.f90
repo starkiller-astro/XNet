@@ -717,8 +717,12 @@ Contains
 
     ! Local variables
     Real(dp) :: c1, temp(ny)
+    Real(dp) :: cnse0(ny), temp0(ny)
     Real(dp) :: bkt, bktinv, rhoinv
     Integer :: ii, jj
+    Real(dp) :: rerr, rerr0
+    Integer :: it
+    Integer, Parameter :: maxit = 30
 
     ! Useful scalars
     bkt = t9nse*bok*epmev
@@ -726,25 +730,39 @@ Contains
     rhoinv = 1.0_dp / rhonse
     c1 = bkt / (2.0_dp*pi*hbar*hbar*epmev*epmev)
     c1 = c1*sqrt(c1)
+    rerr = 0.0_dp
+    rerr0 = huge(1.0_dp)
 
     ! Evaluate chemical potentials and mass fractions
     unse(:) = nn(:)*uvec(1) + zz(:)*uvec(2)
-    xnse(:) = c1 * rhoinv * angm(1:ny)*ggnse(1:ny) * mm52(:)
-    temp(:) = (unse(:) + be(:)*epmev)*bktinv + hnse(intz(:))
-    If ( itsout >= 5 ) Then
-      ii = maxloc( temp, 1 )
-      jj = minloc( temp, 1 )
-      Write(lun_stdout,'(a,a5,4es13.5)') 'max exponent: ', &
-        & nname(ii), temp(ii), unse(ii)*bktinv, be(ii)*epmev*bktinv, hnse(intz(ii))
-      Write(lun_stdout,'(a,a5,4es13.5)') 'min exponent: ', &
-        & nname(jj), temp(jj), unse(jj)*bktinv, be(jj)*epmev*bktinv, hnse(intz(jj))
-    EndIf
-    xnse(:) = xnse(:) * safe_exp( temp(:) )
-    xnse(:) = max( 0.0_dp, min( 1.0_dp, xnse(:) ) )
-    ynse(:) = xnse(:) / (mm(:)*avn)
+    cnse0(:) = c1 * rhoinv * angm(1:ny)*ggnse(1:ny) * mm52(:)
+    temp0(:) = (unse(:) + be(:)*epmev)*bktinv
 
-    ! Update screening to be consistent with the new composition
-    Call nse_screen
+    ! Iterate to get consistent screening with composition
+    Do it = 1, maxit
+
+      ! Update screening from existing composition
+      Call nse_screen
+
+      ! Update the composition
+      temp(:) = temp0(:) + hnse(intz(:))
+      If ( itsout >= 5 ) Then
+        ii = maxloc( temp, 1 )
+        jj = minloc( temp, 1 )
+        Write(lun_stdout,'(a,a5,4es13.5)') 'max exponent: ', &
+          & nname(ii), temp(ii), unse(ii)*bktinv, be(ii)*epmev*bktinv, hnse(intz(ii))
+        Write(lun_stdout,'(a,a5,4es13.5)') 'min exponent: ', &
+          & nname(jj), temp(jj), unse(jj)*bktinv, be(jj)*epmev*bktinv, hnse(intz(jj))
+      EndIf
+      xnse(:) = cnse0(:) * safe_exp( temp(:) )
+      xnse(:) = max( 0.0_dp, min( 1.0_dp, xnse(:) ) )
+
+      ! Check the error
+      if ( iscrn > 0 .and. .not. use_CP98 ) rerr = maxval( abs( ynse(:)*mm(:)*avn - xnse(:)  ) / abs( xnse(:) ) )
+      ynse(:) = xnse(:) / (mm(:)*avn)
+      If ( rerr <= 0.01_dp*tolf .or. rerr >= rerr0 ) Exit
+      rerr0 = rerr
+    EndDo
 
     Return
   End Subroutine nse_composition
