@@ -34,6 +34,8 @@ Module xnet_nse
   Integer, Parameter :: nritmax = 200 ! Maximum number of Newton-Raphson iterations
   Integer, Parameter :: lsitmax = 30  ! Maximum number of line-search iterations
 
+  Integer, Parameter :: scrnitmax = 30 ! Maximum number of iterations to make composition consistent with screening
+
   Integer, Parameter :: iguess_max = 6 ! Maximum number of different initial guesses to try
 
   ! NSE solution variables
@@ -328,7 +330,8 @@ Contains
 
     ! Local variables
     Real(dp) :: uvec(2), uvec0(2)
-    Integer :: i, ii
+    Real(dp) :: rerr, rerr0, xnse0(ny)
+    Integer :: i, ii, it
     Logical :: check
     Integer :: info, info0, iguess, iguess0, iguess_start
 
@@ -369,7 +372,7 @@ Contains
       Call nse_nr(uvec,check,info)
       If ( info > 0 ) Exit
     EndDo
-    If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'CP98:', &
+    If ( itsout >= 3 ) Write(lun_stdout,'(a5,i1,i3,8es23.15)') 'CP98:', &
     & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
 
     ! Save the CP98 result
@@ -383,13 +386,22 @@ Contains
       If ( info0 > 0 ) Then
         iguess = -iguess0
 
-        !! Iterate a few times to make sure screening and composition are consistent
-        !Do i = 1, 3
-          !Call nse_screen
+        ! Iterate a few times to make sure screening and composition are consistent
+        xnse0(:) = xnse(:)
+        rerr = 0.0_dp
+        rerr0 = huge(1.0_dp)
+        Do it = 1, scrnitmax
+          Call nse_screen
           Call nse_nr(uvec,check,info)
-          If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
-          & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
-        !EndDo
+
+          ! Check the relative difference between iterations
+          rerr = l2norm( xnse(:) - xnse0(:) ) / l2norm( xnse(:) )
+          If ( itsout >= 3 ) Write(lun_stdout,'(a5,i1,i3,9es23.15)') 'XNET:', &
+          & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2),rerr
+          If ( rerr <= 0.01_dp*tolf .or. rerr >= rerr0 ) Exit
+          rerr0 = rerr
+        EndDo
+
       EndIf
 
       ! Try different guesses if both screening approaches fail
@@ -403,7 +415,7 @@ Contains
           Call nse_nr(uvec,check,info)
           If ( info > 0 ) Exit
         EndDo
-        If ( itsout >= 3 ) Write(lun_stdout,'(a5,2i2,8es23.15)') 'XNET:', &
+        If ( itsout >= 3 ) Write(lun_stdout,'(a5,i1,i3,8es23.15)') 'XNET:', &
         & info,iguess,uvec(1),uvec(2),xnse(i_nn),xnse(i_pp),xnse(i_he4),xnse(i_ni56),fvec(1),fvec(2)
       EndIf
     EndIf
@@ -720,9 +732,6 @@ Contains
     Real(dp) :: cnse0(ny), temp0(ny)
     Real(dp) :: bkt, bktinv, rhoinv
     Integer :: ii, jj
-    Real(dp) :: rerr, rerr0
-    Integer :: it
-    Integer, Parameter :: maxit = 30
 
     ! Useful scalars
     bkt = t9nse*bok*epmev
@@ -730,39 +739,22 @@ Contains
     rhoinv = 1.0_dp / rhonse
     c1 = bkt / (2.0_dp*pi*hbar*hbar*epmev*epmev)
     c1 = c1*sqrt(c1)
-    rerr = 0.0_dp
-    rerr0 = huge(1.0_dp)
 
     ! Evaluate chemical potentials and mass fractions
     unse(:) = nn(:)*uvec(1) + zz(:)*uvec(2)
-    cnse0(:) = c1 * rhoinv * angm(1:ny)*ggnse(1:ny) * mm52(:)
-    temp0(:) = (unse(:) + be(:)*epmev)*bktinv
-
-    ! Iterate to get consistent screening with composition
-    Do it = 1, maxit
-
-      ! Update screening from existing composition
-      Call nse_screen
-
-      ! Update the composition
-      temp(:) = temp0(:) + hnse(intz(:))
-      If ( itsout >= 5 ) Then
-        ii = maxloc( temp, 1 )
-        jj = minloc( temp, 1 )
-        Write(lun_stdout,'(a,a5,4es13.5)') 'max exponent: ', &
-          & nname(ii), temp(ii), unse(ii)*bktinv, be(ii)*epmev*bktinv, hnse(intz(ii))
-        Write(lun_stdout,'(a,a5,4es13.5)') 'min exponent: ', &
-          & nname(jj), temp(jj), unse(jj)*bktinv, be(jj)*epmev*bktinv, hnse(intz(jj))
-      EndIf
-      xnse(:) = cnse0(:) * safe_exp( temp(:) )
-      xnse(:) = max( 0.0_dp, min( 1.0_dp, xnse(:) ) )
-
-      ! Check the error
-      if ( iscrn > 0 .and. .not. use_CP98 ) rerr = maxval( abs( ynse(:)*mm(:)*avn - xnse(:)  ) / abs( xnse(:) ) )
-      ynse(:) = xnse(:) / (mm(:)*avn)
-      If ( rerr <= 0.01_dp*tolf .or. rerr >= rerr0 ) Exit
-      rerr0 = rerr
-    EndDo
+    xnse(:) = c1 * rhoinv * angm(1:ny)*ggnse(1:ny) * mm52(:)
+    temp(:) = (unse(:) + be(:)*epmev)*bktinv + hnse(intz(:))
+    If ( itsout >= 5 ) Then
+      ii = maxloc( temp, 1 )
+      jj = minloc( temp, 1 )
+      Write(lun_stdout,'(a,a5,4es13.5)') 'max exponent: ', &
+        & nname(ii), temp(ii), unse(ii)*bktinv, be(ii)*epmev*bktinv, hnse(intz(ii))
+      Write(lun_stdout,'(a,a5,4es13.5)') 'min exponent: ', &
+        & nname(jj), temp(jj), unse(jj)*bktinv, be(jj)*epmev*bktinv, hnse(intz(jj))
+    EndIf
+    xnse(:) = xnse(:) * safe_exp( temp(:) )
+    xnse(:) = max( 0.0_dp, min( 1.0_dp, xnse(:) ) )
+    ynse(:) = xnse(:) / (mm(:)*avn)
 
     Return
   End Subroutine nse_composition
