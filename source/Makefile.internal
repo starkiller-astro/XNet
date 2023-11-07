@@ -207,7 +207,7 @@ else ifeq ($(PE_ENV),GNU)
         LDR       = gfortran
 
         ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-          ARCHOPT   = -mcpu=native
+          ARCHOPT   = -mtune=native
         else
           ARCHOPT   = -march=native
         endif
