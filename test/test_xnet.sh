@@ -75,7 +75,7 @@ function test_diff {
     echo "Warning: $1 differs from $2"
     echo "File diff_$3 contains diff output"
     diff diff1.txt diff2.txt >| diff_$3
-    read -rsp $'Press any key to continue...\n' -n1 key
+    #read -rsp $'Press any key to continue...\n' -n1 key
   fi
   rm diff1.txt diff2.txt
 }
