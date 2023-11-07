@@ -12,8 +12,8 @@ Module xnet_util
   Use xnet_types, Only: dp
   Implicit None
 
-  Real(dp), Parameter :: exp_max = maxexponent(1.0_dp)*ln_2*0.99_dp
-  Real(dp), Parameter :: exp_min = minexponent(1.0_dp)*ln_2*0.99_dp
+  Real(dp), Parameter :: exp_max = maxexponent(1.0_dp)*ln_2*0.9_dp
+  Real(dp), Parameter :: exp_min = minexponent(1.0_dp)*ln_2*0.9_dp
 
   Interface safe_exp
     Module Procedure safe_exp_scalar
