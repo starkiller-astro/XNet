@@ -63,6 +63,7 @@ xnetd_mpi=../source/xnetd_mpi
 xnetm_mpi=../source/xnetm_mpi
 xnetp_mpi=../source/xnetp_mpi
 xnet_nse_mpi=../source/xnet_nse_mpi
+xnse=../source/xnse
 
 xnet_mpi=$xnetp_mpi
 
@@ -127,6 +128,17 @@ function do_test_nse {
   test_diff Test_Results/net_diag_nse_$2 Test_Problems/Results/net_diag_nse_$2 nse_$2
 }
 
+function do_test_xnse {
+  cat test_settings_xnse Test_Problems/setup_xnse_$2 >| control
+  $1 < Test_Problems/input_xnse_test > xnse_$2.out
+  mv -f nse_diag01 Test_Results/nse_diag_$2
+  if [ -f Test_Problems/Results/nse_diag_$2 ]; then
+    test_diff Test_Results/nse_diag_$2 Test_Problems/Results/nse_diag_$2 nse_$2
+  else
+    cp -v Test_Results/nse_diag_$2 Test_Problems/Results/nse_diag_$2
+  fi
+}
+
 xnet_list=()
 # Use user-supplied executable if provided as argument
 for arg in $*; do
@@ -142,6 +154,7 @@ if [ ${#xnet_list[@]} -lt 1 ]; then
 fi
 
 mkdir -pv Test_Results
+mkdir -pv Test_Problems/Results
 
 n=1
 for xnet in ${xnet_list[@]}; do
@@ -311,6 +324,28 @@ if [ -f $xnet_nse ]; then
       echo "Test NSE: Core-Collapse SN with nu-p process network"
       test_th="ccsn"; test_net="nup"; test_name=${test_th}_${test_net}
       do_test_nse $xnet_nse $test_name
+    fi
+
+  done
+
+fi
+
+if [ -f $xnse ]; then
+
+  for itest in ${test_list[@]}; do
+
+    # NSE initial abundance test
+    if [ $itest -eq 80 -o $itest -eq 81 ]; then
+      echo "Test NSE: SN160 network"
+      test_net="sn160"; test_name=${test_net}
+      do_test_xnse $xnse $test_name
+    fi
+
+    # NSE initial abundance test
+    if [ $itest -eq 80 -o $itest -eq 82 ]; then
+      echo "Test NSE: SN231 network"
+      test_net="sn231"; test_name=${test_net}
+      do_test_xnse $xnse $test_name
     fi
 
   done
