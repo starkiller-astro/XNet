@@ -412,6 +412,7 @@ Contains
           ynse(:) = 0.0_dp
           hnse(:) = 0.0_dp
           Call nse_guess(iguess,uvec,uvec_in)
+          Call nse_screen
           Call nse_nr(uvec,check,info)
           If ( info > 0 ) Exit
         EndDo
