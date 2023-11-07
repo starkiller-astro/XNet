@@ -1,0 +1,27 @@
+name: Makefile tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout XNet
+      uses: actions/checkout@v3
+
+    - name: Setup environment
+      run: |
+        echo "XNET_DIR=${GITHUB_WORKSPACE}" >> ${GITHUB_ENV}
+
+    - name: Build
+      run: |
+        cd ${XNET_DIR}/source
+        make CMODE=DEBUG test_simple
+        make CMODE=DEBUG test_setup
+        make CMODE=DEBUG test_nse
