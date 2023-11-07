@@ -730,7 +730,6 @@ Contains
 
     ! Local variables
     Real(dp) :: c1, temp(ny)
-    Real(dp) :: cnse0(ny), temp0(ny)
     Real(dp) :: bkt, bktinv, rhoinv
     Integer :: ii, jj
 
