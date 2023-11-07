@@ -2,6 +2,9 @@
 ## Makefile for XNet and associated programs
 ##
 
+## Define the shell (for target commands)
+SHELL = /bin/bash
+
 ## Build search path
 VPATH = .
 
@@ -92,7 +95,7 @@ test_simple: xnet_dense
 	@cd ../test ; ln -s ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnetd 51
 
 test_setup: net_setup
-	@cd ../test/Data_SN160 ; ln -s ../tools/starkiller-helmholtz/helm_table.dat . ; ../../source/net_setup < <(echo "net_setup test")
+	@cd ../test/Data_SN160 ; ../../source/net_setup <<< "net_setup test"
 
 test_nse: xnse
 	@cd ../test ; ln -s ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnse 81
