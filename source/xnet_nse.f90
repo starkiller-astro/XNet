@@ -29,7 +29,7 @@ Module xnet_nse
 
   Real(dp), Parameter :: alpha  = 1.0e-8_dp
   Real(dp), Parameter :: gamma1 = 0.1_dp
-  Real(dp), Parameter :: gamma2 = 0.5_dp
+  Real(dp), Parameter :: gamma2 = 2.0_dp / 3.0_dp
 
   Integer, Parameter :: nritmax = 200 ! Maximum number of Newton-Raphson iterations
   Integer, Parameter :: lsitmax = 30  ! Maximum number of line-search iterations
@@ -1047,6 +1047,7 @@ Contains
     betak(0) = 0.0_dp
     betak(1) = 1.0_dp
     slopek(:) = slope
+    gveck(:) = gvec(:)
     If ( itsout >= 4 ) Write(lun_stdout,'(3x,i3,3x,4es23.15)') 0, beta_min, f0, f0+alpha*betak(1)*slope, slope
 
     Do lsit = 1, lsitmax
