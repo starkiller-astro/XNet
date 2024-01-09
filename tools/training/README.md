@@ -7,6 +7,8 @@ This repository contains a collection of Python scripts and data used during my 
 - Python 3.x
 - NumPy
 - Matplotlib
+- [Visual Studio Code](https://code.visualstudio.com/) (Use for .ipynb files)
+- [Jupyter Lab](https://jupyter.org/install) (Use for .ipynb files)
 
 ## Usage Instructions
 
