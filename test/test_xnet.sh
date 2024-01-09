@@ -289,6 +289,13 @@ for xnet in ${xnet_list[@]}; do
       do_test_batch $xnet $test_name
     fi
 
+    # Zone batching test using torch47 (explosive burning of degenerate C/O)
+    if [ $itest -eq 60 -o $itest -eq 62 ]; then
+      echo "Test: Zone batching w/ self-heating from explosive burning of degenerate C/O with torch47 network"
+      test_th="batch"; test_net="torch47"; test_name=${test_th}_${test_net}
+      do_test_batch $xnet $test_name
+    fi
+
   done
 
 done
