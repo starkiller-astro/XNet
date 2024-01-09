@@ -94,6 +94,9 @@ test_heat: xnet_dense
 test_simple: xnet_dense
 	@cd ../test ; ln -s ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnetd 51
 
+test_batch: xnet_dense
+	@cd ../test ; ln -s ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnetd 62
+
 test_setup: net_setup
 	@cd ../test/Data_SN160 ; ../../source/net_setup <<< "net_setup test"
 
