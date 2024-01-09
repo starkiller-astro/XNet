@@ -55,7 +55,7 @@ Contains
     kstep = 0
     Do izb = zb_lo, zb_hi
       kmon(:,izb) = 0
-!      ktot(:,izb) = 0
+      ktot(:,izb) = 0
     EndDo
 
     ! Set reaction controls not read in from control
@@ -65,7 +65,7 @@ Contains
     Call t9rhofind(0,t,nt,t9,rho)
     Do izb = zb_lo, zb_hi
       tdel_old(izb) = tdel(izb)
-  !    tdel_next(izb) = tdel(izb)
+      tdel_next(izb) = tdel(izb)
       nto(izb) = nt(izb)
       ntt(izb) = nt(izb)
       to(izb) = t(izb)
