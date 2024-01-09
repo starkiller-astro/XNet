@@ -38,7 +38,7 @@ This repository contains a collection of Python scripts and data used during my 
 
 ## Note
 
-Before running any of the scripts, ensure that you have the required Python libraries (NumPy and Matplotlib) installed. Modify the file paths and variables in each script as per your system setup and specific use case. Additionally, make sure that the file names are the same or feel free to change them at your liking.
+Before running any of the scripts, ensure that you have the required Python libraries (NumPy and Matplotlib) installed. For ".ipynb" files, it is advisable to utilize interactive environments for smoother execution of these scripts.Modify the file paths and variables in each script as per your system setup and specific use case. Additionally, make sure that the file names are the same or feel free to change them at your liking.
 
 ## Acknowledgments
 
