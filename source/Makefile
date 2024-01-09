@@ -85,17 +85,17 @@ all: xnet_dense net_setup xnse
 
 test: test_serial test_heat test_setup test_nse
 
-test_serial: xnet_dense
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnetd 0
+test_serial: $(EXE)
+	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 0
 
-test_heat: xnet_dense
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnetd 50
+test_heat: $(EXE)
+	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 50
 
-test_simple: xnet_dense
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnetd 51
+test_simple: $(EXE)
+	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 51
 
-test_batch: xnet_dense
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnetd 62
+test_batch: $(EXE)
+	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 62
 
 test_setup: net_setup
 	@cd ../test/Data_SN160 ; ../../source/net_setup <<< "net_setup test"
