@@ -62,4 +62,5 @@ MATRIX_SOLVER ?= dense
 ##    Maxwell - NVIDIA compute capability 5.x cards
 ##    Pascal  - NVIDIA compute capability 6.x cards
 ##    Volta   - NVIDIA compute capability 7.x cards
+##    Ampere  - NVIDIA compute capability 8.x cards
 GPU_TARGET ?= Volta

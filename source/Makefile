@@ -10,6 +10,7 @@ VPATH = .
 
 ## Define XNet's source directory
 XNET_DIR = .
+XNET_TEST_DIR = $(XNET_TEST_DIR)
 
 ## Include options for build configurations defined in Makefile.opt
 include $(XNET_DIR)/Makefile.opt
@@ -86,22 +87,22 @@ all: xnet_dense net_setup xnse
 test: test_serial test_heat test_setup test_nse
 
 test_serial: $(EXE)
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 0
+	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 0
 
 test_heat: $(EXE)
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 50
+	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 50
 
 test_simple: $(EXE)
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 51
+	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 51
 
 test_batch: $(EXE)
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 62
+	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 62
 
 test_setup: net_setup
-	@cd ../test/Data_SN160 ; ../../source/net_setup <<< "net_setup test"
+	@cd $(XNET_TEST_DIR)/Data_SN160 ; ../../source/net_setup <<< "net_setup test"
 
 test_nse: xnse
-	@cd ../test ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnse 81
+	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnse 81
 
 #
 # Rules to build specific configurations of XNet and supporting tools

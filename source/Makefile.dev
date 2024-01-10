@@ -123,6 +123,9 @@ endif
 ifneq ($(findstring sm70, $(GPU_TARGET)),)
     NVCCFLAGS += -gencode arch=compute_70,code=sm_70
 endif
+ifneq ($(findstring sm70, $(GPU_TARGET)),)
+    NVCCFLAGS += -gencode arch=compute_80,code=sm_80
+endif
 
 ## Flags for compiling with OpenACC
 ifeq ($(GPU_MODE),ON)

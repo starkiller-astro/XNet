@@ -175,7 +175,7 @@ else ifeq ($(PE_ENV),NVIDIA)
     ifeq ($(OPENMP_MODE),ON)
         OPENMP    = -mp=multicore
     else
-        OPENMP    = -mp=multicore -Mnoopenmp
+        OPENMP    =# -mp=multicore -Mnoopenmp
     endif
     ifeq ($(OPENACC_MODE),ON)
         OPENACC   = -acc -gpu=ptxinfo -Minfo=accel
