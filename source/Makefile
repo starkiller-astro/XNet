@@ -10,7 +10,7 @@ VPATH = .
 
 ## Define XNet's source directory
 XNET_DIR = .
-XNET_TEST_DIR = $(XNET_TEST_DIR)
+XNET_TEST_DIR = ../test
 
 ## Include options for build configurations defined in Makefile.opt
 include $(XNET_DIR)/Makefile.opt
