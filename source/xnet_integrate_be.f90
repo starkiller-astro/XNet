@@ -22,9 +22,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: y, yo, yt, xext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, t9, t9o, t9t, rho, rhoo, rhot, &
-      yeo, ye, yet, nt, nto, ntt, t9rhofind
+      yeo, ye, yet, nt, nto, ntt, t9rhofind, tdelstart
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
       & szbatch, zb_lo, zb_hi
+    Use xnet_integrate, Only: timestep
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
 
@@ -104,6 +105,18 @@ Contains
             t9t(izb) = t9(izb)
           EndIf
         EndDo
+      EndIf
+
+      ! For the last attempt, re-calculate timestep based on derivatives
+      ! as is done for the first timestep.
+      If ( kts == ktsmx-1 ) Then
+        Do izb = zb_lo, zb_hi
+          If ( inr(izb) == 0 ) Then
+            tdel(izb) = 0.0
+            tdelstart(izb) = 0.0
+          EndIf
+        EndDo
+        Call timestep(kstep,mask_in = lzstep)
       EndIf
 
       ! Log the failed integration attempts
