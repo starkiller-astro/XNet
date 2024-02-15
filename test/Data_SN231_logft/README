@@ -1,0 +1,12 @@
+This set of reaction data (Data_SN231_logft) contains the weak interaction rates tabulated as logft values.
+Details about the format and most of the values can be found here:
+K. Langanke & G. Martinez-Pinedo, Atomic Data and Nuclear Data Tables, Volume 79, Issue 1, p. 1-46. (2001)
+
+The logft(T,ne) values are stored in the netweak file. While regular ffn rates are indicated by the "ecr" discriptor, the logft 
+values have a "ft+" and "ft-" indicator in the heading line of each reaction. In principle it should be possible to mix and match both types of 
+entries, but make sure you don't have both for the same reaction. The number of entries is diffrent for the logft rates, therefore it is 
+important for the code to know which kind of rate is coming.
+
+How to use logft rates in the standalone XNet:
+To activate the logft rates, you set iweak=2 (or -2 for weak rates only) in the control file. 
+Electron screening needs to be activated and the EOS needs to be setup to return the electron chemical potential.
