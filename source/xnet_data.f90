@@ -575,11 +575,11 @@ Contains
         Call read_ffn_data(nffn,data_dir)
       Else
         Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
+        Allocate (has_logft(nffn))
         If (iweak0 == 2) Then
         !Additional data for logft rates
            Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
            Allocate (ffn_qval(nffn))
-           Allocate (has_logft(nffn))
         Endif
       EndIf
       Call parallel_bcast(ffnsum)
