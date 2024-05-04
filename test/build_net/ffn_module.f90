@@ -2,18 +2,22 @@ MODULE ffn_module
   IMPLICIT NONE
 
   INTEGER, PARAMETER :: max_nffn = 466
-  INTEGER            :: nffn
+  INTEGER            :: nffn = 0
+  INTEGER            :: nlogft =0 
   LOGICAL            :: netweak_flag = .true.
+  LOGICAL            :: read_logft_flag = .false.
 
   INTEGER            :: inuc_ffn(2,max_nffn)
+  INTEGER            :: has_logft(max_nffn)=0
   CHARACTER(LEN=5)   :: nname_ffn(2,max_nffn)
   CHARACTER(LEN=4)   :: desc_ffn = ' ffn'
   REAL(8)            :: q_ffn(max_nffn)
 
   CHARACTER(LEN=256) :: netweak_data_dir   = './ffn_data'
 
-  INTEGER            :: lun_netweak_in
+  INTEGER            :: lun_netweak_in, lun_ffngeff_in
   CHARACTER(LEN=256) :: netweak_in_fname   = 'lmpffnoda.data'
+  CHARACTER(LEN=256) :: ffngeff_in_fname   = 'ffngeff.dat'
 
   INTEGER            :: lun_netweak_out
   CHARACTER(LEN=256) :: netweak_out_fname  = 'netweak'
@@ -22,7 +26,9 @@ MODULE ffn_module
     netweak_flag, &
     netweak_data_dir, &
     netweak_in_fname, &
-    netweak_out_fname
+    netweak_out_fname, &
+    read_logft_flag , &
+    ffngeff_in_fname
 
   CONTAINS
 
@@ -93,6 +99,103 @@ MODULE ffn_module
     RETURN
   END SUBROUTINE write_ffn_rate
 
+  SUBROUTINE read_ffngeff(inuc_ffn,ffnenu,ffn_beta,ffn_ft)
+    USE net_module, ONLY: nuc_rename, net_index_from_name
+    implicit none
+    ! In/Out variables
+    INTEGER, intent(in) :: inuc_ffn(2,max_nffn)
+    REAL(8), intent(out) :: ffn_beta(143,max_nffn), ffn_ft(143,max_nffn)
+    REAL(8), intent(inout) :: ffnenu(143,max_nffn)
+    ! Local variables
+    REAL(8) :: q_read(2), ffnsum_read(2,143), ffnenu_read(2,143)
+    REAL(8) :: ffn_beta_read(2,143), ffn_ft_read(2,143)
+    INTEGER :: ierr, ii, jj, inucmax,inucmin
+    INTEGER :: inuc(2), nffn
+    CHARACTER(LEN=5) :: nname_read(2)
+    LOGICAL :: keep_rate
+
+
+    DO
+      READ(lun_ffngeff_in,'(14X,A5,18X,F8.4)',IOSTAT=ierr) nname_read(1), q_read(1)
+     ! write(*,*) nname_read(1),q_read(1)
+      IF ( ierr /= 0 ) THEN
+         EXIT
+      ENDIF
+
+      READ(lun_ffngeff_in,'(14X,A5,18X,F8.4)',IOSTAT=ierr) nname_read(2), q_read(2)
+      READ(lun_ffngeff_in,*)
+      READ(lun_ffngeff_in,*)
+
+      ! Make sure all nuclei in the rate are in the network
+      keep_rate = .true.
+      DO ii = 1, 2
+
+        ! Convert to lower-case and rename some species
+        CALL nuc_rename( nname_read(ii) )
+
+        CALL net_index_from_name( nname_read(ii), inuc(ii) )
+        IF ( inuc(ii) == 0 ) THEN
+          ! write(*,*) "Not keeping rate",nname_read(ii),inuc(ii)
+           keep_rate=.false.
+        Endif
+
+      END DO
+
+      ! Read the tabulated rate
+      DO jj = 1, 143
+      READ(lun_ffngeff_in,'(19X,6(f9.3))') ffn_beta_read(1,jj), ffn_ft_read(1,jj), ffnenu_read(1,jj), &
+     &        ffn_beta_read(2,jj), ffn_ft_read(2,jj), ffnenu_read(2,jj) 
+      END DO
+
+      READ(lun_ffngeff_in,*)
+
+      IF ( keep_rate ) THEN
+        DO jj=1,max_nffn
+           IF ( inuc_ffn(1,jj) == inuc(1) .and. inuc_ffn(2,jj)==inuc(2) ) THEN
+                   nffn=jj
+                   EXIT
+           ENDIF
+        ENDDO
+        IF (nffn<0) THEN
+                WRITE(*,*) "Reaction in ffngeff but not in lmpffnoda. Skipping."
+                CYCLE
+        ENDIF
+
+        nlogft = nlogft + 1  ! count accepted rate
+        ffn_beta(:,nffn)    = ffn_beta_read(1,:)
+        ffn_ft(:,nffn)    = ffn_ft_read(1,:)
+        ffnenu(:,nffn)    = ffnenu_read(1,:)
+        q_ffn(nffn)       = -q_read(1)!+0.511d0
+
+        has_logft(nffn)=1
+   !     write(*,*)"ft-",inuc(1),inuc(2),nffn
+
+        DO jj=1,max_nffn
+           IF ( inuc_ffn(1,jj) == inuc(2) .and. inuc_ffn(2,jj)==inuc(1) ) THEN
+                   nffn=jj
+                   EXIT
+           ENDIF
+        ENDDO
+        IF (nffn<0) THEN
+                WRITE(*,*) "Reaction in ffngeff but not in lmpffnoda. Skipping."
+                CYCLE
+        ENDIF
+ 
+        nlogft = nlogft + 1  ! count accepted rate
+        ffn_beta(:,nffn)    = ffn_beta_read(2,:)
+        ffn_ft(:,nffn)    = ffn_ft_read(2,:)
+        ffnenu(:,nffn)    = ffnenu_read(2,:)       
+        q_ffn(nffn)       = q_read(1)!-0.511d0
+
+        has_logft(nffn)=2
+   !     write(*,*)"ft+",inuc(2),inuc(1),nffn
+
+      END IF ! keep_rate
+
+    END DO ! read netweak_in
+
+  END SUBROUTINE read_ffngeff
+
   SUBROUTINE build_netweak
     USE net_module, ONLY: nuc_rename, net_index_from_name
     IMPLICIT NONE
@@ -100,8 +203,10 @@ MODULE ffn_module
     ! Local variables
     CHARACTER(LEN=5) :: nname_read(2)
     REAL(8) :: q_read(2), ffnsum_read(2,143), ffnenu_read(2,143)
+    REAL(8) :: ffn_beta_read(2,143), ffn_ft_read(2,143)
 
     REAL(8) :: ffnsum(143,max_nffn), ffnenu(143,max_nffn)
+    REAL(8) :: ffn_beta(143,max_nffn), ffn_ft(143,max_nffn)
     INTEGER :: inuc(2), iffn(2), iffn_sort(max_nffn)
     INTEGER :: ii, jj, inucmin, inucmax, ierr
     LOGICAL :: keep_rate, is_sorted
@@ -162,7 +267,10 @@ MODULE ffn_module
       END IF ! keep_rate
 
     END DO
-
+    ! Read alternative values from ffngeff
+    if (read_logft_flag) then
+        CALL read_ffngeff(inuc_ffn,ffnenu,ffn_beta,ffn_ft)
+    endif
     ! Generate a sorted index vector for sorting the reactions
     DO ii = 1, nffn
       iffn_sort(ii) = ii
@@ -205,15 +313,27 @@ MODULE ffn_module
     nname_ffn(1,1:nffn) = nname_ffn(1,iffn_sort(1:nffn))
     nname_ffn(2,1:nffn) = nname_ffn(2,iffn_sort(1:nffn))
     q_ffn(1:nffn)       = q_ffn(iffn_sort(1:nffn))
+    has_logft(1:nffn)   = has_logft(iffn_sort(1:nffn))
     DO jj = 1,143
       ffnsum(jj,1:nffn) = ffnsum(jj,iffn_sort(1:nffn))
+      ffn_beta(jj,1:nffn) = ffn_beta(jj,iffn_sort(1:nffn))
+      ffn_ft(jj,1:nffn) = ffn_ft(jj,iffn_sort(1:nffn))
       ffnenu(jj,1:nffn) = ffnenu(jj,iffn_sort(1:nffn))
     END DO
 
     ! Write the netweak file
     DO ii = 1, nffn
-      WRITE(lun_netweak_out,'(5x,2a5,28x,a3,6x,1pe12.5)') nname_ffn(1,ii),nname_ffn(2,ii),'ecr',q_ffn(ii)
-      WRITE(lun_netweak_out,'(9(f8.3))') (ffnsum(jj,ii),ffnenu(jj,ii),jj=1,143)
+      IF (has_logft(ii)==1 ) THEN
+         WRITE(lun_netweak_out,'(5x,2a5,28x,a3,6x,1pe12.5)') nname_ffn(1,ii),nname_ffn(2,ii),'ft-',q_ffn(ii)
+         WRITE(lun_netweak_out,'(9(f8.3))') (ffn_beta(jj,ii),ffn_ft(jj,ii),ffnsum(jj,ii),ffnenu(jj,ii),jj=1,143)
+      ELSE IF (has_logft(ii)==2 ) THEN
+         WRITE(lun_netweak_out,'(5x,2a5,28x,a3,6x,1pe12.5)') nname_ffn(1,ii),nname_ffn(2,ii),'ft+',q_ffn(ii)
+         WRITE(lun_netweak_out,'(9(f8.3))') (ffn_beta(jj,ii),ffn_ft(jj,ii),ffnsum(jj,ii),ffnenu(jj,ii),jj=1,143)
+      ELSE
+         WRITE(lun_netweak_out,'(5x,2a5,28x,a3,6x,1pe12.5)') nname_ffn(1,ii),nname_ffn(2,ii),'ecr',q_ffn(ii)
+         WRITE(lun_netweak_out,'(9(f8.3))') (ffnsum(jj,ii),ffnenu(jj,ii),jj=1,143)
+      ENDIF
+      
     END DO
 
     RETURN

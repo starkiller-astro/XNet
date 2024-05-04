@@ -26,6 +26,9 @@
   netweak_in_fname = 'lmpffnoda.data'
 
   netweak_out_fname = 'netweak'
+  
+  read_logft_flag = .false.
+  ffngeff_in_fname = 'ffngeff.dat'
 
 /
 

@@ -36,7 +36,7 @@ PROGRAM reaclib_reader
 
   SUBROUTINE build_netsu
     USE net_module, ONLY: nnet, net_index_from_name, write_net_rate, nname_net, lun_netsu_in, lun_netsu_out, reaclib_ver, no910
-    USE ffn_module, ONLY: nffn, ffn_index_from_name, write_ffn_rate
+    USE ffn_module, ONLY: nffn, nlogft, ffn_index_from_name, write_ffn_rate
     USE nnu_module, ONLY: nnnu, nnu_index_from_name, write_nnu_rate
     IMPLICIT NONE
 
@@ -266,7 +266,7 @@ PROGRAM reaclib_reader
 
     WRITE(*,'(a,i5)') '# reactions (total): ',nrcn+nffn+nnnu
     WRITE(*,'(a,i5)') '          (REACLIB): ',nrcn
-    WRITE(*,'(a,i5)') '              (FFN): ',nffn
+    WRITE(*,'(a,2i5)') '        (FFN,LOGFT): ',nffn,nlogft
     WRITE(*,'(a,i5)') '              (NNU): ',nnnu
 
     RETURN
