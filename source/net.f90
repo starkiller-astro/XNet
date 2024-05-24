@@ -28,7 +28,7 @@ Program net
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
     & lun_diag, lun_ev, lun_stdout, lun_ts, mythread, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
-    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, iaux
+    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, iaux, itrain, train_file_base, lun_train
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
   Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
@@ -58,7 +58,7 @@ Program net
   Character(80), Allocatable :: abund_desc(:), thermo_desc(:)
 
   ! Filenames
-  Character(80) :: ev_file, bin_file, diag_file
+  Character(80) :: ev_file, bin_file, diag_file, train_file
   Character(80) :: diag_file_base = 'net_diag'
   Character(25) :: ev_header_format
 
@@ -269,6 +269,32 @@ Program net
       EndDo
     EndIf
 
+    ! Open the binary training data file
+    If ( itrain >= 1 ) Then
+      Do izb = zb_lo, zb_hi
+        izone = izb + szbatch - zb_lo
+        train_file = trim(train_file_base)
+        Call name_ordered(train_file,izone,nzone)
+        Open(newunit=lun_train(izb), file=train_file, form='unformatted')
+
+        ! Write Control Parameters to ts file
+        Write(lun_train(izb)) (descript(i),i=1,3),data_desc
+        Write(lun_train(izb)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
+
+        ! Write abundance description to ts file
+        Write(lun_train(izb)) inab_file(izone),abund_desc(izb)
+
+        ! Write thermo description to ts file
+        Write(lun_train(izb)) thermo_file(izone),thermo_desc(izb)
+
+        ! Write species identifiers to ts file
+        Write(lun_train(izb)) ny,zz,aa
+
+        ! Write flux identifiers to ts file
+        Write(lun_train(izb)) mflx,ifl_orig,ifl_term
+      EndDo
+    EndIf
+
     stop_timer = xnet_wtime()
     timer_setup = timer_setup + stop_timer
 
@@ -292,6 +318,7 @@ Program net
       ! Close zone output files
       If (itsout >= 2 ) Close(lun_ev(izb))
       If (itsout >= 1 ) Close(lun_ts(izb))
+      If (itrain >= 1 ) Close(lun_train(izb))
     EndDo
   EndDo
   !$omp end do

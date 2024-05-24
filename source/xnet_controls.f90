@@ -72,9 +72,12 @@ Module xnet_controls
   Character(5), Allocatable :: output_nuc(:)   ! Names of nuclei to be output in condensed form
   Integer       :: idiag                       ! Sets level of diagnostic output
   Integer       :: itsout                      ! Sets level of time series output
+  Integer       :: itrain                      ! Sets level of training data output
   Character(80) :: ev_file_base, bin_file_base ! Output filename bases
+  Character(80) :: train_file_base             ! Output filename bases
   Integer       :: lun_diag                    ! Logical units for per-thread diagnostic output file
   Integer, Allocatable :: lun_ts(:), lun_ev(:) ! Logical units for per-zone output files
+  Integer, Allocatable :: lun_train(:)         ! Logical units for per-zone output files
   !$omp threadprivate(lun_diag)
 
   ! Input controls
@@ -203,7 +206,7 @@ Contains
     nzevolve = nzbatchmx * nthread
     Allocate (zone_id(3,nzevolve))
     Allocate (lzactive(nzevolve))
-    Allocate (iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
+    Allocate (iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve),lun_train(nzevolve))
     Allocate (kmon(2,nzevolve),ktot(5,nzevolve))
     !$omp parallel default(shared)
     zb_offset = (mythread-1) * nzbatchmx
@@ -316,6 +319,21 @@ Contains
       Write(lun_stdout,*) 'nnucout',nnucout
     EndIf
     Call parallel_bcast(output_nuc)
+
+    ! Read Training Controls
+    If ( parallel_IOProcessor() ) Then
+      Call find_controls_block(lun_control,'Training Controls',ierr)
+      If ( ierr /= 0 ) Then
+        Read(lun_control,*) itrain       ! sets training output level
+        Read(lun_control,*)
+        Read(lun_control,"(a80)") train_file_base
+      Else
+        Write(lun_stdout,*) 'Using Default Training behavior (off)'
+        itrain = 0
+      EndIf
+    EndIf
+    Call parallel_bcast(itrain)
+    Call parallel_bcast(train_file_base)
 
     !-----------------------------------------------------------------------------------------------
     ! XNet input controls include the relative directory from which the nuclear data should be
