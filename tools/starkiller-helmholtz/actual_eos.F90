@@ -249,10 +249,10 @@ contains
 
         real(dp) :: p_temp, e_temp
 
-        !real(dp) :: smallt, smalld
+        real(dp) :: smallt, smalld
 
-        !call eos_get_small_temp(smallt)
-        !call eos_get_small_dens(smalld)
+        call eos_get_small_temp(smallt)
+        call eos_get_small_dens(smalld)
 
         temp_row = state % T
         den_row  = state % rho
@@ -262,65 +262,65 @@ contains
 
         ! Initial setup for iterations
 
-        !single_iter = .false.
-        !double_iter = .false.
+        single_iter = .false.
+        double_iter = .false.
 
-        !if (input .eq. eos_input_rt) then
+        if (input .eq. eos_input_rt) then
 
-        !  ! Nothing to do here.
+          ! Nothing to do here.
 
-        !elseif (input .eq. eos_input_rh) then
+        elseif (input .eq. eos_input_rh) then
 
-        !  single_iter = .true.
-        !  v_want = state % h
-        !  var  = ienth
-        !  dvar = itemp
+          single_iter = .true.
+          v_want = state % h
+          var  = ienth
+          dvar = itemp
 
-        !elseif (input .eq. eos_input_tp) then
+        elseif (input .eq. eos_input_tp) then
 
-        !  single_iter = .true.
-        !  v_want = state % p
-        !  var  = ipres
-        !  dvar = idens
+          single_iter = .true.
+          v_want = state % p
+          var  = ipres
+          dvar = idens
 
-        !elseif (input .eq. eos_input_rp) then
+        elseif (input .eq. eos_input_rp) then
 
-        !  single_iter = .true.
-        !  v_want = state % p
-        !  var  = ipres
-        !  dvar = itemp
+          single_iter = .true.
+          v_want = state % p
+          var  = ipres
+          dvar = itemp
 
-        !elseif (input .eq. eos_input_re) then
+        elseif (input .eq. eos_input_re) then
 
-        !  single_iter = .true.
-        !  v_want = state % e
-        !  var  = iener
-        !  dvar = itemp
+          single_iter = .true.
+          v_want = state % e
+          var  = iener
+          dvar = itemp
 
-        !elseif (input .eq. eos_input_ps) then
+        elseif (input .eq. eos_input_ps) then
 
-        !  double_iter = .true.
-        !  v1_want = state % p
-        !  v2_want = state % s
-        !  var1 = ipres
-        !  var2 = ientr
+          double_iter = .true.
+          v1_want = state % p
+          v2_want = state % s
+          var1 = ipres
+          var2 = ientr
 
-        !elseif (input .eq. eos_input_ph) then
+        elseif (input .eq. eos_input_ph) then
 
-        !  double_iter = .true.
-        !  v1_want = state % p
-        !  v2_want = state % h
-        !  var1 = ipres
-        !  var2 = ienth
+          double_iter = .true.
+          v1_want = state % p
+          v2_want = state % h
+          var1 = ipres
+          var2 = ienth
 
-        !elseif (input .eq. eos_input_th) then
+        elseif (input .eq. eos_input_th) then
 
-        !  single_iter = .true.
-        !  v_want = state % h
-        !  var  = ienth
-        !  dvar = idens
+          single_iter = .true.
+          v_want = state % h
+          var  = ienth
+          dvar = idens
 
-        !endif
+        endif
 
         ptot_row = 0.0_dp
         dpt_row = 0.0_dp
@@ -358,11 +358,11 @@ contains
         cs_row = 0.0_dp
         gam1_row = 0.0_dp
 
-        !converged = .false.
+        converged = .false.
 
-        !if (input .eq. eos_input_rt) converged = .true.
+        if (input .eq. eos_input_rt) converged = .true.
 
-        !do iter = 1, max_newton
+        do iter = 1, max_newton
 
            temp  = temp_row
            den   =  den_row
@@ -896,167 +896,167 @@ contains
            cs_row = sound
            gam1_row = gam1
 
-           !if (converged) then
+           if (converged) then
 
-           !   exit
+              exit
 
-           !elseif (single_iter) then
+           elseif (single_iter) then
 
-           !   if (dvar .eq. itemp) then
+              if (dvar .eq. itemp) then
 
-           !      x = temp_row
-           !      smallx = smallt
-           !      xtol = ttol
+                 x = temp_row
+                 smallx = smallt
+                 xtol = ttol
 
-           !      if (var .eq. ipres) then
-           !         v    = ptot_row
-           !         dvdx = dpt_row
-           !      elseif (var .eq. iener) then
-           !         v    = etot_row
-           !         dvdx = det_row
-           !      elseif (var .eq. ientr) then
-           !         v    = stot_row
-           !         dvdx = dst_row
-           !      elseif (var .eq. ienth) then
-           !         v    = htot_row
-           !         dvdx = dht_row
-           !      else
-           !         exit
-           !      endif
+                 if (var .eq. ipres) then
+                    v    = ptot_row
+                    dvdx = dpt_row
+                 elseif (var .eq. iener) then
+                    v    = etot_row
+                    dvdx = det_row
+                 elseif (var .eq. ientr) then
+                    v    = stot_row
+                    dvdx = dst_row
+                 elseif (var .eq. ienth) then
+                    v    = htot_row
+                    dvdx = dht_row
+                 else
+                    exit
+                 endif
 
-           !   else ! dvar == density
+              else ! dvar == density
 
-           !      x = den_row
-           !      smallx = smalld
-           !      xtol = dtol
+                 x = den_row
+                 smallx = smalld
+                 xtol = dtol
 
-           !      if (var .eq. ipres) then
-           !         v    = ptot_row
-           !         dvdx = dpd_row
-           !      elseif (var .eq. iener) then
-           !         v    = etot_row
-           !         dvdx = ded_row
-           !      elseif (var .eq. ientr) then
-           !         v    = stot_row
-           !         dvdx = dsd_row
-           !      elseif (var .eq. ienth) then
-           !         v    = htot_row
-           !         dvdx = dhd_row
-           !      else
-           !         exit
-           !      endif
+                 if (var .eq. ipres) then
+                    v    = ptot_row
+                    dvdx = dpd_row
+                 elseif (var .eq. iener) then
+                    v    = etot_row
+                    dvdx = ded_row
+                 elseif (var .eq. ientr) then
+                    v    = stot_row
+                    dvdx = dsd_row
+                 elseif (var .eq. ienth) then
+                    v    = htot_row
+                    dvdx = dhd_row
+                 else
+                    exit
+                 endif
 
-           !   endif
+              endif
 
-           !   ! Now do the calculation for the next guess for T/rho
+              ! Now do the calculation for the next guess for T/rho
 
-           !   xnew = x - (v - v_want) / dvdx
+              xnew = x - (v - v_want) / dvdx
 
-           !   ! Don't let the temperature/density change by more than a factor of two
-           !   xnew = max(0.5 * x, min(xnew, 2.0 * x))
+              ! Don't let the temperature/density change by more than a factor of two
+              xnew = max(0.5 * x, min(xnew, 2.0 * x))
 
-           !   ! Don't let us freeze/evacuate
-           !   xnew = max(smallx, xnew)
+              ! Don't let us freeze/evacuate
+              xnew = max(smallx, xnew)
 
-           !   ! Store the new temperature/density
+              ! Store the new temperature/density
 
-           !   if (dvar .eq. itemp) then
-           !      temp_row = xnew
-           !   else
-           !      den_row  = xnew
-           !   endif
+              if (dvar .eq. itemp) then
+                 temp_row = xnew
+              else
+                 den_row  = xnew
+              endif
 
-           !   ! Compute the error from the last iteration
+              ! Compute the error from the last iteration
 
-           !   error = abs( (xnew - x) / x )
+              error = abs( (xnew - x) / x )
 
-           !   if (error .lt. xtol) converged = .true.
+              if (error .lt. xtol) converged = .true.
 
-           !elseif (double_iter) then
+           elseif (double_iter) then
 
-           !   ! Figure out which variables we're using
+              ! Figure out which variables we're using
 
-           !   told = temp_row
-           !   rold = den_row
+              told = temp_row
+              rold = den_row
 
-           !   if (var1 .eq. ipres) then
-           !      v1    = ptot_row
-           !      dv1dt = dpt_row
-           !      dv1dr = dpd_row
-           !   elseif (var1 .eq. iener) then
-           !      v1    = etot_row
-           !      dv1dt = det_row
-           !      dv1dr = ded_row
-           !   elseif (var1 .eq. ientr) then
-           !      v1    = stot_row
-           !      dv1dt = dst_row
-           !      dv1dr = dsd_row
-           !   elseif (var1 .eq. ienth) then
-           !      v1    = htot_row
-           !      dv1dt = dht_row
-           !      dv1dr = dhd_row
-           !   else
-           !      exit
-           !   endif
+              if (var1 .eq. ipres) then
+                 v1    = ptot_row
+                 dv1dt = dpt_row
+                 dv1dr = dpd_row
+              elseif (var1 .eq. iener) then
+                 v1    = etot_row
+                 dv1dt = det_row
+                 dv1dr = ded_row
+              elseif (var1 .eq. ientr) then
+                 v1    = stot_row
+                 dv1dt = dst_row
+                 dv1dr = dsd_row
+              elseif (var1 .eq. ienth) then
+                 v1    = htot_row
+                 dv1dt = dht_row
+                 dv1dr = dhd_row
+              else
+                 exit
+              endif
 
-           !   if (var2 .eq. ipres) then
-           !      v2    = ptot_row
-           !      dv2dt = dpt_row
-           !      dv2dr = dpd_row
-           !   elseif (var2 .eq. iener) then
-           !      v2    = etot_row
-           !      dv2dt = det_row
-           !      dv2dr = ded_row
-           !   elseif (var2 .eq. ientr) then
-           !      v2    = stot_row
-           !      dv2dt = dst_row
-           !      dv2dr = dsd_row
-           !   elseif (var2 .eq. ienth) then
-           !      v2    = htot_row
-           !      dv2dt = dht_row
-           !      dv2dr = dhd_row
-           !   else
-           !      exit
-           !   endif
+              if (var2 .eq. ipres) then
+                 v2    = ptot_row
+                 dv2dt = dpt_row
+                 dv2dr = dpd_row
+              elseif (var2 .eq. iener) then
+                 v2    = etot_row
+                 dv2dt = det_row
+                 dv2dr = ded_row
+              elseif (var2 .eq. ientr) then
+                 v2    = stot_row
+                 dv2dt = dst_row
+                 dv2dr = dsd_row
+              elseif (var2 .eq. ienth) then
+                 v2    = htot_row
+                 dv2dt = dht_row
+                 dv2dr = dhd_row
+              else
+                 exit
+              endif
 
-           !   ! Two functions, f and g, to iterate over
-           !   v1i = v1_want - v1
-           !   v2i = v2_want - v2
+              ! Two functions, f and g, to iterate over
+              v1i = v1_want - v1
+              v2i = v2_want - v2
 
-           !   !
-           !   ! 0 = f + dfdr * delr + dfdt * delt
-           !   ! 0 = g + dgdr * delr + dgdt * delt
-           !   !
+              !
+              ! 0 = f + dfdr * delr + dfdt * delt
+              ! 0 = g + dgdr * delr + dgdt * delt
+              !
 
-           !   ! note that dfi/dT = - df/dT
-           !   delr = (-v1i*dv2dt + v2i*dv1dt) / (dv2dr*dv1dt - dv2dt*dv1dr)
+              ! note that dfi/dT = - df/dT
+              delr = (-v1i*dv2dt + v2i*dv1dt) / (dv2dr*dv1dt - dv2dt*dv1dr)
 
-           !   rnew = rold + delr
+              rnew = rold + delr
 
-           !   tnew = told + (v1i - dv1dr*delr) / dv1dt
+              tnew = told + (v1i - dv1dr*delr) / dv1dt
 
-           !   ! Don't let the temperature or density change by more
-           !   ! than a factor of two
-           !   tnew = max(0.5_dp * told, min(tnew, 2.0_dp * told))
-           !   rnew = max(0.5_dp * rold, min(rnew, 2.0_dp * rold))
+              ! Don't let the temperature or density change by more
+              ! than a factor of two
+              tnew = max(0.5_dp * told, min(tnew, 2.0_dp * told))
+              rnew = max(0.5_dp * rold, min(rnew, 2.0_dp * rold))
 
-           !   ! Don't let us freeze or evacuate
-           !   tnew = max(smallt, tnew)
-           !   rnew = max(smalld, rnew)
+              ! Don't let us freeze or evacuate
+              tnew = max(smallt, tnew)
+              rnew = max(smalld, rnew)
 
-           !   ! Store the new temperature and density
-           !   den_row  = rnew
-           !   temp_row = tnew
+              ! Store the new temperature and density
+              den_row  = rnew
+              temp_row = tnew
 
-           !   ! Compute the errors
-           !   error1 = abs( (rnew - rold) / rold )
-           !   error2 = abs( (tnew - told) / told )
+              ! Compute the errors
+              error1 = abs( (rnew - rold) / rold )
+              error2 = abs( (tnew - told) / told )
 
-           !   if (error1 .LT. dtol .and. error2 .LT. ttol) converged = .true.
+              if (error1 .LT. dtol .and. error2 .LT. ttol) converged = .true.
 
-           !endif
+           endif
 
-        !enddo
+        enddo
 
         state % T    = temp_row
         state % rho  = den_row
@@ -1107,41 +1107,41 @@ contains
 
         state % cs = sqrt(state % gam1 * state % p / state % rho)
 
-        !if (input_is_constant) then
+        if (input_is_constant) then
 
-        !  if (input .eq. eos_input_rh) then
+          if (input .eq. eos_input_rh) then
 
-        !    state % h = v_want
+            state % h = v_want
 
-        !  elseif (input .eq. eos_input_tp) then
+          elseif (input .eq. eos_input_tp) then
 
-        !    state % p = v_want
+            state % p = v_want
 
-        !  elseif (input .eq. eos_input_rp) then
+          elseif (input .eq. eos_input_rp) then
 
-        !    state % p = v_want
+            state % p = v_want
 
-        !  elseif (input .eq. eos_input_re) then
+          elseif (input .eq. eos_input_re) then
 
-        !    state % e = v_want
+            state % e = v_want
 
-        !  elseif (input .eq. eos_input_ps) then
+          elseif (input .eq. eos_input_ps) then
 
-        !    state % p = v1_want
-        !    state % s = v2_want
+            state % p = v1_want
+            state % s = v2_want
 
-        !  elseif (input .eq. eos_input_ph) then
+          elseif (input .eq. eos_input_ph) then
 
-        !    state % p = v1_want
-        !    state % h = v2_want
+            state % p = v1_want
+            state % h = v2_want
 
-        !  elseif (input .eq. eos_input_th) then
+          elseif (input .eq. eos_input_th) then
 
-        !    state % h = v_want
+            state % h = v_want
 
-        !  endif
+          endif
 
-        !endif
+        endif
 
     end subroutine actual_eos
 
