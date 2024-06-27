@@ -252,8 +252,6 @@ contains
 
         real(dp) :: smallt, smalld
 
-        !$gpu
-
         call eos_get_small_temp(smallt)
         call eos_get_small_dens(smalld)
 
@@ -1357,7 +1355,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: psi0r
-      !$gpu
       psi0r = z**3 * ( z * (-6.0_dp*z + 15.0_dp) -10.0_dp) + 1.0_dp
     end function psi0
 
@@ -1365,7 +1362,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: dpsi0r
-      !$gpu
       dpsi0r = z**2 * ( z * (-30.0_dp*z + 60.0_dp) - 30.0_dp)
     end function dpsi0
 
@@ -1373,7 +1369,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: ddpsi0r
-      !$gpu
       ddpsi0r = z* ( z*( -120.0_dp*z + 180.0_dp) -60.0_dp)
     end function ddpsi0
 
@@ -1382,7 +1377,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: psi1r
-      !$gpu
       psi1r = z* ( z**2 * ( z * (-3.0_dp*z + 8.0_dp) - 6.0_dp) + 1.0_dp)
     end function psi1
 
@@ -1390,7 +1384,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: dpsi1r
-      !$gpu
       dpsi1r = z*z * ( z * (-15.0_dp*z + 32.0_dp) - 18.0_dp) +1.0_dp
     end function dpsi1
 
@@ -1398,7 +1391,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: ddpsi1r
-      !$gpu
       ddpsi1r = z * (z * (-60.0_dp*z + 96.0_dp) -36.0_dp)
     end function ddpsi1
 
@@ -1407,7 +1399,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: psi2r
-      !$gpu
       psi2r = 0.5_dp*z*z*( z* ( z * (-z + 3.0_dp) - 3.0_dp) + 1.0_dp)
     end function psi2
 
@@ -1415,7 +1406,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: dpsi2r
-      !$gpu
       dpsi2r = 0.5_dp*z*( z*(z*(-5.0_dp*z + 12.0_dp) - 9.0_dp) + 2.0_dp)
     end function dpsi2
 
@@ -1423,7 +1413,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: ddpsi2r
-      !$gpu
       ddpsi2r = 0.5_dp*(z*( z * (-20.0_dp*z + 36.0_dp) - 18.0_dp) + 2.0_dp)
     end function ddpsi2
 
@@ -1434,8 +1423,6 @@ contains
       real(dp), intent(in) :: fi(36)
       real(dp), intent(in) :: w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md
       real(dp) :: h5r
-
-      !$gpu
 
       h5r =  fi(1)  *w0d*w0t   + fi(2)  *w0md*w0t &
            + fi(3)  *w0d*w0mt  + fi(4)  *w0md*w0mt &
@@ -1464,7 +1451,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xpsi0r
-      !$gpu
       xpsi0r = z * z * (2.0_dp*z - 3.0_dp) + 1.0
     end function xpsi0
 
@@ -1472,7 +1458,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xdpsi0r
-      !$gpu
       xdpsi0r = z * (6.0_dp*z - 6.0_dp)
     end function xdpsi0
 
@@ -1482,7 +1467,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xpsi1r
-      !$gpu
       xpsi1r = z * ( z * (z - 2.0_dp) + 1.0_dp)
     end function xpsi1
 
@@ -1490,7 +1474,6 @@ contains
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xdpsi1r
-      !$gpu
       xdpsi1r = z * (3.0_dp*z - 4.0_dp) + 1.0_dp
     end function xdpsi1
 
@@ -1500,7 +1483,6 @@ contains
       real(dp), intent(in) :: fi(36)
       real(dp), intent(in) :: w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md
       real(dp) :: h3r
-      !$gpu
       h3r =  fi(1)  *w0d*w0t   +  fi(2)  *w0md*w0t &
            + fi(3)  *w0d*w0mt  +  fi(4)  *w0md*w0mt &
            + fi(5)  *w0d*w1t   +  fi(6)  *w0md*w1t &
