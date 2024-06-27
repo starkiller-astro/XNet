@@ -1353,21 +1353,21 @@ contains
 
     ! quintic hermite polynomial functions
     ! psi0 and its derivatives
-    pure function psi0(z) result(psi0r)
+    function psi0(z) result(psi0r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: psi0r
       psi0r = z**3 * ( z * (-6.0_dp*z + 15.0_dp) -10.0_dp) + 1.0_dp
     end function psi0
 
-    pure function dpsi0(z) result(dpsi0r)
+    function dpsi0(z) result(dpsi0r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: dpsi0r
       dpsi0r = z**2 * ( z * (-30.0_dp*z + 60.0_dp) - 30.0_dp)
     end function dpsi0
 
-    pure function ddpsi0(z) result(ddpsi0r)
+    function ddpsi0(z) result(ddpsi0r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: ddpsi0r
@@ -1375,21 +1375,21 @@ contains
     end function ddpsi0
 
     ! psi1 and its derivatives
-    pure function psi1(z) result(psi1r)
+    function psi1(z) result(psi1r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: psi1r
       psi1r = z* ( z**2 * ( z * (-3.0_dp*z + 8.0_dp) - 6.0_dp) + 1.0_dp)
     end function psi1
 
-    pure function dpsi1(z) result(dpsi1r)
+    function dpsi1(z) result(dpsi1r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: dpsi1r
       dpsi1r = z*z * ( z * (-15.0_dp*z + 32.0_dp) - 18.0_dp) +1.0_dp
     end function dpsi1
 
-    pure function ddpsi1(z) result(ddpsi1r)
+    function ddpsi1(z) result(ddpsi1r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: ddpsi1r
@@ -1397,21 +1397,21 @@ contains
     end function ddpsi1
 
     ! psi2  and its derivatives
-    pure function psi2(z) result(psi2r)
+    function psi2(z) result(psi2r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: psi2r
       psi2r = 0.5_dp*z*z*( z* ( z * (-z + 3.0_dp) - 3.0_dp) + 1.0_dp)
     end function psi2
 
-    pure function dpsi2(z) result(dpsi2r)
+    function dpsi2(z) result(dpsi2r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: dpsi2r
       dpsi2r = 0.5_dp*z*( z*(z*(-5.0_dp*z + 12.0_dp) - 9.0_dp) + 2.0_dp)
     end function dpsi2
 
-    pure function ddpsi2(z) result(ddpsi2r)
+    function ddpsi2(z) result(ddpsi2r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: ddpsi2r
@@ -1420,7 +1420,7 @@ contains
 
 
     ! biquintic hermite polynomial function
-    pure function h5(fi,w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md) result(h5r)
+    function h5(fi,w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md) result(h5r)
       !$acc routine seq
       real(dp), intent(in) :: fi(36)
       real(dp), intent(in) :: w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md
@@ -1449,14 +1449,14 @@ contains
 
     ! cubic hermite polynomial functions
     ! psi0 & derivatives
-    pure function xpsi0(z) result(xpsi0r)
+    function xpsi0(z) result(xpsi0r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xpsi0r
       xpsi0r = z * z * (2.0_dp*z - 3.0_dp) + 1.0
     end function xpsi0
 
-    pure function xdpsi0(z) result(xdpsi0r)
+    function xdpsi0(z) result(xdpsi0r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xdpsi0r
@@ -1465,14 +1465,14 @@ contains
 
 
     ! psi1 & derivatives
-    pure function xpsi1(z) result(xpsi1r)
+    function xpsi1(z) result(xpsi1r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xpsi1r
       xpsi1r = z * ( z * (z - 2.0_dp) + 1.0_dp)
     end function xpsi1
 
-    pure function xdpsi1(z) result(xdpsi1r)
+    function xdpsi1(z) result(xdpsi1r)
       !$acc routine seq
       real(dp), intent(in) :: z
       real(dp) :: xdpsi1r
@@ -1480,7 +1480,7 @@ contains
     end function xdpsi1
 
     ! bicubic hermite polynomial function
-    pure function h3(fi,w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md) result(h3r)
+    function h3(fi,w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md) result(h3r)
       !$acc routine seq
       real(dp), intent(in) :: fi(36)
       real(dp), intent(in) :: w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md
