@@ -4,65 +4,65 @@ module eos_type_module
   use xnet_util, only: xnet_terminate
 
   implicit none
+  private
 
-  real(dp), parameter, private :: ONE = 1.0_dp
-  real(dp), parameter, private :: ZERO = 0.0_dp
-  real(dp), parameter, private :: small_x = 0.0_dp
-
-  integer, parameter :: eos_input_rt = 1  ! rho, T are inputs
-  integer, parameter :: eos_input_rh = 2  ! rho, h are inputs
-  integer, parameter :: eos_input_tp = 3  ! T, p are inputs
-  integer, parameter :: eos_input_rp = 4  ! rho, p are inputs
-  integer, parameter :: eos_input_re = 5  ! rho, e are inputs
-  integer, parameter :: eos_input_ps = 6  ! p, s are inputs
-  integer, parameter :: eos_input_ph = 7  ! p, h are inputs
-  integer, parameter :: eos_input_th = 8  ! T, h are inputs
+  integer, parameter, public :: eos_input_rt = 1  ! rho, T are inputs
+  integer, parameter, public :: eos_input_rh = 2  ! rho, h are inputs
+  integer, parameter, public :: eos_input_tp = 3  ! T, p are inputs
+  integer, parameter, public :: eos_input_rp = 4  ! rho, p are inputs
+  integer, parameter, public :: eos_input_re = 5  ! rho, e are inputs
+  integer, parameter, public :: eos_input_ps = 6  ! p, s are inputs
+  integer, parameter, public :: eos_input_ph = 7  ! p, h are inputs
+  integer, parameter, public :: eos_input_th = 8  ! T, h are inputs
 
   ! these are used to allow for a generic interface to the
   ! root finding
-  integer, parameter :: itemp = 1
-  integer, parameter :: idens = 2
-  integer, parameter :: iener = 3
-  integer, parameter :: ienth = 4
-  integer, parameter :: ientr = 5
-  integer, parameter :: ipres = 6
+  integer, parameter, public :: itemp = 1
+  integer, parameter, public :: idens = 2
+  integer, parameter, public :: iener = 3
+  integer, parameter, public :: ienth = 4
+  integer, parameter, public :: ientr = 5
+  integer, parameter, public :: ipres = 6
 
   ! error codes
-  integer, parameter :: ierr_general         = 1
-  integer, parameter :: ierr_input           = 2
-  integer, parameter :: ierr_iter_conv       = 3
-  integer, parameter :: ierr_neg_e           = 4
-  integer, parameter :: ierr_neg_p           = 5
-  integer, parameter :: ierr_neg_h           = 6
-  integer, parameter :: ierr_neg_s           = 7
-  integer, parameter :: ierr_iter_var        = 8
-  integer, parameter :: ierr_init            = 9
-  integer, parameter :: ierr_init_xn         = 10
-  integer, parameter :: ierr_out_of_bounds   = 11
-  integer, parameter :: ierr_not_implemented = 12
+  integer, parameter, public :: ierr_general         = 1
+  integer, parameter, public :: ierr_input           = 2
+  integer, parameter, public :: ierr_iter_conv       = 3
+  integer, parameter, public :: ierr_neg_e           = 4
+  integer, parameter, public :: ierr_neg_p           = 5
+  integer, parameter, public :: ierr_neg_h           = 6
+  integer, parameter, public :: ierr_neg_s           = 7
+  integer, parameter, public :: ierr_iter_var        = 8
+  integer, parameter, public :: ierr_init            = 9
+  integer, parameter, public :: ierr_init_xn         = 10
+  integer, parameter, public :: ierr_out_of_bounds   = 11
+  integer, parameter, public :: ierr_not_implemented = 12
 
   ! Minimum and maximum thermodynamic quantities permitted by the EOS.
 
-  real(dp), allocatable :: mintemp
-  real(dp), allocatable :: maxtemp
-  real(dp), allocatable :: mindens
-  real(dp), allocatable :: maxdens
-  real(dp), allocatable :: minx
-  real(dp), allocatable :: maxx
-  real(dp), allocatable :: minye
-  real(dp), allocatable :: maxye
-  real(dp), allocatable :: mine
-  real(dp), allocatable :: maxe
-  real(dp), allocatable :: minp
-  real(dp), allocatable :: maxp
-  real(dp), allocatable :: mins
-  real(dp), allocatable :: maxs
-  real(dp), allocatable :: minh
-  real(dp), allocatable :: maxh
+  real(dp), allocatable, public :: mintemp
+  real(dp), allocatable, public :: maxtemp
+  real(dp), allocatable, public :: mindens
+  real(dp), allocatable, public :: maxdens
+  real(dp), allocatable, public :: minx
+  real(dp), allocatable, public :: maxx
+  real(dp), allocatable, public :: minye
+  real(dp), allocatable, public :: maxye
+  real(dp), allocatable, public :: mine
+  real(dp), allocatable, public :: maxe
+  real(dp), allocatable, public :: minp
+  real(dp), allocatable, public :: maxp
+  real(dp), allocatable, public :: mins
+  real(dp), allocatable, public :: maxs
+  real(dp), allocatable, public :: minh
+  real(dp), allocatable, public :: maxh
 
   !$acc declare &
   !$acc create(mintemp, maxtemp, mindens, maxdens, minx, maxx, minye, maxye) &
   !$acc create(mine, maxe, minp, maxp, mins, maxs, minh, maxh)
+
+  public :: clean_state, print_state, eos_get_small_temp, eos_get_small_dens
+  public :: eos_get_max_temp, eos_get_max_dens, eos_input_has_var
 
   ! A generic structure holding thermodynamic quantities and their derivatives,
   ! plus some other quantities of interest.
@@ -105,7 +105,7 @@ module eos_type_module
   ! dpdr_e   -- d pressure / d rho |_energy
   ! conductivity -- thermal conductivity (in erg/cm/K/sec)
 
-  type :: eos_t
+  type, public :: eos_t
 
     real(dp) :: rho
     real(dp) :: T

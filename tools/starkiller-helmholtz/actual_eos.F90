@@ -4,14 +4,13 @@ module actual_eos_module
     use eos_type_module
 
     implicit none
+    private
 
     character (len=64), public :: eos_name = "helmholtz"
 
     ! Runtime parameters
     logical, allocatable :: do_coulomb
     logical, allocatable :: input_is_constant
-
-    real(dp), parameter, private :: ZERO = 0.0_dp, HALF = 0.5_dp, TWO = 2.0_dp
 
     !..for the tables, in general
     integer, parameter, private :: imax = 541, jmax = 201
@@ -47,7 +46,7 @@ module actual_eos_module
                              dd_sav(:), dd2_sav(:),          &
                              ddi_sav(:), dd2i_sav(:)
 
-    integer, parameter          :: max_newton = 100
+    integer, parameter :: max_newton = 100
 
     ! 2006 CODATA physical constants
 
@@ -110,14 +109,12 @@ module actual_eos_module
     !$acc create(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
     !$acc create(do_coulomb, input_is_constant)
 
-public actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
+    public :: actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
 
 contains
 
 
     function eos_supports_input_type(input) result(supported)
-
-        use eos_type_module
 
         implicit none
 
@@ -806,7 +803,7 @@ contains
               p_temp = prad + pion + pele + pcoul
               e_temp = erad + eion + eele + ecoul
 
-              if (p_temp .le. ZERO .or. e_temp .le. ZERO) then
+              if (p_temp .le. 0.0_dp .or. e_temp .le. 0.0_dp) then
 
                  pcoul    = 0.0_dp
                  dpcouldd = 0.0_dp
@@ -1040,8 +1037,8 @@ contains
 
               ! Don't let the temperature or density change by more
               ! than a factor of two
-              tnew = max(HALF * told, min(tnew, TWO * told))
-              rnew = max(HALF * rold, min(rnew, TWO * rold))
+              tnew = max(0.5_dp * told, min(tnew, 2.0_dp * told))
+              rnew = max(0.5_dp * rold, min(rnew, 2.0_dp * rold))
 
               ! Don't let us freeze or evacuate
               tnew = max(smallt, tnew)
