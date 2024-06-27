@@ -3,6 +3,8 @@ module actual_eos_module
     use xnet_types, only: dp
     use eos_type_module
 
+    implicit none
+
     character (len=64), public :: eos_name = "helmholtz"
 
     ! Runtime parameters
