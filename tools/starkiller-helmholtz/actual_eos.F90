@@ -741,7 +741,7 @@ contains
            plasgdz  = 2.0_dp * plasg/zbar
 
            !     TURN ON/OFF COULOMB
-           if ( do_coulomb ) then
+           !if ( do_coulomb ) then
               !...yakovlev & shalybkov 1989 equations 82, 85, 86, 87
               if (plasg .ge. 1.0_dp) then
                  x        = plasg**(0.25_dp)
@@ -822,7 +822,7 @@ contains
                  dscouldz = 0.0_dp
 
               end if
-           end if
+           !end if
 
            !..sum all the components
            pres    = prad + pion + pele + pcoul
