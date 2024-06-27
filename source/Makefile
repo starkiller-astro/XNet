@@ -142,9 +142,9 @@ xinab: xnet_data.o init_abund.o
 	$(LDR) $(LDFLAGS) -o xinab \
 	    init_abund.o xnet_data.o 
 
-xnse: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o xnet_types.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o
+xnse: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_match.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o xnet_types.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o
 	$(LDR) $(LDFLAGS) -o xnse$(MPI_SFX) \
-	    xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o xnet_types.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o \
+	    xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_constants.o xnet_fd.o xnet_ffn.o xnet_match.o xnet_nse.o xnet_preprocess.o xnet_util.o xnet_nnu.o xnet_timers.o xnet_types.o $(EOS_OBJ) $(MPI_OBJ) nse_slice.o \
 	    $(notdir $(LAPACK_OBJ)) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 #
@@ -241,4 +241,4 @@ model_input_ascii.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_da
 net.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_evolve.o xnet_flux.o xnet_match.o xnet_nnu.o xnet_nse.o xnet_preprocess.o xnet_screening.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(JAC_OBJ) $(MPI_OBJ)
 net_setup.o: xnet_controls.o xnet_preprocess.o
 
-nse_slice.o: xnet_controls.o xnet_nse.o xnet_preprocess.o xnet_types.o xnet_data.o xnet_timers.o $(EOS_OBJ)
+nse_slice.o: xnet_controls.o xnet_match.o xnet_nse.o xnet_preprocess.o xnet_types.o xnet_data.o xnet_timers.o $(EOS_OBJ)
