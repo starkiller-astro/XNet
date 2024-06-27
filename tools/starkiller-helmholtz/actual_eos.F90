@@ -1215,8 +1215,8 @@ contains
         iat = max(1,min(iat,itmax-1))
 
         !..various differences
-        xt  = max( (temp - t(jat))*dti_sav(jat), 0.0_rt)
-        xd  = max( (din - d(iat))*ddi_sav(iat), 0.0_rt)
+        xt  = max( (temp - t(jat))*dti_sav(jat), 0.0_dp)
+        xd  = max( (din - d(iat))*ddi_sav(iat), 0.0_dp)
         mxt = 1.0_dp - xt
         mxd = 1.0_dp - xd
 
@@ -1344,8 +1344,8 @@ contains
         iat = max(1,min(iat,itmax-1))
 
         !..various differences
-        xt  = max( (temp - t(jat))*dti_sav(jat), 0.0_rt)
-        xd  = max( (din - d(iat))*ddi_sav(iat), 0.0_rt)
+        xt  = max( (temp - t(jat))*dti_sav(jat), 0.0_dp)
+        xd  = max( (din - d(iat))*ddi_sav(iat), 0.0_dp)
         mxt = 1.0_dp - xt
         mxd = 1.0_dp - xd
 
@@ -1506,8 +1506,7 @@ contains
         e_temp = 0.0_dp
         !e_temp = erad + eion + eele + ecoul
 
-        if (p_temp .le. ZERO ) then
-        !if (p_temp .le. ZERO .or. e_temp .le. ZERO) then
+        if (p_temp .le. 0.0_dp ) then
           decouldt = 0.0_dp
         end if
 
