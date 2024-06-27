@@ -10,6 +10,7 @@ pgipar*
 xnet
 xnet[dmp]
 xnet_nse
+xnse
 net_setup
 
 # misc
