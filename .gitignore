@@ -13,14 +13,23 @@ xnet_nse
 xnse
 net_setup
 
+# build_net files
+test/build_net/build_net
+test/build_net/new_data
+
 # misc
 .DS_Store
+*.bak
+*.tgz
+*.tar
+*.out
 
 # compiled python
 *.pyc
 
 # HSL source
 MA4[18].f
+tools/HSL
 
 # network data binaries
 match_data
@@ -36,6 +45,14 @@ sparse_ind
 ts*
 ev*
 net_diag*
+nse_diag*
 
 # core dumps
 core*
+
+# local ab_ and th_ files
+test/ab*
+test/th*
+
+# runtime controls
+control*
