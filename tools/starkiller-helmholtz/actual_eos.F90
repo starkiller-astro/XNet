@@ -1,6 +1,10 @@
 module actual_eos_module
 
+    use xnet_types, only: dp
     use eos_type_module
+
+    implicit none
+    private
 
     character (len=64), public :: eos_name = "helmholtz"
 
@@ -8,92 +12,91 @@ module actual_eos_module
     logical, allocatable :: do_coulomb
     logical, allocatable :: input_is_constant
 
-    double precision, parameter, private :: ZERO = 0.0d0, HALF = 0.5d0, TWO = 2.0d0
-
     !..for the tables, in general
     integer, parameter, private :: imax = 541, jmax = 201
     integer, allocatable :: itmax, jtmax
-    double precision, allocatable :: d(:), t(:)
+    real(dp), allocatable :: d(:), t(:)
 
-    double precision, allocatable :: tlo, thi, tstp, tstpi
-    double precision, allocatable :: dlo, dhi, dstp, dstpi
+    real(dp), allocatable :: tlo, thi, tstp, tstpi
+    real(dp), allocatable :: dlo, dhi, dstp, dstpi
 
-    double precision, allocatable :: ttol, dtol
+    real(dp), allocatable :: ttol, dtol
 
     !..for the helmholtz free energy tables
-    double precision, allocatable :: f(:,:), fd(:,:),                &
-                                     ft(:,:), fdd(:,:), ftt(:,:),    &
-                                     fdt(:,:), fddt(:,:), fdtt(:,:), &
-                                     fddtt(:,:)
+    real(dp), allocatable :: f(:,:), fd(:,:),                &
+                             ft(:,:), fdd(:,:), ftt(:,:),    &
+                             fdt(:,:), fddt(:,:), fdtt(:,:), &
+                             fddtt(:,:)
 
     !..for the pressure derivative with density ables
-    double precision, allocatable :: dpdf(:,:), dpdfd(:,:),          &
-                                     dpdft(:,:), dpdfdt(:,:)
+    real(dp), allocatable :: dpdf(:,:), dpdfd(:,:),          &
+                             dpdft(:,:), dpdfdt(:,:)
 
     !..for chemical potential tables
-    double precision, allocatable :: ef(:,:), efd(:,:),              &
-                                     eft(:,:), efdt(:,:)
+    real(dp), allocatable :: ef(:,:), efd(:,:),              &
+                             eft(:,:), efdt(:,:)
 
     !..for the number density tables
-    double precision, allocatable :: xf(:,:), xfd(:,:),              &
-                                     xft(:,:), xfdt(:,:)
+    real(dp), allocatable :: xf(:,:), xfd(:,:),              &
+                             xft(:,:), xfdt(:,:)
 
     !..for storing the differences
-    double precision, allocatable :: dt_sav(:), dt2_sav(:),          &
-                                     dti_sav(:), dt2i_sav(:),        &
-                                     dd_sav(:), dd2_sav(:),          &
-                                     ddi_sav(:), dd2i_sav(:)
+    real(dp), allocatable :: dt_sav(:), dt2_sav(:),          &
+                             dti_sav(:), dt2i_sav(:),        &
+                             dd_sav(:), dd2_sav(:),          &
+                             ddi_sav(:), dd2i_sav(:)
 
-    integer, parameter          :: max_newton = 100
+    integer, parameter :: max_newton = 100
 
     ! 2006 CODATA physical constants
 
     ! Math constants
-    double precision, parameter :: pi       = 3.1415926535897932384d0
+    real(dp), parameter :: pi       = 3.1415926535897932384_dp
 
     ! Physical constants
-    double precision, parameter :: h       = 6.6260689633d-27
-    double precision, parameter :: hbar    = 0.5d0 * h/pi
-    double precision, parameter :: qe      = 4.8032042712d-10
-    double precision, parameter :: avo_eos = 6.0221417930d23
-    double precision, parameter :: clight  = 2.99792458d10
-    double precision, parameter :: kerg    = 1.380650424d-16
-    double precision, parameter :: ev2erg_eos  = 1.60217648740d-12
-    double precision, parameter :: kev     = kerg/ev2erg_eos
-    double precision, parameter :: amu     = 1.66053878283d-24
-    double precision, parameter :: me_eos  = 9.1093821545d-28
-    double precision, parameter :: rbohr   = hbar*hbar/(me_eos * qe * qe)
-    double precision, parameter :: fine    = qe*qe/(hbar*clight)
+    real(dp), parameter :: h       = 6.6260689633e-27_dp
+    real(dp), parameter :: hbar    = 0.5_dp * h/pi
+    real(dp), parameter :: qe      = 4.8032042712e-10_dp
+    real(dp), parameter :: avo_eos = 6.0221417930e23_dp
+    real(dp), parameter :: clight  = 2.99792458e10_dp
+    real(dp), parameter :: kerg    = 1.380650424e-16_dp
+    real(dp), parameter :: ev2erg_eos  = 1.60217648740e-12_dp
+    real(dp), parameter :: kev     = kerg/ev2erg_eos
+    real(dp), parameter :: amu     = 1.66053878283e-24_dp
+    real(dp), parameter :: me_eos  = 9.1093821545e-28_dp
+    real(dp), parameter :: rbohr   = hbar*hbar/(me_eos * qe * qe)
+    real(dp), parameter :: fine    = qe*qe/(hbar*clight)
 
-    double precision, parameter :: ssol    = 5.67051d-5
-    double precision, parameter :: asol    = 4.0d0 * ssol / clight
-    double precision, parameter :: weinlam = h*clight/(kerg * 4.965114232d0)
-    double precision, parameter :: weinfre = 2.821439372d0*kerg/h
+    real(dp), parameter :: ssol    = 5.67051e-5_dp
+    real(dp), parameter :: asol    = 4.0_dp * ssol / clight
+    real(dp), parameter :: weinlam = h*clight/(kerg * 4.965114232_dp)
+    real(dp), parameter :: weinfre = 2.821439372_dp*kerg/h
 
     ! Astronomical constants
-    double precision, parameter :: ly      = 9.460528d17
-    double precision, parameter :: pc      = 3.261633d0 * ly
+    real(dp), parameter :: ly      = 9.460528e17_dp
+    real(dp), parameter :: pc      = 3.261633_dp * ly
 
     ! Some other useful combinations of the constants
-    double precision, parameter :: sioncon = (2.0d0 * pi * amu * kerg)/(h*h)
-    double precision, parameter :: forth   = 4.0d0/3.0d0
-    double precision, parameter :: forpi   = 4.0d0 * pi
-    double precision, parameter :: kergavo = kerg * avo_eos
-    double precision, parameter :: ikavo   = 1.0d0/kergavo
-    double precision, parameter :: asoli3  = asol/3.0d0
-    double precision, parameter :: light2  = clight * clight
+    real(dp), parameter :: sioncon = (2.0_dp * pi * amu * kerg)/(h*h)
+    real(dp), parameter :: forth   = 4.0_dp/3.0_dp
+    real(dp), parameter :: forpi   = 4.0_dp * pi
+    real(dp), parameter :: forthpi = forth * pi
+    real(dp), parameter :: kergavo = kerg * avo_eos
+    real(dp), parameter :: ikavo   = 1.0_dp/kergavo
+    real(dp), parameter :: asoli3  = asol/3.0_dp
+    real(dp), parameter :: light2  = clight * clight
 
     ! Constants used for the Coulomb corrections
-    double precision, parameter :: a1    = -0.898004d0
-    double precision, parameter :: b1    =  0.96786d0
-    double precision, parameter :: c1    =  0.220703d0
-    double precision, parameter :: d1    = -0.86097d0
-    double precision, parameter :: e1    =  2.5269d0
-    double precision, parameter :: a2    =  0.29561d0
-    double precision, parameter :: b2    =  1.9885d0
-    double precision, parameter :: c2    =  0.288675d0
-    double precision, parameter :: onethird = 1.0d0/3.0d0
-    double precision, parameter :: esqu = qe * qe
+    real(dp), parameter :: a1    = -0.898004_dp
+    real(dp), parameter :: b1    =  0.96786_dp
+    real(dp), parameter :: c1    =  0.220703_dp
+    real(dp), parameter :: d1    = -0.86097_dp
+    real(dp), parameter :: e1    =  2.5269_dp
+    real(dp), parameter :: a2    =  0.29561_dp
+    real(dp), parameter :: b2    =  1.9885_dp
+    real(dp), parameter :: c2    =  0.288675_dp
+    real(dp), parameter :: onethird = 1.0_dp/3.0_dp
+    real(dp), parameter :: esqu = qe * qe
 
     !$acc declare &
     !$acc create(tlo, thi, dlo, dhi) &
@@ -107,14 +110,13 @@ module actual_eos_module
     !$acc create(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
     !$acc create(do_coulomb, input_is_constant)
 
-public actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
+    public :: actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
+    public :: xnet_actual_eos, actual_eos_eta, actual_eos_cv
 
 contains
 
 
     function eos_supports_input_type(input) result(supported)
-
-        use eos_type_module
 
         implicit none
 
@@ -174,84 +176,80 @@ contains
         type (eos_t), intent(inout) :: state
 
         !..rows to store EOS data
-        double precision :: temp_row, &
-                            den_row, &
-                            abar_row, &
-                            zbar_row, &
-                            ye_row, &
-                            etot_row, &
-                            ptot_row, &
-                            cv_row, &
-                            cp_row,  &
-                            xne_row, &
-                            xnp_row, &
-                            etaele_row, &
-                            detadt_row, &
-                            pele_row, &
-                            ppos_row, &
-                            dpd_row,  &
-                            dpt_row, &
-                            dpa_row, &
-                            dpz_row,  &
-                            ded_row, &
-                            det_row, &
-                            dea_row,  &
-                            dez_row,  &
-                            stot_row, &
-                            dsd_row, &
-                            dst_row, &
-                            htot_row, &
-                            dhd_row, &
-                            dht_row, &
-                            dpe_row, &
-                            dpdr_e_row, &
-                            gam1_row, &
-                            cs_row
+        real(dp) :: temp_row, &
+                    den_row, &
+                    abar_row, &
+                    zbar_row, &
+                    ye_row, &
+                    etot_row, &
+                    ptot_row, &
+                    cv_row, &
+                    cp_row,  &
+                    xne_row, &
+                    xnp_row, &
+                    etaele_row, &
+                    detadt_row, &
+                    pele_row, &
+                    ppos_row, &
+                    dpd_row,  &
+                    dpt_row, &
+                    dpa_row, &
+                    dpz_row,  &
+                    ded_row, &
+                    det_row, &
+                    dea_row,  &
+                    dez_row,  &
+                    stot_row, &
+                    dsd_row, &
+                    dst_row, &
+                    htot_row, &
+                    dhd_row, &
+                    dht_row, &
+                    dpe_row, &
+                    dpdr_e_row, &
+                    gam1_row, &
+                    cs_row
 
         !..declare local variables
 
         logical :: single_iter, double_iter, converged
         integer :: var, dvar, var1, var2, iter
-        double precision :: v_want
-        double precision :: v1_want, v2_want
-        double precision :: xnew, xtol, dvdx, smallx, error, v
-        double precision :: v1, v2, dv1dt, dv1dr, dv2dt,dv2dr, delr, error1, error2, told, rold, tnew, rnew, v1i, v2i
+        real(dp) :: v_want
+        real(dp) :: v1_want, v2_want
+        real(dp) :: xnew, xtol, dvdx, smallx, error, v
+        real(dp) :: v1, v2, dv1dt, dv1dr, dv2dt,dv2dr, delr, error1, error2, told, rold, tnew, rnew, v1i, v2i
 
-        double precision :: x,y,zz,zzi,deni,tempi,xni,dxnidd,dxnida, &
-                            dpepdt,dpepdd,deepdt,deepdd,dsepdd,dsepdt, &
-                            dpraddd,dpraddt,deraddd,deraddt,dpiondd,dpiondt, &
-                            deiondd,deiondt,dsraddd,dsraddt,dsiondd,dsiondt, &
-                            dse,dpe,dsp,kt,ktinv,prad,erad,srad,pion,eion, &
-                            sion,xnem,pele,eele,sele,pres,ener,entr,dpresdd, &
-                            dpresdt,denerdd,denerdt,dentrdd,dentrdt,cv,cp, &
-                            gam1,gam2,gam3,chit,chid,nabad,sound,etaele, &
-                            detadt,detadd,xnefer,dxnedt,dxnedd,s, &
-                            temp,den,abar,zbar,ytot1,ye
+        real(dp) :: x,y,z,zz,zzi,deni,tempi,xni,dxnidd,dxnida, &
+                    dpepdt,dpepdd,deepdt,deepdd,dsepdd,dsepdt, &
+                    dpraddd,dpraddt,deraddd,deraddt,dpiondd,dpiondt, &
+                    deiondd,deiondt,dsraddd,dsraddt,dsiondd,dsiondt, &
+                    dse,dpe,dsp,kt,ktinv,prad,erad,srad,pion,eion, &
+                    sion,xnem,pele,eele,sele,pres,ener,entr,dpresdd, &
+                    dpresdt,denerdd,denerdt,dentrdd,dentrdt,cv,cp, &
+                    gam1,gam2,gam3,chit,chid,nabad,sound,etaele, &
+                    detadt,detadd,xnefer,dxnedt,dxnedd,s, &
+                    temp,den,abar,zbar,ytot1,ye,din
 
 
         !..for the interpolations
-        integer          :: iat,jat
-        double precision :: free,df_d,df_t,df_tt,df_dt
-        double precision :: xt,xd,mxt,mxd, &
-                            si0t,si1t,si2t,si0mt,si1mt,si2mt, &
-                            si0d,si1d,si2d,si0md,si1md,si2md, &
-                            dsi0t,dsi1t,dsi2t,dsi0mt,dsi1mt,dsi2mt, &
-                            dsi0d,dsi1d,dsi2d,dsi0md,dsi1md,dsi2md, &
-                            ddsi0t,ddsi1t,ddsi2t,ddsi0mt,ddsi1mt,ddsi2mt, &
-                            z,din,fi(36)
+        integer :: iat,jat
+        real(dp) :: free,df_d,df_t,df_tt,df_dt
+        real(dp) :: xt,xd,mxt,mxd,fi(36), &
+                    si0t,si1t,si2t,si0mt,si1mt,si2mt, &
+                    si0d,si1d,si2d,si0md,si1md,si2md, &
+                    dsi0t,dsi1t,dsi2t,dsi0mt,dsi1mt,dsi2mt, &
+                    dsi0d,dsi1d,dsi2d,dsi0md,dsi1md,dsi2md, &
+                    ddsi0t,ddsi1t,ddsi2t,ddsi0mt,ddsi1mt,ddsi2mt
 
         !..for the coulomb corrections
-        double precision :: dsdd,dsda,lami,inv_lami,lamida,lamidd,     &
-                            plasg,plasgdd,plasgdt,plasgda,plasgdz,     &
-                            ecoul,decouldd,decouldt,decoulda,decouldz, &
-                            pcoul,dpcouldd,dpcouldt,dpcoulda,dpcouldz, &
-                            scoul,dscouldd,dscouldt,dscoulda,dscouldz
+        real(dp) :: dsdd,dsda,lami,inv_lami,lamida,lamidd,     &
+                    plasg,plasgdd,plasgdt,plasgda,plasgdz,     &
+                    ecoul,decouldd,decouldt,decoulda,decouldz, &
+                    pcoul,dpcouldd,dpcouldt,dpcoulda,dpcouldz, &
+                    scoul,dscouldd,dscouldt,dscoulda,dscouldz
 
-        double precision :: p_temp, e_temp
-
-        double precision :: smallt, smalld
-
-        !$gpu
+        real(dp) :: p_temp, e_temp
+        real(dp) :: smallt, smalld
 
         call eos_get_small_temp(smallt)
         call eos_get_small_dens(smalld)
@@ -324,41 +322,41 @@ contains
 
         endif
 
-        ptot_row = 0.0d0
-        dpt_row = 0.0d0
-        dpd_row = 0.0d0
-        dpa_row = 0.0d0
-        dpz_row = 0.0d0
-        dpe_row = 0.0d0
-        dpdr_e_row = 0.0d0
+        ptot_row = 0.0_dp
+        dpt_row = 0.0_dp
+        dpd_row = 0.0_dp
+        dpa_row = 0.0_dp
+        dpz_row = 0.0_dp
+        dpe_row = 0.0_dp
+        dpdr_e_row = 0.0_dp
 
-        etot_row = 0.0d0
-        det_row = 0.0d0
-        ded_row = 0.0d0
-        dea_row = 0.0d0
-        dez_row = 0.0d0
+        etot_row = 0.0_dp
+        det_row = 0.0_dp
+        ded_row = 0.0_dp
+        dea_row = 0.0_dp
+        dez_row = 0.0_dp
 
-        stot_row = 0.0d0
-        dst_row = 0.0d0
-        dsd_row = 0.0d0
+        stot_row = 0.0_dp
+        dst_row = 0.0_dp
+        dsd_row = 0.0_dp
 
-        htot_row = 0.0d0
-        dhd_row = 0.0d0
-        dht_row = 0.0d0
+        htot_row = 0.0_dp
+        dhd_row = 0.0_dp
+        dht_row = 0.0_dp
 
-        pele_row = 0.0d0
-        ppos_row = 0.0d0
+        pele_row = 0.0_dp
+        ppos_row = 0.0_dp
 
-        xne_row = 0.0d0
-        xnp_row = 0.0d0
+        xne_row = 0.0_dp
+        xnp_row = 0.0_dp
 
-        etaele_row = 0.0d0
-        detadt_row = 0.0d0
+        etaele_row = 0.0_dp
+        detadt_row = 0.0_dp
 
-        cv_row = 0.0d0
-        cp_row = 0.0d0
-        cs_row = 0.0d0
-        gam1_row = 0.0d0
+        cv_row = 0.0_dp
+        cp_row = 0.0_dp
+        cs_row = 0.0_dp
+        gam1_row = 0.0_dp
 
         converged = .false.
 
@@ -371,24 +369,24 @@ contains
            abar  = abar_row
            zbar  = zbar_row
 
-           ytot1 = 1.0d0 / abar
+           ytot1 = 1.0_dp / abar
            ye    = ye_row
            din   = ye * den
 
            !..initialize
-           deni    = 1.0d0/den
-           tempi   = 1.0d0/temp
+           deni    = 1.0_dp/den
+           tempi   = 1.0_dp/temp
            kt      = kerg * temp
-           ktinv   = 1.0d0/kt
+           ktinv   = 1.0_dp/kt
 
            !..radiation section:
            prad    = asoli3 * temp * temp * temp * temp
-           dpraddd = 0.0d0
-           dpraddt = 4.0d0 * prad*tempi
+           dpraddd = 0.0_dp
+           dpraddt = 4.0_dp * prad*tempi
 
-           erad    = 3.0d0 * prad*deni
+           erad    = 3.0_dp * prad*deni
            deraddd = -erad*deni
-           deraddt = 3.0d0 * dpraddt*deni
+           deraddt = 3.0_dp * dpraddt*deni
 
            srad    = (prad*deni + erad)*tempi
            dsraddd = (dpraddd*deni - prad*deni*deni + deraddd)*tempi
@@ -403,9 +401,9 @@ contains
            dpiondd = dxnidd * kt
            dpiondt = xni * kerg
 
-           eion    = 1.5d0 * pion*deni
-           deiondd = (1.5d0 * dpiondd - eion)*deni
-           deiondt = 1.5d0 * dpiondt*deni
+           eion    = 1.5_dp * pion*deni
+           deiondd = (1.5_dp * dpiondd - eion)*deni
+           deiondt = 1.5_dp * dpiondt*deni
 
            x       = abar*abar*sqrt(abar) * deni/avo_eos
            s       = sioncon * temp
@@ -416,7 +414,7 @@ contains
                 - kergavo * deni * ytot1
            dsiondt = (dpiondt*deni + deiondt)*tempi -  &
                 (pion*deni + eion) * tempi*tempi  &
-                + 1.5d0 * kergavo * tempi*ytot1
+                + 1.5_dp * kergavo * tempi*ytot1
            x       = avo_eos*kerg/abar
 
            !..electron-positron section:
@@ -471,10 +469,10 @@ contains
            fi(36) = fddtt(iat+1,jat+1)
 
            !..various differences
-           xt  = max( (temp - t(jat))*dti_sav(jat), 0.0d0)
-           xd  = max( (din - d(iat))*ddi_sav(iat), 0.0d0)
-           mxt = 1.0d0 - xt
-           mxd = 1.0d0 - xd
+           xt  = max( (temp - t(jat))*dti_sav(jat), 0.0_dp)
+           xd  = max( (din - d(iat))*ddi_sav(iat), 0.0_dp)
+           mxt = 1.0_dp - xt
+           mxd = 1.0_dp - xd
 
            !..the six density and six temperature basis functions
            si0t =   psi0(xt)
@@ -608,7 +606,7 @@ contains
            dpepdd  = h3(   fi, &
                 si0t,   si1t,   si0mt,   si1mt, &
                 si0d,   si1d,   si0md,   si1md)
-           dpepdd  = max(ye * dpepdd,0.0d0)
+           dpepdd  = max(ye * dpepdd,0.0_dp)
 
            !..look in the electron chemical potential table only once
            fi(1)  = ef(iat,jat)
@@ -672,7 +670,7 @@ contains
            x        = h3( fi, &
                 si0t,   si1t,   si0mt,   si1mt, &
                 dsi0d,  dsi1d,  dsi0md,  dsi1md)
-           x = max(x,0.0d0)
+           x = max(x,0.0_dp)
            dxnedd   = ye * x
 
            !..derivative with respect to temperature
@@ -690,8 +688,8 @@ contains
            x       = din * din
            pele    = x * df_d
            dpepdt  = x * df_dt
-           !     dpepdd  = ye * (x * df_dd + 2.0d0 * din * df_d)
-           s       = dpepdd/ye - 2.0d0 * din * df_d
+           !     dpepdd  = ye * (x * df_dd + 2.0_dp * din * df_d)
+           s       = dpepdd/ye - 2.0_dp * din * df_d
 
            x       = ye * ye
            sele    = -df_t * ye
@@ -704,21 +702,21 @@ contains
 
            !..coulomb section:
            !..initialize
-           pcoul    = 0.0d0
-           dpcouldd = 0.0d0
-           dpcouldt = 0.0d0
-           dpcoulda = 0.0d0
-           dpcouldz = 0.0d0
-           ecoul    = 0.0d0
-           decouldd = 0.0d0
-           decouldt = 0.0d0
-           decoulda = 0.0d0
-           decouldz = 0.0d0
-           scoul    = 0.0d0
-           dscouldd = 0.0d0
-           dscouldt = 0.0d0
-           dscoulda = 0.0d0
-           dscouldz = 0.0d0
+           pcoul    = 0.0_dp
+           dpcouldd = 0.0_dp
+           dpcouldt = 0.0_dp
+           dpcoulda = 0.0_dp
+           dpcouldz = 0.0_dp
+           ecoul    = 0.0_dp
+           decouldd = 0.0_dp
+           decouldt = 0.0_dp
+           decoulda = 0.0_dp
+           decouldz = 0.0_dp
+           scoul    = 0.0_dp
+           dscouldd = 0.0_dp
+           dscouldt = 0.0_dp
+           dscoulda = 0.0_dp
+           dscouldz = 0.0_dp
 
            !..uniform background corrections only
            !..from yakovlev & shalybkov 1989
@@ -729,8 +727,8 @@ contains
            dsdd     = z * dxnidd
            dsda     = z * dxnida
 
-           lami     = 1.0d0/s**onethird
-           inv_lami = 1.0d0/lami
+           lami     = 1.0_dp/s**onethird
+           inv_lami = 1.0_dp/lami
            z        = -onethird * lami
            lamidd   = z * dsdd/s
            lamida   = z * dsda/s
@@ -740,20 +738,20 @@ contains
            plasgdd  = z * lamidd
            plasgda  = z * lamida
            plasgdt  = -plasg*ktinv * kerg
-           plasgdz  = 2.0d0 * plasg/zbar
+           plasgdz  = 2.0_dp * plasg/zbar
 
            !     TURN ON/OFF COULOMB
            if ( do_coulomb ) then
               !...yakovlev & shalybkov 1989 equations 82, 85, 86, 87
-              if (plasg .ge. 1.0D0) then
-                 x        = plasg**(0.25d0)
+              if (plasg .ge. 1.0_dp) then
+                 x        = plasg**(0.25_dp)
                  y        = avo_eos * ytot1 * kerg
                  ecoul    = y * temp * (a1*plasg + b1*x + c1/x + d1)
                  pcoul    = onethird * den * ecoul
-                 scoul    = -y * (3.0d0*b1*x - 5.0d0*c1/x &
-                      + d1 * (log(plasg) - 1.0d0) - e1)
+                 scoul    = -y * (3.0_dp*b1*x - 5.0_dp*c1/x &
+                      + d1 * (log(plasg) - 1.0_dp) - e1)
 
-                 y        = avo_eos*ytot1*kt*(a1 + 0.25d0/plasg*(b1*x - c1/x))
+                 y        = avo_eos*ytot1*kt*(a1 + 0.25_dp/plasg*(b1*x - c1/x))
                  decouldd = y * plasgdd
                  decouldt = y * plasgdt + ecoul/temp
                  decoulda = y * plasgda - ecoul/abar
@@ -766,33 +764,33 @@ contains
                  dpcouldz = y * decouldz
 
                  y        = -avo_eos*kerg/(abar*plasg)* &
-                      (0.75d0*b1*x+1.25d0*c1/x+d1)
+                      (0.75_dp*b1*x+1.25_dp*c1/x+d1)
                  dscouldd = y * plasgdd
                  dscouldt = y * plasgdt
                  dscoulda = y * plasgda - scoul/abar
                  dscouldz = y * plasgdz
 
                  !...yakovlev & shalybkov 1989 equations 102, 103, 104
-              else if (plasg .lt. 1.0D0) then
+              else if (plasg .lt. 1.0_dp) then
                  x        = plasg*sqrt(plasg)
                  y        = plasg**b2
                  z        = c2 * x - onethird * a2 * y
                  pcoul    = -pion * z
-                 ecoul    = 3.0d0 * pcoul/den
-                 scoul    = -avo_eos/abar*kerg*(c2*x -a2*(b2-1.0d0)/b2*y)
+                 ecoul    = 3.0_dp * pcoul/den
+                 scoul    = -avo_eos/abar*kerg*(c2*x -a2*(b2-1.0_dp)/b2*y)
 
-                 s        = 1.5d0*c2*x/plasg - onethird*a2*b2*y/plasg
+                 s        = 1.5_dp*c2*x/plasg - onethird*a2*b2*y/plasg
                  dpcouldd = -dpiondd*z - pion*s*plasgdd
                  dpcouldt = -dpiondt*z - pion*s*plasgdt
 
-                 s        = 3.0d0/den
+                 s        = 3.0_dp/den
                  decouldd = s * dpcouldd - ecoul/den
                  decouldt = s * dpcouldt
                  decoulda = s * dpcoulda
                  decouldz = s * dpcouldz
 
                  s        = -avo_eos*kerg/(abar*plasg)* &
-                      (1.5d0*c2*x-a2*(b2-1.0d0)*y)
+                      (1.5_dp*c2*x-a2*(b2-1.0_dp)*y)
                  dscouldd = s * plasgdd
                  dscouldt = s * plasgdt
                  dscoulda = s * plasgda - scoul/abar
@@ -805,23 +803,23 @@ contains
               p_temp = prad + pion + pele + pcoul
               e_temp = erad + eion + eele + ecoul
 
-              if (p_temp .le. ZERO .or. e_temp .le. ZERO) then
+              if (p_temp .le. 0.0_dp .or. e_temp .le. 0.0_dp) then
 
-                 pcoul    = 0.0d0
-                 dpcouldd = 0.0d0
-                 dpcouldt = 0.0d0
-                 dpcoulda = 0.0d0
-                 dpcouldz = 0.0d0
-                 ecoul    = 0.0d0
-                 decouldd = 0.0d0
-                 decouldt = 0.0d0
-                 decoulda = 0.0d0
-                 decouldz = 0.0d0
-                 scoul    = 0.0d0
-                 dscouldd = 0.0d0
-                 dscouldt = 0.0d0
-                 dscoulda = 0.0d0
-                 dscouldz = 0.0d0
+                 pcoul    = 0.0_dp
+                 dpcouldd = 0.0_dp
+                 dpcouldt = 0.0_dp
+                 dpcoulda = 0.0_dp
+                 dpcouldz = 0.0_dp
+                 ecoul    = 0.0_dp
+                 decouldd = 0.0_dp
+                 decouldt = 0.0_dp
+                 decoulda = 0.0_dp
+                 decouldz = 0.0_dp
+                 scoul    = 0.0_dp
+                 dscouldd = 0.0_dp
+                 dscouldt = 0.0_dp
+                 dscoulda = 0.0_dp
+                 dscouldz = 0.0_dp
 
               end if
            end if
@@ -852,19 +850,19 @@ contains
            chid  = dpresdd*zzi
            cv    = denerdt
            x     = zz * chit/(temp * cv)
-           gam3  = x + 1.0d0
+           gam3  = x + 1.0_dp
            gam1  = chit*x + chid
            nabad = x/gam1
-           gam2  = 1.0d0/(1.0d0 - nabad)
+           gam2  = 1.0_dp/(1.0_dp - nabad)
            cp    = cv * gam1/chid
-           z     = 1.0d0 + (ener + light2)*zzi
+           z     = 1.0_dp + (ener + light2)*zzi
            sound = clight * sqrt(gam1/z)
 
            !..maxwell relations; each is zero if the consistency is perfect
            x   = den * den
-           dse = temp*dentrdt/denerdt - 1.0d0
-           dpe = (denerdd*x + temp*dpresdt)/pres - 1.0d0
-           dsp = -dentrdd*x/dpresdt - 1.0d0
+           dse = temp*dentrdt/denerdt - 1.0_dp
+           dpe = (denerdd*x + temp*dpresdt)/pres - 1.0_dp
+           dsp = -dentrdd*x/dpresdt - 1.0_dp
 
            ptot_row = pres
            dpt_row = dpresdt
@@ -885,10 +883,10 @@ contains
            dht_row = denerdt + dpresdt / den
 
            pele_row = pele
-           ppos_row = 0.0d0
+           ppos_row = 0.0_dp
 
            xne_row = xnefer
-           xnp_row = 0.0d0
+           xnp_row = 0.0_dp
 
            etaele_row = etaele
            detadt_row = detadt
@@ -1039,8 +1037,8 @@ contains
 
               ! Don't let the temperature or density change by more
               ! than a factor of two
-              tnew = max(HALF * told, min(tnew, TWO * told))
-              rnew = max(HALF * rold, min(rnew, TWO * rold))
+              tnew = max(0.5_dp * told, min(tnew, 2.0_dp * told))
+              rnew = max(0.5_dp * rold, min(rnew, 2.0_dp * rold))
 
               ! Don't let us freeze or evacuate
               tnew = max(smallt, tnew)
@@ -1148,6 +1146,375 @@ contains
     end subroutine actual_eos
 
 
+    subroutine xnet_actual_eos(input, state)
+
+        ! This is a pruned version of actual_eos that only calculates those 
+        ! quantities needed by XNet: electron chemical potential, its derivative
+        ! w.r.t. temperature, and specific heat.
+
+        !$acc routine seq
+
+        implicit none
+
+        !..input arguments
+        integer,      intent(in   ) :: input
+        type (eos_t), intent(inout) :: state
+
+        !..declare local variables
+        real(dp) :: cv,etaele,detadt, &
+                    temp,den,abar,zbar,ye
+
+        temp  = state % T
+        den   = state % rho
+        abar  = state % abar
+        zbar  = state % zbar
+
+        ye    = state % y_e
+
+        call actual_eos_cv(temp,den,abar,zbar,ye,cv)
+        call actual_eos_eta(temp,den,ye,etaele,detadt)
+
+        state % cv     = cv
+        state % eta    = etaele
+        state % detadt = detadt
+
+    end subroutine xnet_actual_eos
+
+
+    subroutine actual_eos_eta(temp,den,ye,etaele,detadt)
+
+        ! This is a pruned version of actual_eos that only calculates those 
+        ! quantities needed by XNet: electron chemical potential, its derivative
+        ! w.r.t. temperature, and specific heat.
+
+        !$acc routine seq
+
+        implicit none
+
+        !..input arguments
+        real(dp),     intent(in ) :: temp,den,ye
+        real(dp),     intent(out) :: etaele,detadt
+
+        !..declare local variables
+        real(dp) :: din
+
+        !..for the interpolations
+        integer  :: iat,jat
+        real(dp) :: xt,xd,mxt,mxd,dfi(16), &
+                    si0t,si1t,si2t,si0mt,si1mt,si2mt, &
+                    si0d,si1d,si2d,si0md,si1md,si2md, &
+                    dsi0t,dsi1t,dsi2t,dsi0mt,dsi1mt,dsi2mt
+
+        din   = ye * den
+
+        !..electron-positron section:
+        !..hash locate this temperature and density
+        jat = int((log10(temp) - tlo)*tstpi) + 1
+        jat = max(1,min(jat,jtmax-1))
+        iat = int((log10(din) - dlo)*dstpi) + 1
+        iat = max(1,min(iat,itmax-1))
+
+        !..various differences
+        xt  = max( (temp - t(jat))*dti_sav(jat), 0.0_dp)
+        xd  = max( (din - d(iat))*ddi_sav(iat), 0.0_dp)
+        mxt = 1.0_dp - xt
+        mxd = 1.0_dp - xd
+
+        !..now get the pressure derivative with density, chemical potential, and
+        !..electron positron number densities
+        !..get the interpolation weight functions
+        si0t   =  xpsi0(xt)
+        si1t   =  xpsi1(xt)*dt_sav(jat)
+
+        si0mt  =  xpsi0(mxt)
+        si1mt  =  -xpsi1(mxt)*dt_sav(jat)
+
+        si0d   =  xpsi0(xd)
+        si1d   =  xpsi1(xd)*dd_sav(iat)
+
+        si0md  =  xpsi0(mxd)
+        si1md  =  -xpsi1(mxd)*dd_sav(iat)
+
+        !..derivatives of weight functions
+        dsi0t  = xdpsi0(xt)*dti_sav(jat)
+        dsi1t  = xdpsi1(xt)
+
+        dsi0mt = -xdpsi0(mxt)*dti_sav(jat)
+        dsi1mt = xdpsi1(mxt)
+
+        !..look in the electron chemical potential table only once
+        dfi(1)  = ef(iat,jat)
+        dfi(2)  = ef(iat+1,jat)
+        dfi(3)  = ef(iat,jat+1)
+        dfi(4)  = ef(iat+1,jat+1)
+        dfi(5)  = eft(iat,jat)
+        dfi(6)  = eft(iat+1,jat)
+        dfi(7)  = eft(iat,jat+1)
+        dfi(8)  = eft(iat+1,jat+1)
+        dfi(9)  = efd(iat,jat)
+        dfi(10) = efd(iat+1,jat)
+        dfi(11) = efd(iat,jat+1)
+        dfi(12) = efd(iat+1,jat+1)
+        dfi(13) = efdt(iat,jat)
+        dfi(14) = efdt(iat+1,jat)
+        dfi(15) = efdt(iat,jat+1)
+        dfi(16) = efdt(iat+1,jat+1)
+
+        !..electron chemical potential etaele
+        etaele  = h3( dfi, &
+          si0t,   si1t,   si0mt,   si1mt, &
+          si0d,   si1d,   si0md,   si1md)
+
+        !..derivative with respect to temperature
+        detadt  = h3( dfi, &
+          dsi0t,  dsi1t,  dsi0mt,  dsi1mt, &
+          si0d,   si1d,   si0md,   si1md)
+
+    end subroutine actual_eos_eta
+
+
+    subroutine actual_eos_cv(temp,den,abar,zbar,ye,cv)
+
+        ! This is a pruned version of actual_eos that only calculates those 
+        ! quantities needed by XNet: electron chemical potential, its derivative
+        ! w.r.t. temperature, and specific heat.
+
+        implicit none
+
+        !$acc routine seq
+
+        !..input arguments
+        real(dp),     intent(in ) :: temp,den,abar,zbar,ye
+        real(dp),     intent(out) :: cv
+
+        !..declare local variables
+        real(dp) :: x,y,z,deni,tempi,xni, &
+                    deepdt,dsepdt, &
+                    dpraddt,deraddt,dpiondt, &
+                    deiondt, &
+                    kt,ktinv,prad,erad,pion,eion, &
+                    pele,eele,sele, &
+                    s, &
+                    ytot1,din
+
+
+        !..for the interpolations
+        integer  :: iat,jat
+        real(dp) :: free,df_d,df_t,df_tt
+        real(dp) :: xt,xd,mxt,mxd,fi(36),dfi(16), &
+                    si0t,si1t,si2t,si0mt,si1mt,si2mt, &
+                    si0d,si1d,si2d,si0md,si1md,si2md, &
+                    dsi0t,dsi1t,dsi2t,dsi0mt,dsi1mt,dsi2mt, &
+                    dsi0d,dsi1d,dsi2d,dsi0md,dsi1md,dsi2md, &
+                    ddsi0t,ddsi1t,ddsi2t,ddsi0mt,ddsi1mt,ddsi2mt
+
+        !..for the coulomb corrections
+        real(dp) :: lami,inv_lami, &
+                    plasg,plasgdt, &
+                    ecoul,decouldt, &
+                    pcoul,dpcouldt
+
+        real(dp) :: p_temp, e_temp
+
+        ytot1 = 1.0_dp/abar
+        din   = ye * den
+
+        !..initialize
+        deni    = 1.0_dp/den
+        tempi   = 1.0_dp/temp
+        kt      = kerg * temp
+        ktinv   = 1.0_dp/kt
+
+        !..radiation section:
+        prad    = asoli3 * temp * temp * temp * temp
+        dpraddt = 4.0_dp * prad*tempi
+        deraddt = 3.0_dp * dpraddt*deni
+
+        !..ion section:
+        xni     = avo_eos * ytot1 * den
+        pion    = xni * kt
+        dpiondt = xni * kerg
+        deiondt = 1.5_dp * dpiondt*deni
+
+        !..electron-positron section:
+        !..hash locate this temperature and density
+        jat = int((log10(temp) - tlo)*tstpi) + 1
+        jat = max(1,min(jat,jtmax-1))
+        iat = int((log10(din) - dlo)*dstpi) + 1
+        iat = max(1,min(iat,itmax-1))
+
+        !..various differences
+        xt  = max( (temp - t(jat))*dti_sav(jat), 0.0_dp)
+        xd  = max( (din - d(iat))*ddi_sav(iat), 0.0_dp)
+        mxt = 1.0_dp - xt
+        mxd = 1.0_dp - xd
+
+        !..the six density and six temperature basis functions
+        si0t =   psi0(xt)
+        si1t =   psi1(xt)*dt_sav(jat)
+        si2t =   psi2(xt)*dt2_sav(jat)
+
+        si0mt =  psi0(mxt)
+        si1mt = -psi1(mxt)*dt_sav(jat)
+        si2mt =  psi2(mxt)*dt2_sav(jat)
+
+        si0d =   psi0(xd)
+        si1d =   psi1(xd)*dd_sav(iat)
+        si2d =   psi2(xd)*dd2_sav(iat)
+
+        si0md =  psi0(mxd)
+        si1md = -psi1(mxd)*dd_sav(iat)
+        si2md =  psi2(mxd)*dd2_sav(iat)
+
+        !..derivatives of the weight functions
+        !dsi0t =   dpsi0(xt)*dti_sav(jat)
+        !dsi1t =   dpsi1(xt)
+        !dsi2t =   dpsi2(xt)*dt_sav(jat)
+
+        !dsi0mt = -dpsi0(mxt)*dti_sav(jat)
+        !dsi1mt =  dpsi1(mxt)
+        !dsi2mt = -dpsi2(mxt)*dt_sav(jat)
+
+        dsi0d =   dpsi0(xd)*ddi_sav(iat)
+        dsi1d =   dpsi1(xd)
+        dsi2d =   dpsi2(xd)*dd_sav(iat)
+
+        dsi0md = -dpsi0(mxd)*ddi_sav(iat)
+        dsi1md =  dpsi1(mxd)
+        dsi2md = -dpsi2(mxd)*dd_sav(iat)
+
+        !..second derivatives of the weight functions
+        ddsi0t =   ddpsi0(xt)*dt2i_sav(jat)
+        ddsi1t =   ddpsi1(xt)*dti_sav(jat)
+        ddsi2t =   ddpsi2(xt)
+
+        ddsi0mt =  ddpsi0(mxt)*dt2i_sav(jat)
+        ddsi1mt = -ddpsi1(mxt)*dti_sav(jat)
+        ddsi2mt =  ddpsi2(mxt)
+
+        !..access the table locations only once
+        fi(1)  = f(iat,jat)
+        fi(2)  = f(iat+1,jat)
+        fi(3)  = f(iat,jat+1)
+        fi(4)  = f(iat+1,jat+1)
+        fi(5)  = ft(iat,jat)
+        fi(6)  = ft(iat+1,jat)
+        fi(7)  = ft(iat,jat+1)
+        fi(8)  = ft(iat+1,jat+1)
+        fi(9)  = ftt(iat,jat)
+        fi(10) = ftt(iat+1,jat)
+        fi(11) = ftt(iat,jat+1)
+        fi(12) = ftt(iat+1,jat+1)
+        fi(13) = fd(iat,jat)
+        fi(14) = fd(iat+1,jat)
+        fi(15) = fd(iat,jat+1)
+        fi(16) = fd(iat+1,jat+1)
+        fi(17) = fdd(iat,jat)
+        fi(18) = fdd(iat+1,jat)
+        fi(19) = fdd(iat,jat+1)
+        fi(20) = fdd(iat+1,jat+1)
+        fi(21) = fdt(iat,jat)
+        fi(22) = fdt(iat+1,jat)
+        fi(23) = fdt(iat,jat+1)
+        fi(24) = fdt(iat+1,jat+1)
+        fi(25) = fddt(iat,jat)
+        fi(26) = fddt(iat+1,jat)
+        fi(27) = fddt(iat,jat+1)
+        fi(28) = fddt(iat+1,jat+1)
+        fi(29) = fdtt(iat,jat)
+        fi(30) = fdtt(iat+1,jat)
+        fi(31) = fdtt(iat,jat+1)
+        fi(32) = fdtt(iat+1,jat+1)
+        fi(33) = fddtt(iat,jat)
+        fi(34) = fddtt(iat+1,jat)
+        fi(35) = fddtt(iat,jat+1)
+        fi(36) = fddtt(iat+1,jat+1)
+
+        !..the free energy
+        !free  = h5( fi, &
+        !   si0t,   si1t,   si2t,   si0mt,   si1mt,   si2mt, &
+        !   si0d,   si1d,   si2d,   si0md,   si1md,   si2md)
+
+        !..derivative with respect to density
+        df_d  = h5( fi, &
+           si0t,   si1t,   si2t,   si0mt,   si1mt,   si2mt, &
+           dsi0d,  dsi1d,  dsi2d,  dsi0md,  dsi1md,  dsi2md)
+
+        !..derivative with respect to temperature
+        !df_t = h5( fi, &
+        !   dsi0t,  dsi1t,  dsi2t,  dsi0mt,  dsi1mt,  dsi2mt, &
+        !   si0d,   si1d,   si2d,   si0md,   si1md,   si2md)
+
+        !..derivative with respect to temperature**2
+        df_tt = h5( fi, &
+           ddsi0t, ddsi1t, ddsi2t, ddsi0mt, ddsi1mt, ddsi2mt, &
+           si0d,   si1d,   si2d,   si0md,   si1md,   si2md)
+
+        !..the desired electron-positron thermodynamic quantities
+        x       = din * din
+        pele    = x * df_d
+
+        !sele    = -df_t * ye
+        dsepdt  = -df_tt * ye
+
+        !eele    = ye*free + temp * sele
+        deepdt  = temp * dsepdt
+
+        !..coulomb section:
+        !..uniform background corrections only
+        !..from yakovlev & shalybkov 1989
+        !..plasg is the plasma coupling parameter
+        z        = forth * pi
+        s        = z * xni
+
+        lami     = 1.0_dp/s**onethird
+        inv_lami = 1.0_dp/lami
+
+        plasg    = zbar*zbar*esqu*ktinv*inv_lami
+        plasgdt  = -plasg*ktinv * kerg
+
+        !     TURN ON/OFF COULOMB
+        !...yakovlev & shalybkov 1989 equations 82, 85, 86, 87
+        if (plasg .ge. 1.0_dp) then
+          x        = plasg**(0.25_dp)
+          y        = avo_eos * ytot1 * kerg
+          ecoul    = y * temp * (a1*plasg + b1*x + c1/x + d1)
+          pcoul    = onethird * den * ecoul
+
+          y        = avo_eos*ytot1*kt*(a1 + 0.25_dp/plasg*(b1*x - c1/x))
+          decouldt = y * plasgdt + ecoul/temp
+
+        !...yakovlev & shalybkov 1989 equations 102, 103, 104
+        else if (plasg .lt. 1.0_dp) then
+          x        = plasg*sqrt(plasg)
+          y        = plasg**b2
+          z        = c2 * x - onethird * a2 * y
+          pcoul    = -pion * z
+          ecoul    = 3.0_dp * pcoul/den
+
+          s        = 1.5_dp*c2*x/plasg - onethird*a2*b2*y/plasg
+          dpcouldt = -dpiondt*z - pion*s*plasgdt
+
+          s        = 3.0_dp/den
+          decouldt = s * dpcouldt
+        end if
+
+        ! Disable Coulomb corrections if they cause
+        ! the energy or pressure to go negative.
+
+        p_temp = prad + pion + pele + pcoul
+        e_temp = 0.0_dp
+        !e_temp = erad + eion + eele + ecoul
+
+        if (p_temp .le. 0.0_dp ) then
+          decouldt = 0.0_dp
+        end if
+
+        !..the specific heat at constant volume (c&g 9.92)
+        cv = deraddt + deiondt + deepdt + decouldt
+
+    end subroutine actual_eos_cv
+
 
     subroutine actual_eos_init
 
@@ -1156,9 +1523,9 @@ contains
 
         implicit none
 
-        double precision :: dth, dt2, dti, dt2i
-        double precision :: dd, dd2, ddi, dd2i
-        double precision :: tsav, dsav
+        real(dp) :: dth, dt2, dti, dt2i
+        real(dp) :: dd, dd2, ddi, dd2i
+        real(dp) :: tsav, dsav
         integer :: i, j
         integer :: status
 
@@ -1214,27 +1581,27 @@ contains
 
         input_is_constant = .true.
         do_coulomb = .true.
-        ttol = 1.0d-8
-        dtol = 1.0d-8
+        ttol = 1.0e-8_dp
+        dtol = 1.0e-8_dp
 
         !..   read the helmholtz free energy table
         itmax = imax
         jtmax = jmax
-        tlo   = 3.0d0
-        thi   = 13.0d0
+        tlo   = 3.0_dp
+        thi   = 13.0_dp
         tstp  = (thi - tlo)/float(jmax-1)
-        tstpi = 1.0d0/tstp
-        dlo   = -12.0d0
-        dhi   = 15.0d0
+        tstpi = 1.0_dp/tstp
+        dlo   = -12.0_dp
+        dhi   = 15.0_dp
         dstp  = (dhi - dlo)/float(imax-1)
-        dstpi = 1.0d0/dstp
+        dstpi = 1.0_dp/dstp
 
         do j=1,jmax
            tsav = tlo + (j-1)*tstp
-           t(j) = 10.0d0**(tsav)
+           t(j) = 10.0_dp**(tsav)
            do i=1,imax
               dsav = dlo + (i-1)*dstp
-              d(i) = 10.0d0**(dsav)
+              d(i) = 10.0_dp**(dsav)
            end do
         end do
 
@@ -1304,8 +1671,8 @@ contains
         do j = 1, jmax-1
            dth         = t(j+1) - t(j)
            dt2         = dth * dth
-           dti         = 1.0d0/dth
-           dt2i        = 1.0d0/dt2
+           dti         = 1.0_dp/dth
+           dt2i        = 1.0_dp/dt2
            dt_sav(j)   = dth
            dt2_sav(j)  = dt2
            dti_sav(j)  = dti
@@ -1314,8 +1681,8 @@ contains
         do i = 1, imax-1
            dd          = d(i+1) - d(i)
            dd2         = dd * dd
-           ddi         = 1.0d0/dd
-           dd2i        = 1.0d0/dd2
+           ddi         = 1.0_dp/dd
+           dd2i        = 1.0_dp/dd2
            dd_sav(i)   = dd
            dd2_sav(i)  = dd2
            ddi_sav(i)  = ddi
@@ -1352,89 +1719,78 @@ contains
 
     ! quintic hermite polynomial functions
     ! psi0 and its derivatives
-    pure function psi0(z) result(psi0r)
+    function psi0(z) result(psi0r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: psi0r
-      !$gpu
-      psi0r = z**3 * ( z * (-6.0d0*z + 15.0d0) -10.0d0) + 1.0d0
+      real(dp), intent(in) :: z
+      real(dp) :: psi0r
+      psi0r = z**3 * ( z * (-6.0_dp*z + 15.0_dp) -10.0_dp) + 1.0_dp
     end function psi0
 
-    pure function dpsi0(z) result(dpsi0r)
+    function dpsi0(z) result(dpsi0r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: dpsi0r
-      !$gpu
-      dpsi0r = z**2 * ( z * (-30.0d0*z + 60.0d0) - 30.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: dpsi0r
+      dpsi0r = z**2 * ( z * (-30.0_dp*z + 60.0_dp) - 30.0_dp)
     end function dpsi0
 
-    pure function ddpsi0(z) result(ddpsi0r)
+    function ddpsi0(z) result(ddpsi0r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: ddpsi0r
-      !$gpu
-      ddpsi0r = z* ( z*( -120.0d0*z + 180.0d0) -60.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: ddpsi0r
+      ddpsi0r = z* ( z*( -120.0_dp*z + 180.0_dp) -60.0_dp)
     end function ddpsi0
 
     ! psi1 and its derivatives
-    pure function psi1(z) result(psi1r)
+    function psi1(z) result(psi1r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: psi1r
-      !$gpu
-      psi1r = z* ( z**2 * ( z * (-3.0d0*z + 8.0d0) - 6.0d0) + 1.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: psi1r
+      psi1r = z* ( z**2 * ( z * (-3.0_dp*z + 8.0_dp) - 6.0_dp) + 1.0_dp)
     end function psi1
 
-    pure function dpsi1(z) result(dpsi1r)
+    function dpsi1(z) result(dpsi1r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: dpsi1r
-      !$gpu
-      dpsi1r = z*z * ( z * (-15.0d0*z + 32.0d0) - 18.0d0) +1.0d0
+      real(dp), intent(in) :: z
+      real(dp) :: dpsi1r
+      dpsi1r = z*z * ( z * (-15.0_dp*z + 32.0_dp) - 18.0_dp) +1.0_dp
     end function dpsi1
 
-    pure function ddpsi1(z) result(ddpsi1r)
+    function ddpsi1(z) result(ddpsi1r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: ddpsi1r
-      !$gpu
-      ddpsi1r = z * (z * (-60.0d0*z + 96.0d0) -36.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: ddpsi1r
+      ddpsi1r = z * (z * (-60.0_dp*z + 96.0_dp) -36.0_dp)
     end function ddpsi1
 
     ! psi2  and its derivatives
-    pure function psi2(z) result(psi2r)
+    function psi2(z) result(psi2r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: psi2r
-      !$gpu
-      psi2r = 0.5d0*z*z*( z* ( z * (-z + 3.0d0) - 3.0d0) + 1.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: psi2r
+      psi2r = 0.5_dp*z*z*( z* ( z * (-z + 3.0_dp) - 3.0_dp) + 1.0_dp)
     end function psi2
 
-    pure function dpsi2(z) result(dpsi2r)
+    function dpsi2(z) result(dpsi2r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: dpsi2r
-      !$gpu
-      dpsi2r = 0.5d0*z*( z*(z*(-5.0d0*z + 12.0d0) - 9.0d0) + 2.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: dpsi2r
+      dpsi2r = 0.5_dp*z*( z*(z*(-5.0_dp*z + 12.0_dp) - 9.0_dp) + 2.0_dp)
     end function dpsi2
 
-    pure function ddpsi2(z) result(ddpsi2r)
+    function ddpsi2(z) result(ddpsi2r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: ddpsi2r
-      !$gpu
-      ddpsi2r = 0.5d0*(z*( z * (-20.0d0*z + 36.0d0) - 18.0d0) + 2.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: ddpsi2r
+      ddpsi2r = 0.5_dp*(z*( z * (-20.0_dp*z + 36.0_dp) - 18.0_dp) + 2.0_dp)
     end function ddpsi2
 
 
     ! biquintic hermite polynomial function
-    pure function h5(fi,w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md) result(h5r)
+    function h5(fi,w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md) result(h5r)
       !$acc routine seq
-      double precision, intent(in) :: fi(36)
-      double precision, intent(in) :: w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md
-      double precision :: h5r
-
-      !$gpu
+      real(dp), intent(in) :: fi(36)
+      real(dp), intent(in) :: w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md
+      real(dp) :: h5r
 
       h5r =  fi(1)  *w0d*w0t   + fi(2)  *w0md*w0t &
            + fi(3)  *w0d*w0mt  + fi(4)  *w0md*w0mt &
@@ -1459,55 +1815,50 @@ contains
 
     ! cubic hermite polynomial functions
     ! psi0 & derivatives
-    pure function xpsi0(z) result(xpsi0r)
+    function xpsi0(z) result(xpsi0r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: xpsi0r
-      !$gpu
-      xpsi0r = z * z * (2.0d0*z - 3.0d0) + 1.0
+      real(dp), intent(in) :: z
+      real(dp) :: xpsi0r
+      xpsi0r = z * z * (2.0_dp*z - 3.0_dp) + 1.0
     end function xpsi0
 
-    pure function xdpsi0(z) result(xdpsi0r)
+    function xdpsi0(z) result(xdpsi0r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: xdpsi0r
-      !$gpu
-      xdpsi0r = z * (6.0d0*z - 6.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: xdpsi0r
+      xdpsi0r = z * (6.0_dp*z - 6.0_dp)
     end function xdpsi0
 
 
     ! psi1 & derivatives
-    pure function xpsi1(z) result(xpsi1r)
+    function xpsi1(z) result(xpsi1r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: xpsi1r
-      !$gpu
-      xpsi1r = z * ( z * (z - 2.0d0) + 1.0d0)
+      real(dp), intent(in) :: z
+      real(dp) :: xpsi1r
+      xpsi1r = z * ( z * (z - 2.0_dp) + 1.0_dp)
     end function xpsi1
 
-    pure function xdpsi1(z) result(xdpsi1r)
+    function xdpsi1(z) result(xdpsi1r)
       !$acc routine seq
-      double precision, intent(in) :: z
-      double precision :: xdpsi1r
-      !$gpu
-      xdpsi1r = z * (3.0d0*z - 4.0d0) + 1.0d0
+      real(dp), intent(in) :: z
+      real(dp) :: xdpsi1r
+      xdpsi1r = z * (3.0_dp*z - 4.0_dp) + 1.0_dp
     end function xdpsi1
 
     ! bicubic hermite polynomial function
-    pure function h3(fi,w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md) result(h3r)
+    function h3(dfi,w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md) result(h3r)
       !$acc routine seq
-      double precision, intent(in) :: fi(36)
-      double precision, intent(in) :: w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md
-      double precision :: h3r
-      !$gpu
-      h3r =   fi(1)  *w0d*w0t   +  fi(2)  *w0md*w0t &
-           + fi(3)  *w0d*w0mt  +  fi(4)  *w0md*w0mt &
-           + fi(5)  *w0d*w1t   +  fi(6)  *w0md*w1t &
-           + fi(7)  *w0d*w1mt  +  fi(8)  *w0md*w1mt &
-           + fi(9)  *w1d*w0t   +  fi(10) *w1md*w0t &
-           + fi(11) *w1d*w0mt  +  fi(12) *w1md*w0mt &
-           + fi(13) *w1d*w1t   +  fi(14) *w1md*w1t &
-           + fi(15) *w1d*w1mt  +  fi(16) *w1md*w1mt
+      real(dp), intent(in) :: dfi(16)
+      real(dp), intent(in) :: w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md
+      real(dp) :: h3r
+      h3r =  dfi(1)  *w0d*w0t   +  dfi(2)  *w0md*w0t &
+           + dfi(3)  *w0d*w0mt  +  dfi(4)  *w0md*w0mt &
+           + dfi(5)  *w0d*w1t   +  dfi(6)  *w0md*w1t &
+           + dfi(7)  *w0d*w1mt  +  dfi(8)  *w0md*w1mt &
+           + dfi(9)  *w1d*w0t   +  dfi(10) *w1md*w0t &
+           + dfi(11) *w1d*w0mt  +  dfi(12) *w1md*w0mt &
+           + dfi(13) *w1d*w1t   +  dfi(14) *w1md*w1t &
+           + dfi(15) *w1d*w1mt  +  dfi(16) *w1md*w1mt
     end function h3
 
     subroutine actual_eos_finalize

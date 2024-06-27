@@ -31,7 +31,7 @@ Contains
     Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag
     Use xnet_types, Only: dp
 
-    Use actual_eos_module, Only: actual_eos
+    Use actual_eos_module, Only: xnet_actual_eos
     Use eos_type_module, Only: eos_input_rt, eos_t
     Implicit None
 
@@ -63,7 +63,7 @@ Contains
       eos_state%zbar = ye*abar
 
       ! Call the eos
-      Call actual_eos(eos_input_rt,eos_state)
+      Call xnet_actual_eos(eos_input_rt,eos_state)
 
       ! Convert units from ergs/g to MeV/nucleon and K to GK
       etae = eos_state%eta
