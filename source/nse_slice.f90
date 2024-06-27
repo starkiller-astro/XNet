@@ -13,6 +13,7 @@ Program nse_slice
     & changemx, tolm, tolc, yacc, ymin, tdel_maxmult, kstmx, kitmx, bin_file_base, lun_diag, &
     & lun_stdin, lun_stdout, read_controls, myid, nproc
   Use xnet_eos, Only: eos_initialize
+  Use xnet_match, Only: read_match_data
   Use xnet_nse, Only: xnse, ynse, i_nn, i_pp, i_he4, i_ni56, knrtot, nse_initialize, nse_solve
   Use xnet_parallel, Only: parallel_initialize, parallel_finalize, parallel_myproc, parallel_nprocs
   Use xnet_preprocess, Only: net_preprocess
@@ -85,6 +86,9 @@ Program nse_slice
   ! Read nuclear dataset
   Call read_nuclear_data(data_dir,data_desc)
   Call read_reaction_data(data_dir)
+
+  ! Read data on matching forward and reverse reactions
+  Call read_match_data(data_dir)
 
   ! Initialize EoS for screening
   If ( iscrn > 0 ) Call eos_initialize
