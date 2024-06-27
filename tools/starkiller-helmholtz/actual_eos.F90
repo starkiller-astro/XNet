@@ -80,7 +80,7 @@ module actual_eos_module
     real(dp), parameter :: sioncon = (2.0_dp * pi * amu * kerg)/(h*h)
     real(dp), parameter :: forth   = 4.0_dp/3.0_dp
     real(dp), parameter :: forpi   = 4.0_dp * pi
-    real(rt), parameter :: forthpi = forth * pi
+    real(dp), parameter :: forthpi = forth * pi
     real(dp), parameter :: kergavo = kerg * avo_eos
     real(dp), parameter :: ikavo   = 1.0_dp/kergavo
     real(dp), parameter :: asoli3  = asol/3.0_dp
@@ -1192,15 +1192,15 @@ contains
         implicit none
 
         !..input arguments
-        real(rt),     intent(in ) :: temp,den,ye
-        real(rt),     intent(out) :: etaele,detadt
+        real(dp),     intent(in ) :: temp,den,ye
+        real(dp),     intent(out) :: etaele,detadt
 
         !..declare local variables
-        real(rt) :: din
+        real(dp) :: din
 
         !..for the interpolations
         integer  :: iat,jat
-        real(rt) :: xt,xd,mxt,mxd,dfi(16), &
+        real(dp) :: xt,xd,mxt,mxd,dfi(16), &
                     si0t,si1t,si2t,si0mt,si1mt,si2mt, &
                     si0d,si1d,si2d,si0md,si1md,si2md, &
                     dsi0t,dsi1t,dsi2t,dsi0mt,dsi1mt,dsi2mt
@@ -1284,11 +1284,11 @@ contains
         !$acc routine seq
 
         !..input arguments
-        real(rt),     intent(in ) :: temp,den,abar,zbar,ye
-        real(rt),     intent(out) :: cv
+        real(dp),     intent(in ) :: temp,den,abar,zbar,ye
+        real(dp),     intent(out) :: cv
 
         !..declare local variables
-        real(rt) :: x,y,z,deni,tempi,xni, &
+        real(dp) :: x,y,z,deni,tempi,xni, &
                     deepdt,dsepdt, &
                     dpraddt,deraddt,dpiondt, &
                     deiondt, &
@@ -1300,8 +1300,8 @@ contains
 
         !..for the interpolations
         integer  :: iat,jat
-        real(rt) :: free,df_d,df_t,df_tt
-        real(rt) :: xt,xd,mxt,mxd,fi(36),dfi(16), &
+        real(dp) :: free,df_d,df_t,df_tt
+        real(dp) :: xt,xd,mxt,mxd,fi(36),dfi(16), &
                     si0t,si1t,si2t,si0mt,si1mt,si2mt, &
                     si0d,si1d,si2d,si0md,si1md,si2md, &
                     dsi0t,dsi1t,dsi2t,dsi0mt,dsi1mt,dsi2mt, &
@@ -1309,14 +1309,12 @@ contains
                     ddsi0t,ddsi1t,ddsi2t,ddsi0mt,ddsi1mt,ddsi2mt
 
         !..for the coulomb corrections
-        real(rt) :: lami,inv_lami, &
+        real(dp) :: lami,inv_lami, &
                     plasg,plasgdt, &
                     ecoul,decouldt, &
                     pcoul,dpcouldt
 
-        real(rt) :: p_temp, e_temp
-
-        !$gpu
+        real(dp) :: p_temp, e_temp
 
         ytot1 = 1.0_dp/abar
         din   = ye * den
@@ -1849,19 +1847,19 @@ contains
     end function xdpsi1
 
     ! bicubic hermite polynomial function
-    function h3(fi,w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md) result(h3r)
+    function h3(dfi,w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md) result(h3r)
       !$acc routine seq
-      real(dp), intent(in) :: fi(36)
+      real(dp), intent(in) :: dfi(16)
       real(dp), intent(in) :: w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md
       real(dp) :: h3r
-      h3r =  fi(1)  *w0d*w0t   +  fi(2)  *w0md*w0t &
-           + fi(3)  *w0d*w0mt  +  fi(4)  *w0md*w0mt &
-           + fi(5)  *w0d*w1t   +  fi(6)  *w0md*w1t &
-           + fi(7)  *w0d*w1mt  +  fi(8)  *w0md*w1mt &
-           + fi(9)  *w1d*w0t   +  fi(10) *w1md*w0t &
-           + fi(11) *w1d*w0mt  +  fi(12) *w1md*w0mt &
-           + fi(13) *w1d*w1t   +  fi(14) *w1md*w1t &
-           + fi(15) *w1d*w1mt  +  fi(16) *w1md*w1mt
+      h3r =  dfi(1)  *w0d*w0t   +  dfi(2)  *w0md*w0t &
+           + dfi(3)  *w0d*w0mt  +  dfi(4)  *w0md*w0mt &
+           + dfi(5)  *w0d*w1t   +  dfi(6)  *w0md*w1t &
+           + dfi(7)  *w0d*w1mt  +  dfi(8)  *w0md*w1mt &
+           + dfi(9)  *w1d*w0t   +  dfi(10) *w1md*w0t &
+           + dfi(11) *w1d*w0mt  +  dfi(12) *w1md*w0mt &
+           + dfi(13) *w1d*w1t   +  dfi(14) *w1md*w1t &
+           + dfi(15) *w1d*w1mt  +  dfi(16) *w1md*w1mt
     end function h3
 
     subroutine actual_eos_finalize
