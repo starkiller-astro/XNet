@@ -1,15 +1,13 @@
 module eos_type_module
 
-  use xnet_types, only : rt => dp
+  use xnet_types, only: dp
   use xnet_util, only: xnet_terminate
 
   implicit none
 
-  private :: rt
-
-  double precision, parameter, private :: ONE = 1.0d0
-  double precision, parameter, private :: ZERO = 0.0d0
-  double precision, parameter, private :: small_x = 0.0d0
+  real(dp), parameter, private :: ONE = 1.0_dp
+  real(dp), parameter, private :: ZERO = 0.0_dp
+  real(dp), parameter, private :: small_x = 0.0_dp
 
   integer, parameter :: eos_input_rt = 1  ! rho, T are inputs
   integer, parameter :: eos_input_rh = 2  ! rho, h are inputs
@@ -45,22 +43,22 @@ module eos_type_module
 
   ! Minimum and maximum thermodynamic quantities permitted by the EOS.
 
-  real(rt), allocatable :: mintemp
-  real(rt), allocatable :: maxtemp
-  real(rt), allocatable :: mindens
-  real(rt), allocatable :: maxdens
-  real(rt), allocatable :: minx
-  real(rt), allocatable :: maxx
-  real(rt), allocatable :: minye
-  real(rt), allocatable :: maxye
-  real(rt), allocatable :: mine
-  real(rt), allocatable :: maxe
-  real(rt), allocatable :: minp
-  real(rt), allocatable :: maxp
-  real(rt), allocatable :: mins
-  real(rt), allocatable :: maxs
-  real(rt), allocatable :: minh
-  real(rt), allocatable :: maxh
+  real(dp), allocatable :: mintemp
+  real(dp), allocatable :: maxtemp
+  real(dp), allocatable :: mindens
+  real(dp), allocatable :: maxdens
+  real(dp), allocatable :: minx
+  real(dp), allocatable :: maxx
+  real(dp), allocatable :: minye
+  real(dp), allocatable :: maxye
+  real(dp), allocatable :: mine
+  real(dp), allocatable :: maxe
+  real(dp), allocatable :: minp
+  real(dp), allocatable :: maxp
+  real(dp), allocatable :: mins
+  real(dp), allocatable :: maxs
+  real(dp), allocatable :: minh
+  real(dp), allocatable :: maxh
 
   !$acc declare &
   !$acc create(mintemp, maxtemp, mindens, maxdens, minx, maxx, minye, maxye) &
@@ -109,42 +107,42 @@ module eos_type_module
 
   type :: eos_t
 
-    real(rt) :: rho
-    real(rt) :: T
-    real(rt) :: p
-    real(rt) :: e
-    real(rt) :: h
-    real(rt) :: s
+    real(dp) :: rho
+    real(dp) :: T
+    real(dp) :: p
+    real(dp) :: e
+    real(dp) :: h
+    real(dp) :: s
 
-    real(rt) :: dpdT
-    real(rt) :: dpdr
-    real(rt) :: dedT
-    real(rt) :: dedr
-    real(rt) :: dhdT
-    real(rt) :: dhdr
-    real(rt) :: dsdT
-    real(rt) :: dsdr
-    real(rt) :: dpde
-    real(rt) :: dpdr_e
+    real(dp) :: dpdT
+    real(dp) :: dpdr
+    real(dp) :: dedT
+    real(dp) :: dedr
+    real(dp) :: dhdT
+    real(dp) :: dhdr
+    real(dp) :: dsdT
+    real(dp) :: dsdr
+    real(dp) :: dpde
+    real(dp) :: dpdr_e
 
-    real(rt) :: cv
-    real(rt) :: cp
-    real(rt) :: xne
-    real(rt) :: xnp
-    real(rt) :: eta
-    real(rt) :: detadt
-    real(rt) :: pele
-    real(rt) :: ppos
-    real(rt) :: mu
-    real(rt) :: mu_e
-    real(rt) :: y_e
-    real(rt) :: gam1
-    real(rt) :: cs
+    real(dp) :: cv
+    real(dp) :: cp
+    real(dp) :: xne
+    real(dp) :: xnp
+    real(dp) :: eta
+    real(dp) :: detadt
+    real(dp) :: pele
+    real(dp) :: ppos
+    real(dp) :: mu
+    real(dp) :: mu_e
+    real(dp) :: y_e
+    real(dp) :: gam1
+    real(dp) :: cs
 
-    real(rt) :: abar
-    real(rt) :: zbar
+    real(dp) :: abar
+    real(dp) :: zbar
 
-    real(rt) :: conductivity
+    real(dp) :: conductivity
 
   end type eos_t
 
@@ -240,7 +238,7 @@ contains
 
     implicit none
 
-    real(rt), intent(out) :: small_temp_out
+    real(dp), intent(out) :: small_temp_out
 
     !$gpu
 
@@ -256,7 +254,7 @@ contains
 
     implicit none
 
-    real(rt), intent(out) :: small_dens_out
+    real(dp), intent(out) :: small_dens_out
 
     !$gpu
 
@@ -272,7 +270,7 @@ contains
 
     implicit none
 
-    real(rt), intent(out) :: max_temp_out
+    real(dp), intent(out) :: max_temp_out
 
     !$gpu
 
@@ -288,7 +286,7 @@ contains
 
     implicit none
 
-    real(rt), intent(out) :: max_dens_out
+    real(dp), intent(out) :: max_dens_out
 
     !$gpu
 
