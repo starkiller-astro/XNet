@@ -33,8 +33,9 @@ Module xnet_timers
   Real(dp) :: start_timer  = 0.0  ! cpu time at the beginning of the timer block
   Real(dp) :: stop_timer   = 0.0  ! cpu time at the end of the timer block
   !$omp threadprivate(timer_burner,timer_xnet,timer_setup,timer_csect,timer_deriv,timer_jacob,timer_decmp, &
-  !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_eos,timer_output,start_timer,stop_timer, &
-  !$omp   timer_nse,timer_nseinit,timer_nsesolv,timer_nsenrap,timer_nsels,timer_nseeval,timer_nsescrn)
+  !$omp   timer_bksub,timer_nraph,timer_tstep,timer_solve,timer_scrn,timer_prescrn,timer_eos,timer_output, &
+  !$omp   timer_nse,timer_nseinit,timer_nsesolv,timer_nsenrap,timer_nsels,timer_nseeval,timer_nsescrn, &
+  !$omp   start_timer,stop_timer)
 
 Contains
 
@@ -75,6 +76,7 @@ Contains
     timer_tstep = 0.0
     timer_solve = 0.0
     timer_scrn  = 0.0
+    timer_prescrn = 0.0
     timer_eos   = 0.0
     timer_nse    = 0.0
     timer_nseinit= 0.0

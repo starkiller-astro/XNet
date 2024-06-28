@@ -164,10 +164,12 @@ Contains
 
       ! Write timers
       If ( idiag >= 0 ) Then
-        Write(lun_diag,"(a8,10a10)") &
-          & 'Timers: ','Total','TS','NR','Solver','Jacobian','Deriv','CrossSect','Screening','Setup','Output'
-        Write(lun_diag,"(8x,10es10.3)") &
-          & timer_xnet,timer_tstep,timer_nraph,timer_solve,timer_jacob,timer_deriv,timer_csect,timer_scrn,timer_setup,timer_output
+        Write(lun_diag,"(a8,14a10)") &
+          & 'Timers: ','Total','TS','NR','Solver','Decomp','BkSub','Jacobian','Deriv', &
+          & 'CrossSect','Screening','PreScreen','EOS','Setup','Output'
+        Write(lun_diag,"(8x,14es10.3)") &
+          & timer_xnet,timer_tstep,timer_nraph,timer_solve,timer_decmp,timer_bksub,timer_jacob,timer_deriv, &
+          & timer_csect,timer_scrn,timer_prescrn,timer_eos,timer_setup,timer_output
       EndIf
 
       ! Use the following line to restart the timers

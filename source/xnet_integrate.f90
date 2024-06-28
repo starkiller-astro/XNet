@@ -505,7 +505,7 @@ Contains
     Use xnet_ffn, Only: ffn_rate
     Use xnet_nnu, Only: nnu_rate, nnuspec
     Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9, screening
-    Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_scrn, timer_csect
+    Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_csect
     Use xnet_types, Only: dp
     Implicit None
 
@@ -544,9 +544,6 @@ Contains
     ! Check for any changes to iweak
     Call update_iweak(t9t,mask_in = mask)
 
-    start_timer = xnet_wtime()
-    timer_scrn = timer_scrn - start_timer
-
     ! Calculate the screening terms
     If ( iscrn >= 1 ) Then
       ascrn = 1.0
@@ -554,9 +551,6 @@ Contains
     Else
       ascrn = 0.0
     EndIf
-
-    stop_timer = xnet_wtime()
-    timer_scrn = timer_scrn + stop_timer
 
     start_timer = xnet_wtime()
     timer_csect = timer_csect - start_timer

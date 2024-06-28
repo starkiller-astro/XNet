@@ -146,6 +146,7 @@ Contains
     Use xnet_conditions, Only: rhot, t9t, etae, detaedt9
     Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_eos, Only: eos_screen
+    Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_prescrn, timer_scrn
     Use xnet_types, Only: dp
     Implicit None
 
@@ -173,6 +174,9 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+
+    start_timer = xnet_wtime()
+    timer_scrn = timer_scrn - start_timer
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -364,6 +368,9 @@ Contains
         EndIf
       EndIf
     EndDo
+
+    stop_timer = xnet_wtime()
+    timer_scrn = timer_scrn + stop_timer
 
     Return
   End Subroutine screening
