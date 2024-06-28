@@ -21,14 +21,12 @@ Contains
     Return
   End Subroutine eos_initialize
 
-  Subroutine eos_interface(t9,rho,y,ye,cv,etae,detaedt9,izb)
+  Subroutine eosx(t9,rho,ye,abar,zbar,cv,etae,detaedt9)
     !-----------------------------------------------------------------------------------------------
-    ! This routine updates the equation of state for changes in temperature and density.
+    ! This routine interfaces with and calls the underlying EoS.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
-    Use xnet_abundances, Only: y_moment
-    Use xnet_constants, Only: avn, epmev
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag
+    Use xnet_constants, Only: amu
+    Use xnet_controls, Only: iheat, iscrn
     Use xnet_types, Only: dp
 
     Use actual_eos_module, Only: xnet_actual_eos
@@ -36,14 +34,55 @@ Contains
     Implicit None
 
     ! Input variables
+    Real(dp), Intent(in) :: t9, rho, ye, abar, zbar
+
+    ! Ouput variables
+    Real(dp), Intent(out) :: cv, etae, detaedt9
+
+    ! Local variables
+    Type(eos_t) :: eos_state
+
+    cv = 0.0
+    etae = 0.0
+    detaedt9 = 0.0
+    If ( iscrn > 0 .or. iheat > 0 ) Then
+
+      ! Load input variables for the eos
+      eos_state%rho = rho
+      eos_state%T = t9*1e9
+      eos_state%y_e = ye
+      eos_state%abar = abar
+      eos_state%zbar = zbar
+
+      ! Call the eos
+      Call xnet_actual_eos(eos_input_rt,eos_state)
+
+      ! Convert units from ergs/g to MeV/nucleon and K to GK
+      cv = eos_state%cv * amu * 1e9
+      etae = eos_state%eta
+      detaedt9 = eos_state%detadt * 1e9
+    EndIf
+
+  End Subroutine eosx
+
+  Subroutine eos_interface(t9,rho,y,ye,cv,etae,detaedt9,izb)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine updates the equation of state for changes in temperature and density.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_abundances, Only: y_moment
+    Use xnet_controls, Only: idiag, lun_diag
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
     Real(dp), Intent(in) :: t9, rho, y(ny)
-    Integer, Intent(in),Optional :: izb
+    Integer, Intent(in), Optional :: izb
     ! Ouput variables
     Real(dp), Intent(out) :: ye, cv, etae, detaedt9
 
     ! Local variables
     Real(dp) :: ytot, abar, zbar, z2bar, zibar
-    Type(eos_t) :: eos_state
     Real(dp) :: xext, aext, zext, xnet, xnorm
 
     ! Calculate Ye
@@ -53,28 +92,8 @@ Contains
        Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
     Endif
 
-    If ( iscrn > 0 .or. iheat > 0 ) Then
-
-      ! Load input variables for the eos
-      eos_state%rho = rho
-      eos_state%T = t9*1e9
-      eos_state%y_e = ye
-      eos_state%abar = abar
-      eos_state%zbar = ye*abar
-
-      ! Call the eos
-      Call xnet_actual_eos(eos_input_rt,eos_state)
-
-      ! Convert units from ergs/g to MeV/nucleon and K to GK
-      etae = eos_state%eta
-      detaedt9 = eos_state%detadt * 1e9
-      cv = eos_state%cv * 1e9/epmev/avn
-    Else
-      etae = 0.0
-      detaedt9 = 0.0
-      cv = 0.0
-    EndIf
-
+    ! Call the eos
+    Call eosx(t9,rho,ye,abar,zbar,cv,etae,detaedt9)
     If ( idiag >= 3 ) Write(lun_diag,"(a,6es23.15)") 'EOS',t9,rho,ye,cv,etae,detaedt9
 
     Return
@@ -87,20 +106,19 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_constants, Only: avn, bok, clt, e2, ele_en, emass, hbar, pi, pi2, third, two3rd, &
-      & thbim2, twm2bi
     Use xnet_controls, Only: idiag, iheat, lun_diag
     Use xnet_types, Only: dp
+    Use xnet_util, Only: plasma
     Implicit None
 
     ! Input variables
     Real(dp), Intent(in) :: t9, rho, y(ny), etae, detaedt9
-    Integer, Intent(in),Optional :: izb
+    Integer, Intent(in), Optional :: izb
     ! Output variables
     Real(dp), Intent(out) :: ztilde, zinter, lambda0, gammae, dztildedt9
 
     ! Local variables
-    Real(dp) :: ye, ytot, bkt, abar, zbar, z2bar, zibar
+    Real(dp) :: ye, ytot, abar, zbar, z2bar, zibar
     Real(dp) :: sratio, ae, dsratiodeta
 
     ! Calculate Ye and other needed moments of the abundance distribution
@@ -111,21 +129,15 @@ Contains
        Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
     EndIf
 
-    ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24)
+    ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
     Call salpeter_ratio(etae,sratio,dsratiodeta)
-    ztilde = sqrt(z2bar + zbar*sratio)
+    ztilde = sqrt(z2bar + zbar*sratio) ! DGC, Eq. 4
     If ( iheat > 0 ) Then
       dztildedt9 = 0.5*zbar/ztilde * dsratiodeta*detaedt9
-    Else
-      dztildedt9 = 0.0
     EndIf
 
     ! Calculate plasma quantities
-    bkt = bok*t9
-    lambda0 = sqrt(4.0*pi*rho*avn*ytot) * (e2/bkt)**1.5 ! DGC, Eq. 3
-    ae = (3.0 / (4.0*pi*avn*rho*ye))**third ! electron-sphere radius
-    gammae = e2 / (ae*bkt) ! electron Coulomb coupling parameter
-    zinter = zibar / (ztilde**thbim2 * zbar**twm2bi)
+    Call plasma(t9,rho,ytot,ye,zbar,zibar,ztilde,zinter,lambda0,gammae)
     If ( idiag >= 3 ) Write(lun_diag,"(a14,9es23.15)") 'EOS Screen', &
       & t9,rho,ye,z2bar,zbar,sratio,ztilde,ztilde*lambda0,gammae
 
@@ -136,6 +148,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the Salpeter (1954) ratio f'/f(eta) needed for electron screening.
     ! eta is the ratio of electron chemical potential to kT.
+    ! f'/f is also defined as theta_e in DeWitt+ (1973).
     !
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
@@ -159,7 +172,7 @@ Contains
     fermim = fdm1h(eta)
     fermip = fd1h(eta)
 
-    ! Evalutate the Salpeter ratio
+    ! Evalutate the Salpeter ratio (extra factor of 1/2 from FD integral definition)
     ratio = 0.5 * fermim/fermip
     If ( iheat > 0 ) Then
       dfmdeta = -0.5 * fdm3h(eta)

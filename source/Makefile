@@ -222,7 +222,7 @@ xnet_util.o: xnet_constants.o xnet_types.o $(MPI_OBJ)
 xnet_fd.o: xnet_types.o
 xnet_eos_helm.o: xnet_fd.o helmholtz.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
 xnet_eos_bahcall.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
-xnet_eos_starkiller.o: actual_eos.o eos_type.o xnet_fd.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_abundances.o 
+xnet_eos_starkiller.o: actual_eos.o eos_type.o xnet_fd.o xnet_constants.o xnet_controls.o xnet_data.o xnet_types.o xnet_util.o xnet_abundances.o 
 
 actual_eos.o: eos_type.o xnet_util.o $(MPI_OBJ)
 eos_type.o: xnet_types.o xnet_util.o
