@@ -226,53 +226,50 @@ Program net
       zone_id(3,izb)=1
     EndDo
 
-    ! Open the evolution file
-    If ( itsout >= 2 ) Then
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
-        ev_file = trim(ev_file_base)
-        Call name_ordered(ev_file,izone,nzone)
-        If ( idiag >= 0 ) Write(lun_diag,"(a,i5,7es10.3)") trim(ev_file), &
-          & nh(izb),th(nh(izb),izb),t9h(nh(izb),izb),rhoh(nh(izb),izb),tstart(izb),tstop(izb)
-        Open(newunit=lun_ev(izb), file=ev_file, action='write')
-
-        ! Write evolution file header
-        Write(ev_header_format,"(a)") "(a4,a15,4a10,"//trim(nnucout_string)//"a9,a4)"
-        Write(lun_ev(izb),ev_header_format) &
-          & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' Timestep ',(nname(inucout(i)),i=1,nnucout), ' It '
-      EndDo
-    EndIf
-
-    ! Open the binary time series file
-    If ( itsout >= 1 ) Then
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
-        bin_file = trim(bin_file_base)
-        Call name_ordered(bin_file,izone,nzone)
-        Open(newunit=lun_ts(izb), file=bin_file, form='unformatted', action='write')
-
-        ! Write Control Parameters to ts file
-        Write(lun_ts(izb)) (descript(i),i=1,3),data_desc
-        Write(lun_ts(izb)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
-
-        ! Write abundance description to ts file
-        Write(lun_ts(izb)) inab_file(izone),abund_desc(izb)
-
-        ! Write thermo description to ts file
-        Write(lun_ts(izb)) thermo_file(izone),thermo_desc(izb)
-
-        ! Write species identifiers to ts file
-        Write(lun_ts(izb)) ny,zz,aa
-
-        ! Write flux identifiers to ts file
-        Write(lun_ts(izb)) mflx,ifl_orig,ifl_term
-      EndDo
-    EndIf
-
     If ( itsout > 0 ) Then
       Do izb = zb_lo, zb_hi
-        Write(lun_stdout,"(a,i6,a,i2,2(a,es10.3))") &
-          & 'Max Step',kstmx,' IDiag=',idiag, ' Start Time',tstart(izb),' Stop Time',tstop(izb)
+        If ( lzactive(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_stdout,"(a,i6,a,i2,2(a,es10.3))") &
+            & 'Max Step',kstmx,' IDiag=',idiag, ' Start Time',tstart(izb),' Stop Time',tstop(izb)
+
+          ! Open the binary time series file
+          If ( itsout >= 1 ) Then
+            bin_file = trim(bin_file_base)
+            Call name_ordered(bin_file,izone,nzone)
+            Open(newunit=lun_ts(izb), file=bin_file, form='unformatted', action='write')
+
+            ! Write Control Parameters to ts file
+            Write(lun_ts(izb)) (descript(i),i=1,3),data_desc
+            Write(lun_ts(izb)) kstmx,kitmx,iweak0,iscrn,iconvc,changemx,tolm,tolc,yacc,ymin,tdel_maxmult,iheat,isolv
+
+            ! Write abundance description to ts file
+            Write(lun_ts(izb)) inab_file(izone),abund_desc(izb)
+
+            ! Write thermo description to ts file
+            Write(lun_ts(izb)) thermo_file(izone),thermo_desc(izb)
+
+            ! Write species identifiers to ts file
+            Write(lun_ts(izb)) ny,zz,aa
+
+            ! Write flux identifiers to ts file
+            Write(lun_ts(izb)) mflx,ifl_orig,ifl_term
+          EndIf
+
+          ! Open the evolution file
+          If ( itsout >= 2 ) Then
+            ev_file = trim(ev_file_base)
+            Call name_ordered(ev_file,izone,nzone)
+            If ( idiag >= 0 ) Write(lun_diag,"(a,i5,7es10.3)") trim(ev_file), &
+              & nh(izb),th(nh(izb),izb),t9h(nh(izb),izb),rhoh(nh(izb),izb),tstart(izb),tstop(izb)
+            Open(newunit=lun_ev(izb), file=ev_file, action='write')
+
+            ! Write evolution file header
+            Write(ev_header_format,"(a)") "(a4,a15,4a10,"//trim(nnucout_string)//"a9,a4)"
+            Write(lun_ev(izb),ev_header_format) &
+              & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' Timestep ',(nname(inucout(i)),i=1,nnucout), ' It '
+          EndIf
+        EndIf
       EndDo
     EndIf
 
@@ -284,21 +281,23 @@ Program net
 
     ! Test how well sums of fluxes match abundances changes
     Do izb = zb_lo, zb_hi
-      If ( idiag >= 3 ) Then
-        dyf = 0.0
-        Do k = 1, mflx
-          dyf(nflx(1:4,k)) = dyf(nflx(1:4,k)) + flx_int(k,izb)
-          dyf(nflx(5:8,k)) = dyf(nflx(5:8,k)) - flx_int(k,izb)
-        EndDo
-        flx_diff(:) = y(:,izb) - ystart(:,izb) + dyf(1:ny)
-        Write(lun_diag,"(a,es11.3)") 'Compare Integrated flux to abundance change',dyf(0)
-        Write(lun_diag,"(a)") 'Species Flux Sum + Y Final - Y Initial = Flux Diff'
-        Write(lun_diag,"(a5,4es11.3)") (nname(k),dyf(k),y(k,izb),ystart(k,izb),flx_diff(k),k=1,ny)
-      EndIf
+      If ( lzactive(izb) ) Then
+        If ( idiag >= 3 ) Then
+          dyf = 0.0
+          Do k = 1, mflx
+            dyf(nflx(1:4,k)) = dyf(nflx(1:4,k)) + flx_int(k,izb)
+            dyf(nflx(5:8,k)) = dyf(nflx(5:8,k)) - flx_int(k,izb)
+          EndDo
+          flx_diff(:) = y(:,izb) - ystart(:,izb) + dyf(1:ny)
+          Write(lun_diag,"(a,es11.3)") 'Compare Integrated flux to abundance change',dyf(0)
+          Write(lun_diag,"(a)") 'Species Flux Sum + Y Final - Y Initial = Flux Diff'
+          Write(lun_diag,"(a5,4es11.3)") (nname(k),dyf(k),y(k,izb),ystart(k,izb),flx_diff(k),k=1,ny)
+        EndIf
 
-      ! Close zone output files
-      If (itsout >= 2 ) Close(lun_ev(izb))
-      If (itsout >= 1 ) Close(lun_ts(izb))
+        ! Close zone output files
+        If (itsout >= 2 ) Close(lun_ev(izb))
+        If (itsout >= 1 ) Close(lun_ts(izb))
+      EndIf
     EndDo
   EndDo
   !$omp end do
