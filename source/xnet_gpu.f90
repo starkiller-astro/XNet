@@ -17,7 +17,7 @@ Module xnet_gpu
 Contains
 
   Subroutine gpu_init
-    Use xnet_controls, Only: lun_stdout, myid, mythread
+    Use xnet_controls, Only: lun_stdout, myid, tid
     Use cublasf
     Use cudaf
     Use openaccf
@@ -48,7 +48,7 @@ Contains
     ! Associate OpenACC async queue with CUDA stream
     !acc_async_default = acc_get_default_async()
     !call acc_set_default_async(acc_async_default)
-    acc_queue = mythread
+    acc_queue = tid
     istat = acc_set_cuda_stream(acc_queue, stream)
 
     ! Associate each cublas handle with a CUDA stream

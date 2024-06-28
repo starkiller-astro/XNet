@@ -86,8 +86,8 @@ Module xnet_controls
   !$omp threadprivate(lun_th,lun_ab)
 
   ! Job indentifiers
-  Integer :: myid, nproc, mythread, nthread ! task & thread ids and counts
-  !$omp threadprivate(mythread)
+  Integer :: myid, nproc, tid, nthread ! task & thread ids and counts
+  !$omp threadprivate(tid)
 
   ! Sweep identifier
   Character(LEN=1) :: sweep ! Current hydro sweep: x, y, z
@@ -206,7 +206,7 @@ Contains
     Allocate (iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
     Allocate (kmon(2,nzevolve),ktot(5,nzevolve))
     !$omp parallel default(shared)
-    zb_offset = (mythread-1) * nzbatchmx
+    zb_offset = (tid-1) * nzbatchmx
     zb_lo = zb_offset + 1
     zb_hi = zb_offset + nzbatchmx
     !$omp end parallel

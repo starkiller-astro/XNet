@@ -27,7 +27,7 @@ Program net
   Use xnet_controls, Only: descript, iconvc, idiag, iheat, inucout, iprocess, iscrn, isolv, &
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
-    & lun_diag, lun_ev, lun_stdout, lun_ts, mythread, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
+    & lun_diag, lun_ev, lun_stdout, lun_ts, tid, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
     & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, iaux
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
@@ -70,8 +70,8 @@ Program net
 
   ! Identify threads
   !$omp parallel default(shared)
-  mythread = 1
-  !$ mythread = omp_get_thread_num() + 1
+  tid = 1
+  !$ tid = omp_get_thread_num() + 1
   !$omp single
   nthread = 1
   !$ nthread = omp_get_num_threads()
@@ -98,10 +98,10 @@ Program net
   If ( idiag >= 0 ) Then
     diag_file = trim(diag_file_base)
     Call name_ordered(diag_file,myid,nproc)
-    Call name_ordered(diag_file,mythread,nthread)
+    Call name_ordered(diag_file,tid,nthread)
     Open(newunit=lun_diag, file=diag_file)
     Write(lun_diag,"(a5,2i5)") 'MyId',myid,nproc
-    !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',mythread,' of ',nthread
+    !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',tid,' of ',nthread
   EndIf
   !$omp end parallel
 
