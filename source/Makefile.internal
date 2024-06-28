@@ -95,8 +95,8 @@ ifeq ($(PE_ENV),INTEL)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  = -check all,noarg_temp_created -fpe0 -gen-interfaces -warn interfaces
 
-    F77FLAGS      = -real-size 64 -integer-size 32
-    F90FLAGS      = -real-size 64 -integer-size 32
+    F77FLAGS      = -fpp -real-size 64 -integer-size 32
+    F90FLAGS      = -fpp -real-size 64 -integer-size 32
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -141,8 +141,8 @@ else ifeq ($(PE_ENV),PGI)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  = -Ktrap=fp -Mbounds -Mchkptr -Mdclchk
 
-    F77FLAGS      = -r8 -i4 -Mfixed
-    F90FLAGS      = -r8 -i4
+    F77FLAGS      = -Mpreprocess -r8 -i4 -Mfixed
+    F90FLAGS      = -Mpreprocess -r8 -i4
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -187,8 +187,8 @@ else ifeq ($(PE_ENV),NVIDIA)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  = -Ktrap=fp -Mbounds -Mchkptr -Mdclchk
 
-    F77FLAGS      = -r8 -i4 -Mfixed
-    F90FLAGS      = -r8 -i4
+    F77FLAGS      = -Mpreprocess -r8 -i4 -Mfixed
+    F90FLAGS      = -Mpreprocess -r8 -i4
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -234,8 +234,8 @@ else ifeq ($(PE_ENV),GNU)
     DEBUG_FFLAGS  = -fcheck=bounds,do,mem,pointer -ffpe-trap=invalid,zero,overflow -fbacktrace \
                     -Wno-unused-dummy-argument -Wno-unused-label -Wno-maybe-uninitialized
 
-    F77FLAGS      = -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-compare-reals
-    F90FLAGS      = -fdefault-real-8 -fdefault-double-8 -fimplicit-none -ffree-line-length-none
+    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-compare-reals
+    F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -ffree-line-length-none
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -269,8 +269,8 @@ else ifeq ($(PE_ENV),CRAY)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  =
 
-    F77FLAGS      = -s real64 -s integer32
-    F90FLAGS      = -s real64 -s integer32
+    F77FLAGS      = -eZ -s real64 -s integer32
+    F90FLAGS      = -eZ -s real64 -s integer32
 
     # C-specific flags
     OPT_CFLAGS    =
@@ -311,8 +311,8 @@ else ifeq ($(PE_ENV),XL)
     OPT_FFLAGS    =
     DEBUG_FFLAGS  = -qflag=i:w
 
-    F77FLAGS      = -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg -qfixed
-    F90FLAGS      = -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg
+    F77FLAGS      = -qpreprocess -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg -qfixed
+    F90FLAGS      = -qpreprocess -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg
 
     # C-specific flags
     OPT_CFLAGS    =
