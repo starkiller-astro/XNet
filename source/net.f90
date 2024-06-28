@@ -99,7 +99,7 @@ Program net
     diag_file = trim(diag_file_base)
     Call name_ordered(diag_file,myid,nproc)
     Call name_ordered(diag_file,tid,nthread)
-    Open(newunit=lun_diag, file=diag_file)
+    Open(newunit=lun_diag, file=diag_file, action='write')
     Write(lun_diag,"(a5,2i5)") 'MyId',myid,nproc
     !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',tid,' of ',nthread
   EndIf
@@ -234,7 +234,7 @@ Program net
         Call name_ordered(ev_file,izone,nzone)
         If ( idiag >= 0 ) Write(lun_diag,"(a,i5,7es10.3)") trim(ev_file), &
           & nh(izb),th(nh(izb),izb),t9h(nh(izb),izb),rhoh(nh(izb),izb),tstart(izb),tstop(izb)
-        Open(newunit=lun_ev(izb), file=ev_file)
+        Open(newunit=lun_ev(izb), file=ev_file, action='write')
 
         ! Write evolution file header
         Write(ev_header_format,"(a)") "(a4,a15,4a10,"//trim(nnucout_string)//"a9,a4)"
@@ -249,7 +249,7 @@ Program net
         izone = izb + szbatch - zb_lo
         bin_file = trim(bin_file_base)
         Call name_ordered(bin_file,izone,nzone)
-        Open(newunit=lun_ts(izb), file=bin_file, form='unformatted')
+        Open(newunit=lun_ts(izb), file=bin_file, form='unformatted', action='write')
 
         ! Write Control Parameters to ts file
         Write(lun_ts(izb)) (descript(i),i=1,3),data_desc

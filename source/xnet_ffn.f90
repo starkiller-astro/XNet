@@ -58,7 +58,7 @@ Contains
     Integer :: i, j, lun_ffn
 
     Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
-    Open(newunit=lun_ffn, file=trim(data_dir)//"/netweak", status='old')
+    Open(newunit=lun_ffn, file=trim(data_dir)//"/netweak", status='old', action='read')
     Do i = 1, nffn
       Read(lun_ffn,*)
       Read(lun_ffn,*) (ffnsum(i,j), ffnenu(i,j), j=1,ngrid)

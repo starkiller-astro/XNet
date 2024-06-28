@@ -169,7 +169,8 @@ Contains
 
     ! Read Problem Description
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_control, file='control', status='old')
+      Open(newunit=lun_control, file='control', status='old', action='read', iostat=ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('Failed to open control file',ierr)
       Call find_controls_block(lun_control,'Problem Description',ierr)
       Read(lun_control,"(a80)") (descript(i), i=1,3) ! text description of the problem.
     EndIf

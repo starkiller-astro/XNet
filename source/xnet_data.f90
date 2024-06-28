@@ -189,7 +189,7 @@ Contains
     Integer :: lun_sunet, inuc, ierr
 
     filename = trim(data_dir)//'/sunet'
-    Open(newunit=lun_sunet, file=trim(filename), status='old', iostat=ierr)
+    Open(newunit=lun_sunet, file=trim(filename), status='old', action='read', iostat=ierr)
     If ( ierr /= 0 ) Call xnet_terminate('Failed to open sunet file',ierr)
 
     If ( .not. allocated(nname) ) Then
@@ -233,7 +233,7 @@ Contains
     Integer :: inuc, j, ierr, lun_winv
 
     filename = trim(data_dir)//'/netwinv'
-    Open(newunit=lun_winv, file=trim(filename), status='old', iostat=ierr)
+    Open(newunit=lun_winv, file=trim(filename), status='old', action='read', iostat=ierr)
     If ( ierr /= 0 ) Call xnet_terminate('Failed to open netwinv file',ierr)
 
     Read(lun_winv,"(i5)",iostat=ierr) ny
@@ -307,7 +307,7 @@ Contains
 
     ! Read in the data description
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_desc, file=trim(data_dir)//"/net_desc", status='old', iostat=ierr)
+      Open(newunit=lun_desc, file=trim(data_dir)//"/net_desc", status='old', action='read', iostat=ierr)
       If ( ierr == 0 ) Then
         Read(lun_desc,"(a80)") data_desc
         Close(lun_desc)
@@ -457,7 +457,7 @@ Contains
     be = mex_n*nn + mex_p*zz - mex
 
     ! Write binary data file
-    Open(newunit=lun_data, file=trim(data_dir)//'/nuc_data', form='unformatted')
+    Open(newunit=lun_data, file=trim(data_dir)//'/nuc_data', form='unformatted', action='write')
     Write(lun_data) ny
     Write(lun_data) t9i
     Write(lun_data) (nname(i),aa(i),zz(i),nn(i),be(i),(g(n,i),n=1,ng),angm(i),i=1,ny)
@@ -549,7 +549,8 @@ Contains
     ! Read in nuclear set, numbers of reactions, and extents of extended reaction arrays
     Allocate (la(4,ny),le(4,ny))
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_s4, file=trim(data_dir)//"/nets4", form='unformatted', status='old')
+      Open(newunit=lun_s4, file=trim(data_dir)//"/nets4", form='unformatted', status='old', action='read', iostat=ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('Failed to open nets4 file',ierr)
       Read(lun_s4) ny
       Read(lun_s4) (nname(i), i=1,ny)
       Read(lun_s4) nffn, nnnu
@@ -616,7 +617,8 @@ Contains
     nr1 = nreac(1)
     Allocate (n1i(5,nr1),iwk1(nr1),ires1(nr1),irev1(nr1),rc1(7,nr1),q1(nr1))
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_s3, file=trim(data_dir)//"/nets3", form='unformatted', status='old')
+      Open(newunit=lun_s3, file=trim(data_dir)//"/nets3", form='unformatted', status='old', action='read', iostat=ierr)
+      If ( ierr /= 0 ) Call xnet_terminate('Failed to open nets3 file',ierr)
       Do j = 1, nr1
         Read(lun_s3) n, (n1i(l,j), l=1,5), iwk1(j), ires1(j), irev1(j), (rc1(l,j), l=1,7), q1(j)
         If ( n /= j ) Then

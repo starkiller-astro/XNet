@@ -48,7 +48,7 @@ Contains
     Integer :: i, j, lun_nnu
 
     Allocate (sigmanu(nnnu,ntnu))
-    Open(newunit=lun_nnu, file=trim(data_dir)//"/netneutr", status='old')
+    Open(newunit=lun_nnu, file=trim(data_dir)//"/netneutr", status='old', action='read')
     Do i = 1, nnnu
       Read(lun_nnu,*)
       Read(lun_nnu,*) (sigmanu(i,j), j=1,ntnu)
