@@ -95,9 +95,6 @@ Contains
         en0(izb) = enm(izb)
         delta_en(izb) = 0.0
         edot(izb) = 0.0
-
-        If ( itsout > 0 ) Write(lun_stdout,"(a,i6,a,i2,2(a,es10.3))") &
-          & 'Max Step',kstmx,' IDiag=',idiag,' Start Time',tstart(izb),' Stop Time',tstop(izb)
       EndIf
     EndDo
 
