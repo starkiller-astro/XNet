@@ -58,7 +58,8 @@ Contains
     ! This augments a previously calculation Jacobian matrix by multiplying all elements by mult and
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use nuclear_data, Only: ny, nname
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Implicit None
 
@@ -69,7 +70,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, i0, izb
+    Integer :: i, j, i0, izb, izone
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -87,6 +88,27 @@ Contains
         EndDo
       EndIf
     EndDo
+
+    If ( idiag >= 5 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a9,i5,2es24.16)") 'JAC_SCALE',izone,diag(izb),mult(izb)
+          Do i = 1, ny
+            Write(lun_diag,"(3a)") 'J(',nname(i),',Y)'
+            Write(lun_diag,"(7es24.16)") (jac(i,j,izb),j=1,ny)
+          EndDo
+          If ( iheat > 0 ) Then
+            Write(lun_diag,"(3a)") 'J(Y,T9)'
+            Write(lun_diag,"(7es24.16)") (jac(i,ny+1,izb),i=1,ny)
+            Write(lun_diag,"(a)") 'J(T9,Y)'
+            Write(lun_diag,"(7es24.16)") (jac(ny+1,j,izb),j=1,ny)
+            Write(lun_diag,"(a)") 'J(T9,T9)'
+            Write(lun_diag,"(es24.16)") jac(ny+1,ny+1,izb)
+          EndIf
+        EndIf
+      EndDo
+    EndIf
     
     Return
   End Subroutine jacobian_scale
