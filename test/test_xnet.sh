@@ -44,6 +44,7 @@
 ##                                        alpha (16)                      51
 ##                                        torch47 (47)                    52
 ##                                        SN160 (160)                     53
+##                                        SN160 (160) (BDF integrator)    54
 ##       =====================================================================
 ##       All parallel test problems                                       30
 ##       4 different SN                   alpha (16)                      31
@@ -96,6 +97,13 @@ function do_test_small {
 
 function do_test_heat {
   cat test_settings_heat Test_Problems/setup_$2 >| control
+  $1
+  mv -f net_diag01 Test_Results/net_diag_$2
+  test_diff Test_Results/net_diag_$2 Test_Problems/Results/net_diag_$2 $2
+}
+
+function do_test_bdf {
+  cat test_settings_bdf Test_Problems/setup_$2 >| control
   $1
   mv -f net_diag01 Test_Results/net_diag_$2
   test_diff Test_Results/net_diag_$2 Test_Problems/Results/net_diag_$2 $2
@@ -280,6 +288,13 @@ for xnet in ${xnet_list[@]}; do
       echo "Test: Self-heating from explosive burning of degenerate C/O with SN160 network"
       test_th="heat"; test_net="sn160"; test_name=${test_th}_${test_net}
       do_test_heat $xnet $test_name
+    fi
+
+    # Self-heating test using SN160 (explosive burning of degenerate C/O) (with BDF integrator)
+    if [ $itest -eq 50 -o $itest -eq 54 ]; then
+      echo "Test: Self-heating from explosive burning of degenerate C/O with SN160 network and BDF integrator"
+      test_th="bdf"; test_net="sn160"; test_name=${test_th}_${test_net}
+      do_test_bdf $xnet $test_name
     fi
 
     # Zone batching test using alpha (explosive burning of degenerate C/O)
