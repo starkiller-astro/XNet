@@ -310,7 +310,6 @@ Contains
     Use xnet_constants, Only: avn, bok, e2, pi, third, thbim2, twm2bi
     Use xnet_types, Only: dp
     Implicit None
-    !$acc routine seq
 
     ! Input variables
     Real(dp), Intent(in) :: t9, rho, ytot, ye, zbar, zibar, ztilde
