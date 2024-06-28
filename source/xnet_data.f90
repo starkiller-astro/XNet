@@ -542,7 +542,7 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: i, j, n, l
+    Integer :: i, j, n, l, ierr
     Integer :: nr1, nr2, nr3, nr4
     Integer :: lun_s3, lun_s4
 
