@@ -20,6 +20,9 @@ Module xnet_jacobian
   Integer, Allocatable :: indx(:,:)       ! Pivots in the LU decomposition
   Integer :: msize                        ! Size of linear system to be solved
 
+  Real(dp), Allocatable, Target :: diag0(:)
+  Real(dp), Allocatable, Target :: mult1(:)
+
 Contains
 
   Subroutine read_jacobian_data(data_dir)
@@ -27,7 +30,7 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzevolve
+    Use xnet_controls, Only: iheat, nzevolve, nzbatchmx
     Implicit None
 
     ! Input variables
@@ -44,12 +47,17 @@ Contains
     jac = 0.0
     indx = 0
 
+    Allocate (diag0(nzbatchmx),mult1(nzbatchmx))
+    diag0 = 0.0
+    mult1 = 1.0
+
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
     Implicit None
     Deallocate (dydotdy,jac,indx)
+    Deallocate (diag0,mult1)
     Return
   End Subroutine jacobian_finalize
 
@@ -129,7 +137,7 @@ Contains
     Implicit None
 
     ! Optional variables
-    Real(dp), Optional, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
@@ -139,7 +147,7 @@ Contains
     Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
     Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
+    Real(dp), Pointer :: diag(:), mult(:)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -151,6 +159,17 @@ Contains
 
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
+
+    If ( present(diag_in) ) Then
+      diag(zb_lo:) => diag_in
+    Else
+      diag(zb_lo:) => diag0
+    EndIf
+    If ( present(mult_in) ) Then
+      mult(zb_lo:) => mult_in
+    Else
+      mult(zb_lo:) => mult1
+    EndIf
 
     ! Build the Jacobian
     Do izb = zb_lo, zb_hi
