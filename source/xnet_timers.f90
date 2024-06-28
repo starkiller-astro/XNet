@@ -21,6 +21,7 @@ Module xnet_timers
   Real(dp) :: timer_tstep  = 0.0  ! Time integration step timer
   Real(dp) :: timer_solve  = 0.0  ! Solution time
   Real(dp) :: timer_scrn   = 0.0  ! Screening and EOS time
+  Real(dp) :: timer_prescrn = 0.0  ! Screening and EOS time
   Real(dp) :: timer_eos    = 0.0  ! Screening and EOS time
   Real(dp) :: timer_nse    = 0.0  ! NSE timer
   Real(dp) :: timer_nseinit= 0.0  ! NSE init timer
