@@ -126,7 +126,7 @@ Contains
     ! This routine calculates the reaction Jacobian matrix, dYdot/dY, and augments by multiplying
     ! all elements by mult and adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, mex
+    Use nuclear_data, Only: ny, mex, nname
     Use reaction_data, Only: a1, a2, a3, a4, b1, b2, b3, b4, la, le, mu1, mu2, mu3, mu4, n11, n21, &
       & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: yt
@@ -310,6 +310,27 @@ Contains
     EndIf
     Call jacobian_scale(diag,mult,mask_in = mask)
 
+    If ( idiag >= 5 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a9,i5)") 'JAC_BUILD',izone
+          Do i = 1, ny
+            Write(lun_diag,"(3a)") 'dYDOT(',nname(i),')/dY'
+            Write(lun_diag,"(7es24.16)") (dydotdy(j,i,izb),j=1,ny)
+          EndDo
+          If ( iheat > 0 ) Then
+            Write(lun_diag,"(3a)") 'dYDOT/dT9'
+            Write(lun_diag,"(7es24.16)") (dydotdy(ny+1,i,izb),i=1,ny)
+            Write(lun_diag,"(a)") 'dT9DOT/dY'
+            Write(lun_diag,"(7es24.16)") (dydotdy(j,ny+1,izb),j=1,ny)
+            Write(lun_diag,"(a)") 'dT9DOT/dT9'
+            Write(lun_diag,"(es24.16)") dydotdy(ny+1,ny+1,izb)
+          EndIf
+        EndIf
+      EndDo
+    EndIf
+
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -380,7 +401,7 @@ Contains
       EndIf
     EndDo
 
-    If ( idiag >= 5 ) Then
+    If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -499,7 +520,7 @@ Contains
       EndIf
     EndDo
 
-    If ( idiag >= 5 ) Then
+    If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
