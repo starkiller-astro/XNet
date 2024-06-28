@@ -87,7 +87,7 @@ all: xnet_dense net_setup xnse
 test: test_serial test_heat test_setup test_nse
 
 test_serial: $(EXE)
-	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 0
+	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 1 4 7 9 11 15 53
 
 test_heat: $(EXE)
 	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 50
