@@ -49,6 +49,7 @@ Program net
   Integer :: i, k, izone ! Loop indices
   Integer :: ierr, inuc
   Integer :: ibatch, batch_count, izb
+  Integer :: kstep
 
   ! Thermodynamic input data
   Real(dp), Allocatable :: dyf(:), flx_diff(:)
@@ -171,7 +172,7 @@ Program net
   timer_setup = timer_setup + stop_timer
 
   !$omp parallel default(shared) &
-  !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb) &
+  !$omp   private(dyf,flx_diff,ev_file,bin_file,izone,ierr,ibatch,izb,kstep) &
   !$omp   copyin(timer_setup)
 
   start_timer = xnet_wtime()
@@ -188,7 +189,6 @@ Program net
 
     start_timer = xnet_wtime()
     timer_setup = timer_setup - start_timer
-
 
     ! Determine which zones are in this batch
     szbatch = szone + (ibatch-1)*nzbatchmx
@@ -269,11 +269,18 @@ Program net
       EndDo
     EndIf
 
+    If ( itsout > 0 ) Then
+      Do izb = zb_lo, zb_hi
+        Write(lun_stdout,"(a,i6,a,i2,2(a,es10.3))") &
+          & 'Max Step',kstmx,' IDiag=',idiag, ' Start Time',tstart(izb),' Stop Time',tstop(izb)
+      EndDo
+    EndIf
+
     stop_timer = xnet_wtime()
     timer_setup = timer_setup + stop_timer
 
     ! Evolve abundance from tstart to tstop
-    Call full_net
+    Call full_net(kstep)
 
     ! Test how well sums of fluxes match abundances changes
     Do izb = zb_lo, zb_hi

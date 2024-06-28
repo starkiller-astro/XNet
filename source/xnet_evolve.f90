@@ -14,7 +14,7 @@ Module xnet_evolve
 
 Contains
 
-  Subroutine full_net
+  Subroutine full_net(kstep)
     !-----------------------------------------------------------------------------------------------
     ! The abundance evolution is performed over a series of timesteps, with the duration of the
     ! timestep determined by the integration scheme and the changing thermodynamic conditions.
@@ -35,13 +35,16 @@ Contains
     Use xnet_util, Only: xnet_terminate
     Implicit None
 
+    ! Output variables
+    Integer, Intent(out) :: kstep
+
     ! Local variables
     !Integer, Parameter :: kstep_output = 10
     Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
     Real(dp) :: enold(zb_lo:zb_hi), en0(zb_lo:zb_hi)
     Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
     Real(dp) :: yout(ny+1)
-    Integer :: k, izb, izone, kstep, nstep_est, idiag0
+    Integer :: k, izb, izone, nstep_est, idiag0
     Integer :: its(zb_lo:zb_hi), mykstep(zb_lo:zb_hi)
     Integer :: ierr
     Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
