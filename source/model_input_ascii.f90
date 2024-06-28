@@ -127,7 +127,7 @@ Module model_input_ascii
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
     Use xnet_conditions, Only: nstart, tstart, t9start, rhostart, yestart, nh, th, yeh
-    USe xnet_abundances, Only: y_moment, ystart, xext, aext, zext
+    Use xnet_abundances, Only: y_moment, ystart, xext, aext, zext
     Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, nzevolve, szbatch, zb_lo, zb_hi, &
       lzactive, iaux
     Use xnet_nse, Only: nse_solve, ynse
