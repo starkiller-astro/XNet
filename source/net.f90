@@ -207,7 +207,8 @@ Program net
     Call read_thermo_file(thermo_file,thermo_desc,ierr)
 
     ! Determine thermodynamic conditions at tstart
-    Call t9rhofind(0,tstart,nstart,t9start,rhostart)
+    Call t9rhofind(0,tstart(zb_lo:zb_hi),nstart(zb_lo:zb_hi),t9start(zb_lo:zb_hi), &
+      & rhostart(zb_lo:zb_hi))
 
     ! Determine initial abundances
     Call load_initial_abundances(inab_file,abund_desc,ierr)

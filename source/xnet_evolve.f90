@@ -65,7 +65,7 @@ Contains
     idiag0 = idiag
 
     ! Initialize trial time step abundances and conditions
-    Call t9rhofind(0,t,nt,t9,rho)
+    Call t9rhofind(0,t(zb_lo:zb_hi),nt(zb_lo:zb_hi),t9(zb_lo:zb_hi),rho(zb_lo:zb_hi))
     Do izb = zb_lo, zb_hi
       tdel_old(izb) = tdel(izb)
       tdel_next(izb) = tdel(izb)
