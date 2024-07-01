@@ -380,8 +380,7 @@ Contains
     mm = aa / avn! + mex(:)*epmev/(clt*clt)
     !mm(:) = zz(:)*(m_p+m_e) + nn(:)*m_n - be(:)*epmev/(clt*clt)
 
-    Allocate (gg(0:ny,nzevolve))
-    If ( iheat > 0 ) Allocate (dlngdt9(0:ny,nzevolve))
+    Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
 
     Return
   End Subroutine read_nuclear_data
@@ -530,9 +529,9 @@ Contains
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
     Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0
-    Use xnet_ffn, Only: ffnsum, ffnenu, ngrid, read_ffn_data
-    Use xnet_ffn, Only: ffn_ec, ffn_beta, ffn_qval, has_logft
-    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu
+    Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
+      & ngrid, rffn, dlnrffndt9
+    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, rnnu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -577,27 +576,40 @@ Contains
       Else
         Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
         Allocate (has_logft(nffn))
-        If (iweak0 == 2) Then
-        !Additional data for logft rates
-           Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
-           Allocate (ffn_qval(nffn))
-        Endif
+        ffnsum = 0.0
+        ffnenu = 0.0
+        has_logft = 0
+        If ( abs(iweak0) == 2 ) Then
+          ! Additional data for logft rates
+          Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
+          Allocate (ffn_qval(nffn))
+          ffn_ec = 0.0
+          ffn_beta = 0.0
+          ffn_qval = 0.0
+        EndIf
       EndIf
       Call parallel_bcast(ffnsum)
       Call parallel_bcast(ffnenu)
       Call parallel_bcast(has_logft)
-      If (iweak0 == 2) Then
-        !Additional data for logft rates
+      If ( abs(iweak0) == 2 ) Then
+        ! Additional data for logft rates
         Call parallel_bcast(ffn_ec)
         Call parallel_bcast(ffn_beta)
         Call parallel_bcast(ffn_qval)
-      Endif
+      EndIf
     Else
       Allocate(ffnsum(1,ngrid),ffnenu(1,ngrid))
-      !Additional arrays for logft rates
-      If (iweak0 == 2) Then
+      Allocate (has_logft(1))
+      ffnsum = 0.0
+      ffnenu = 0.0
+      has_logft = 0
+      ! Additional arrays for logft rates
+      If ( abs(iweak0) == 2 ) Then
          Allocate (ffn_ec(1,ngrid),ffn_beta(1,ngrid))
          Allocate (ffn_qval(1))
+         ffn_ec = 0.0
+         ffn_beta = 0.0
+         ffn_qval = 0.0
       Endif
     Endif
 
@@ -607,10 +619,12 @@ Contains
         Call read_nnu_data(nnnu,data_dir)
       Else
         Allocate (sigmanu(nnnu,ntnu))
+        sigmanu = 0.0
       EndIf
       Call parallel_bcast(sigmanu)
     Else
       Allocate (sigmanu(1,ntnu))
+      sigmanu = 0.0
     EndIf
 
     ! Read in reaction arrays for 1 reactant reactions
@@ -762,20 +776,22 @@ Contains
       EndDo
     EndDo
 
-    Allocate (csect1(nr1,nzevolve))
-    Allocate (csect2(nr2,nzevolve))
-    Allocate (csect3(nr3,nzevolve))
-    Allocate (csect4(nr4,nzevolve))
     Allocate (b1(nan(1),nzevolve))
     Allocate (b2(nan(2),nzevolve))
     Allocate (b3(nan(3),nzevolve))
     Allocate (b4(nan(4),nzevolve))
-    If ( iheat > 0 ) Then
-      Allocate (dcsect1dt9(nr1,nzevolve))
-      Allocate (dcsect2dt9(nr2,nzevolve))
-      Allocate (dcsect3dt9(nr3,nzevolve))
-      Allocate (dcsect4dt9(nr4,nzevolve))
-    EndIf
+    Allocate (csect1(nr1,nzevolve))
+    Allocate (csect2(nr2,nzevolve))
+    Allocate (csect3(nr3,nzevolve))
+    Allocate (csect4(nr4,nzevolve))
+    Allocate (dcsect1dt9(nr1,nzevolve))
+    Allocate (dcsect2dt9(nr2,nzevolve))
+    Allocate (dcsect3dt9(nr3,nzevolve))
+    Allocate (dcsect4dt9(nr4,nzevolve))
+
+    Allocate (rffn(max(1,nffn),nzevolve))
+    Allocate (dlnrffndt9(max(1,nffn),nzevolve))
+    Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
 
     Return
   End Subroutine read_reaction_data

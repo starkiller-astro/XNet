@@ -30,7 +30,8 @@ Module xnet_nnu
   Integer, Allocatable :: irl(:)          ! Reaclib Chapter 1 index of reaction
   Integer, Allocatable :: nuspec(:)       ! The neutrino species involved in the reaction
 
-  Real(dp), Dimension(:,:), Allocatable :: sigmanu ! dim(nnnu,ntnu)
+  Real(dp), Allocatable :: sigmanu(:,:) ! dim(nnnu,ntnu)
+  Real(dp), Allocatable :: rnnu(:,:,:)
 
 Contains
 
@@ -48,6 +49,8 @@ Contains
     Integer :: i, j, lun_nnu
 
     Allocate (sigmanu(nnnu,ntnu))
+    sigmanu = 0.0
+
     Open(newunit=lun_nnu, file=trim(data_dir)//"/netneutr", status='old', action='read')
     Do i = 1, nnnu
       Read(lun_nnu,*)
@@ -123,7 +126,7 @@ Contains
     Real(dp), Intent(in) :: time(nzevolve)
 
     ! Output variables
-    Real(dp), Intent(out), Dimension(nnnu,nnuspec,zb_lo:zb_hi) :: rate
+    Real(dp), Intent(out) :: rate(nnnu,nnuspec,zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -148,7 +151,11 @@ Contains
     If ( ineutrino == 0 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          rate(:,:,izb) = 0.0
+          Do j = 1, nnuspec
+            Do k = 1, nnnu
+              rate(k,j,izb) = 0.0
+            EndDo
+          EndDo
         EndIf
       EndDo
     Else

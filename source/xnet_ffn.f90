@@ -22,6 +22,9 @@ Module xnet_ffn
   Real(dp), Allocatable :: ffn_qval(:)
   Integer, Allocatable :: has_logft(:)
 
+  Real(dp), Allocatable :: rffn(:,:)              ! FFN reaction rates
+  Real(dp), Allocatable :: dlnrffndt9(:,:)        ! log FFN reaction rates
+
 Contains
 
   Subroutine read_ffn_data(nffn,data_dir)
