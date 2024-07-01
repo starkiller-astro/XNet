@@ -23,7 +23,7 @@ Contains
     Use nuclear_data, Only: ny, nname, benuc
     Use xnet_abundances, Only: yo, y, yt, ydot, xext, aext, zext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
-      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9rhofind, t9start, rhostart, yestart
+      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9start, rhostart, yestart
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
       & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id
     Use xnet_integrate, Only: timestep
@@ -65,7 +65,6 @@ Contains
     idiag0 = idiag
 
     ! Initialize trial time step abundances and conditions
-    Call t9rhofind(0,t(zb_lo:zb_hi),nt(zb_lo:zb_hi),t9(zb_lo:zb_hi),rho(zb_lo:zb_hi))
     Do izb = zb_lo, zb_hi
       tdel_old(izb) = tdel(izb)
       tdel_next(izb) = tdel(izb)
