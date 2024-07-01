@@ -680,7 +680,8 @@ Contains
         If ( iheat > 0 ) t9t(izb) = zt0(neq,0,izb)
       EndIf
     EndDo
-    If ( iheat == 0 ) Call t9rhofind(kstep,tt,ntt,t9t,rhot,mask_in = retry_ts(zb_lo:zb_hi))
+    If ( iheat == 0 ) Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi), &
+      rhot(zb_lo:zb_hi),mask_in = retry_ts(zb_lo:zb_hi))
 
     ! Initialize masks
     Do izb = zb_lo, zb_hi

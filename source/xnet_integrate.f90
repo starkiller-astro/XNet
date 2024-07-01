@@ -169,7 +169,8 @@ Contains
           tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
         EndIf
       EndDo
-      Call t9rhofind(kstep,tt,ntt,t9t,rhot,mask_in = mask_profile)
+      Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi), &
+        & mask_in = mask_profile)
       Do izb = zb_lo, zb_hi
         If ( mask_profile(izb) .and. ntt(izb)-1 > nt(izb) ) Then
           Do j = nt(izb), ntt(izb)-1
@@ -199,7 +200,8 @@ Contains
             tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
           EndIf
         EndDo
-        Call t9rhofind(kstep,tt,ntt,t9t,rhot,mask_in = mask_profile)
+        Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi), &
+          & mask_in = mask_profile)
         Do izb = zb_lo, zb_hi
           If ( mask_profile(izb) .and. t9(izb) > 0.0 ) Then
             dtherm(izb) = 10.0*abs(t9t(izb)-t9(izb))/t9(izb) + abs(rhot(izb)-rho(izb))/rho(izb)

@@ -98,7 +98,8 @@ Contains
 
       ! Reset temperature and density for failed integrations
       lzstep = ( inr == 0 )
-      Call t9rhofind(kstep,tt,ntt,t9t,rhot,mask_in = lzstep)
+      Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
+        & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
       If ( iheat > 0 ) Then
         Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
