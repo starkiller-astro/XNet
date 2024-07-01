@@ -18,7 +18,7 @@ Contains
     Return
   End Subroutine eos_initialize
 
-  Subroutine eos_interface(rho,t9,y,ye,cv,efermkt,defermktdt9,izb)
+  Subroutine eos_interface(rho,t9,y,ye,cv,efermkt,defermktdt9,xext,aext,zext)
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the Equation of State for changes in temperature and density.
     !
@@ -41,8 +41,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(ny)
-    Integer, Intent(in),Optional :: izb
+    Real(dp), Intent(in) :: t9, rho, y(ny), xext, aext, zext
 
     ! Output variables
     Real(dp), Intent(out) :: ye, cv, efermkt, defermktdt9
@@ -56,11 +55,7 @@ Contains
     Real(dp) :: deiondt9, deraddt9, decouldt9
 
     ! Calculate Ye and other needed moments of the abundance distribution
-    If (present(izb)) Then
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,izb)
-    Else
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
-    Endif
+    Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,xext,aext,zext)
 
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
@@ -102,7 +97,7 @@ Contains
     Return
   End Subroutine eos_interface
 
-  Subroutine eos_screen(t9,rho,y,efermkt,defermktdt9,ztilde,zinter,lambda0,gammae,dztildedt9,izb)
+  Subroutine eos_screen(t9,rho,y,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9,xext,aext,zext)
     !-----------------------------------------------------------------------------------------------
     ! This routine Bahcall's approach to calculate the factors needed for screening from the input
     ! temperature, density and composition.
@@ -119,8 +114,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(ny), efermkt, defermktdt9
-    Integer, Intent(in),Optional :: izb
+    Real(dp), Intent(in) :: t9, rho, y(ny), efermkt, defermktdt9, xext, aext, zext
 
     ! Output variables
     Real(dp), Intent(out) :: ztilde, zinter, lambda0, gammae, dztildedt9
@@ -130,11 +124,7 @@ Contains
     Real(dp) :: sratio, ae, dsratiodefermkt
 
     ! Calculate Ye and other needed moments of the abundance distribution
-    If (present(izb)) Then
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,izb)
-    Else
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
-    Endif
+    Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,xext,aext,zext)
 
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24)
     Call salpeter_ratio(efermkt,sratio,dsratiodefermkt)

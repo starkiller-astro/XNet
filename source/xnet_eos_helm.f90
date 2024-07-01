@@ -21,7 +21,7 @@ Contains
     Return
   End Subroutine eos_initialize
 
-  Subroutine eos_interface(t9,rho,y,ye,cv,etae,detaedt9,izb)
+  Subroutine eos_interface(t9,rho,y,ye,cv,etae,detaedt9,xext,aext,zext)
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
     Use xnet_constants, Only: avn, epmev
@@ -30,8 +30,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(ny)
-    Integer, Intent(in),Optional :: izb
+    Real(dp), Intent(in) :: t9, rho, y(ny), xext, aext, zext
 
     ! Ouput variables
     Real(dp), Intent(out) :: ye, cv, etae, detaedt9
@@ -40,11 +39,7 @@ Contains
     Real(dp) :: ytot, abar, zbar, z2bar, zibar
 
     ! Calculate Ye
-    If (present(izb)) Then
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,izb)
-    Else
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
-    Endif
+    Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,xext,aext,zext)
 
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
@@ -73,7 +68,7 @@ Contains
     Return
   End Subroutine eos_interface
 
-  Subroutine eos_screen(t9,rho,y,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9,izb)
+  Subroutine eos_screen(t9,rho,y,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9,xext,aext,zext)
     !-----------------------------------------------------------------------------------------------
     ! This routine uses the current composition and prior updates to the Equation of State to
     ! calculate the factors needed for screening.
@@ -87,8 +82,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9, rho, y(ny), etae, detaedt9
-    Integer, Intent(in),Optional :: izb
+    Real(dp), Intent(in) :: t9, rho, y(ny), etae, detaedt9, xext, aext, zext
 
     ! Output variables
     Real(dp), Intent(out) :: ztilde, zinter, lambda0, gammae, dztildedt9
@@ -98,11 +92,7 @@ Contains
     Real(dp) :: sratio, ae, dsratiodeta
 
     ! Calculate Ye and other needed moments of the abundance distribution
-    If (present(izb)) Then
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,izb)
-    Else
-       Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar)
-    Endif
+    Call y_moment(y,ye,ytot,abar,zbar,z2bar,zibar,xext,aext,zext)
 
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24)
     Call salpeter_ratio(etae,sratio,dsratiodeta)

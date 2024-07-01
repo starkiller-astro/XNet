@@ -278,7 +278,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the dependent thermodynamic state variables by interfacing with the EoS.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_abundances, Only: yt
+    Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_conditions, Only: t9t, rhot, yet, cv, etae, detaedt9
     Use xnet_controls, Only: zb_lo, zb_hi, lzactive
     Use xnet_eos, Only: eos_interface
@@ -305,7 +305,8 @@ Contains
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        call eos_interface(t9t(izb),rhot(izb),yt(:,izb),yet(izb),cv(izb),etae(izb),detaedt9(izb),izb)
+        call eos_interface(t9t(izb),rhot(izb),yt(:,izb),yet(izb),cv(izb),etae(izb),detaedt9(izb), &
+          & xext(izb),aext(izb),zext(izb))
       EndIf
     EndDo
 
