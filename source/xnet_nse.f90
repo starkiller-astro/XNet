@@ -1242,6 +1242,7 @@ Contains
     Real(dp) :: theta12iw(izmax-1), theta12is(izmax-1), theta12si(izmax-1)
     Real(dp) :: fhs(0:izmax+1), fhi(0:izmax+1), gammaz(0:izmax+1)
     Real(dp) :: cv, etae, detaedt9, ztot, ztilde, zinter, lambda0, gammae, dztildedt9, s0
+    Real(dp) :: xext,aext,zext
 
     start_timer = xnet_wtime()
     timer_nsescrn = timer_nsescrn - start_timer
@@ -1251,8 +1252,12 @@ Contains
     ElseIf ( .not. use_CP98 ) Then
 
       ! Call EOS to get plasma quantities
-      call eos_interface(t9nse,rhonse,ynse,ztot,cv,etae,detaedt9)
-      Call eos_screen(t9nse,rhonse,ynse,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9)
+      xext = 0.0
+      aext = 1.0
+      zext = 0.0
+      call eos_interface(t9nse,rhonse,ynse,ztot,cv,etae,detaedt9,xext,aext,zext)
+      Call eos_screen(t9nse,rhonse,ynse,etae,detaedt9,ztilde,zinter,lambda0,gammae,dztildedt9, &
+        xext,aext,zext)
 
       !---------------------------------------------------------------------------------------------
       ! Calculate screening energies as a function of Z, for prescriptions that follow this approach

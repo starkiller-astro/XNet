@@ -161,13 +161,17 @@ Module model_input_ascii
 
     ! Initialize
     ierr = 0
-    ! Allow auxiliary nucleus
-    ! Set to 0 to force normalization of abundances
-    ! and exclude aux nuclear species
-    iaux = 1
     Do izb = zb_lo, zb_hi
       yestart(izb) = 0.0     
       ystart(:,izb) = 0.0
+
+      ! Allow auxiliary nucleus
+      ! Set to 0 to force normalization of abundances
+      ! and exclude aux nuclear species
+      iaux(izb) = 1
+      xext(izb) = 0.0
+      aext(izb) = 1.0
+      zext(izb) = 0.0
     EndDo
 
     Do izb = zb_lo, zb_hi
@@ -190,12 +194,9 @@ Module model_input_ascii
        
         If ( t9start(izb) <= t9nse .or. yestart(izb) <= 0.0 .or. yestart(izb) >= 1.0 ) Then
           Call read_inab_file(inab_file(izone),abund_desc(izb),yein,yin,xext_loc,aext_loc,zext_loc,xnorm,ierr)
-          If ( iaux(izb)==0 ) then ! Turn off aux nucleus
-              yin = yin/xnorm
+          If ( iaux(izb) == 0 ) then ! Turn off aux nucleus
+              yin = yin / xnorm
               Write(lun_diag,"(a)") 'Normalizing initial abundances.'
-              xext(izb) = 0.0
-              aext(izb) = 1.0
-              zext(izb) = 0.0
           Else    
               xext(izb) = xext_loc
               aext(izb) = aext_loc
@@ -203,7 +204,7 @@ Module model_input_ascii
           Endif
           ! If Ye is not provided in the initial abundance file explicitly, calculate it here
           If ( yein <= 0.0 .or. yein >= 1.0 ) &
-          &    Call y_moment(yin,yein,ytot,abar,zbar,z2bar,zibar,izb)
+          &    Call y_moment(yin,yein,ytot,abar,zbar,z2bar,zibar,xext(izb),aext(izb),zext(izb))
           yestart(izb) = yein
 
 
@@ -223,9 +224,6 @@ Module model_input_ascii
           Call nse_solve(rhostart(izb),t9start(izb),yestart(izb))
           ystart(:,izb) = ynse(:)
           iaux(izb) = 0
-          xext(izb) = 0.d0
-          aext(izb) = 1.d0
-          zext(izb) = 1.d0
         Else
           ystart(:,izb) = yin(:)
         EndIf

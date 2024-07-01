@@ -141,7 +141,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: izmax, nname, zseq, zseq53, zseqi
     Use reaction_data, Only: n2i, n3i, n4i, nreac
-    Use xnet_abundances, Only: yt
+    Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_constants, Only: bi, bip1, cds, kbi, thbim2
     Use xnet_conditions, Only: rhot, t9t, etae, detaedt9
     Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive
@@ -183,7 +183,7 @@ Contains
 
         ! Call EOS to get plasma quantities
         call eos_screen(t9t(izb),rhot(izb),yt(:,izb),etae(izb),detaedt9(izb), &
-          & ztilde,zinter,lambda0,gammae,dztildedt9,izb)
+          & ztilde,zinter,lambda0,gammae,dztildedt9,xext(izb),aext(izb),zext(izb))
 
         ! Calculate screening energies as a function of Z, for prescriptions that follow this approach
         gammaz(0) = 0.0d0
