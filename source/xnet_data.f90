@@ -120,7 +120,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, ii, izb
+    Integer :: i, ii, k, izb
     Real(dp) :: rdt9
     Logical, Pointer :: mask(:)
 
