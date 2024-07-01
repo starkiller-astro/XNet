@@ -213,9 +213,7 @@ Contains
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
     Call salpeter_ratio(etae,sratio,dztildedt9)
     ztilde = sqrt(z2bar + zbar*sratio) ! DGC, Eq. 4
-    If ( iheat > 0 ) Then
-      dztildedt9 = 0.5*zbar/ztilde * dztildedt9*detaedt9
-    EndIf
+    dztildedt9 = 0.5*zbar/ztilde * dztildedt9*detaedt9
 
     ! Calculate plasma quantities
     Call plasma(t9,rho,ytot,ye,zbar,zibar,ztilde,zinter,lambda0,gammae)
@@ -232,7 +230,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Use xnet_util, Only: plasma
     Implicit None
@@ -272,9 +270,7 @@ Contains
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ztilde(izb) = sqrt(z2bar(izb) + sratio(izb)*zbar(izb)) ! DGC, Eq. 4
-        If ( iheat > 0 ) Then
-          dztildedt9(izb) = 0.5*zbar(izb)/ztilde(izb) * dztildedt9(izb)*detaedt9(izb)
-        EndIf
+        dztildedt9(izb) = 0.5*zbar(izb)/ztilde(izb) * dztildedt9(izb)*detaedt9(izb)
 
         ! Calculate plasma quantities
         Call plasma(t9(izb),rho(izb),ytot(izb),ye(izb),zbar(izb), &
