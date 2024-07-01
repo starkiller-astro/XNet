@@ -41,18 +41,6 @@ Module model_input_ascii
     ierr = 0
 
     Do izb = zb_lo, zb_hi
-      tstart(izb) = 0.0
-      tstop(izb) = 0.0
-      tdelstart(izb) = 0.0
-      th(:,izb) = 0.0
-      t9h(:,izb) = 0.0
-      rhoh(:,izb) = 0.0
-      yeh(:,izb) = 0.0
-      fluxcms(:,:,izb) = 0.0
-      tmevnu(:,:,izb) = 0.0
-    EndDo
-
-    Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         izone = izb + szbatch - zb_lo
 
