@@ -147,23 +147,36 @@ Program net
   ! Set sizes of abundance arrays
   Allocate (y(ny,nzevolve),yo(ny,nzevolve),yt(ny,nzevolve),ydot(ny,nzevolve),ystart(ny,nzevolve))
   Allocate (xext(nzevolve),aext(nzevolve),zext(nzevolve),iaux(nzevolve))
+  y = 0.0 ; yo = 0.0 ; yt = 0.0 ; ydot = 0.0 ; ystart = 0.0
+  xext = 0.0 ; aext = 0.0 ; zext = 0.0 ; iaux = 0
 
   ! Allocate conditions arrays
-  Allocate (t(nzevolve),tt(nzevolve),to(nzevolve), &
-    &       tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
-    &       t9(nzevolve),t9t(nzevolve),t9o(nzevolve), &
+  Allocate (tdel(nzevolve),tdel_next(nzevolve),tdel_old(nzevolve), &
+    &       t(nzevolve),tt(nzevolve),to(nzevolve), &
+    &       t9(nzevolve),t9t(nzevolve),t9o(nzevolve),t9dot(nzevolve), &
     &       rho(nzevolve),rhot(nzevolve),rhoo(nzevolve), &
     &       ye(nzevolve),yet(nzevolve),yeo(nzevolve), &
+    &       cv(nzevolve),etae(nzevolve),detaedt9(nzevolve), &
     &       nt(nzevolve),ntt(nzevolve),nto(nzevolve), &
-    &       ints(nzevolve),intso(nzevolve), &
-    &       t9dot(nzevolve),cv(nzevolve),etae(nzevolve),detaedt9(nzevolve))
+    &       ints(nzevolve),intso(nzevolve))
+  tdel  = 0.0 ; tdel_next = 0.0 ; tdel_old = 0.0
+  t     = 0.0 ; tt        = 0.0 ; to       = 0.0
+  t9    = 0.0 ; t9t       = 0.0 ; t9o      = 0.0 ; t9dot = 0.0
+  rho   = 0.0 ; rhot      = 0.0 ; rhoo     = 0.0
+  ye    = 0.0 ; yet       = 0.0 ; yeo      = 0.0
+  cv    = 0.0 ; etae      = 0.0 ; detaedt9 = 0.0
+  nt    = 0   ; ntt       = 0   ; nto      = 0
+  ints  = 0   ; intso     = 0
 
   ! Allocate thermo history arrays
-  Allocate (nh(nzevolve),nstart(nzevolve), &
-    &       tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
+  Allocate (nstart(nzevolve),tstart(nzevolve),tstop(nzevolve),tdelstart(nzevolve), &
     &       t9start(nzevolve),rhostart(nzevolve),yestart(nzevolve), &
-    &       th(nhmx,nzevolve),t9h(nhmx,nzevolve),rhoh(nhmx,nzevolve),yeh(nhmx,nzevolve), &
-    &       tmevnu(nhmx,nnuspec,nzevolve),fluxcms(nhmx,nnuspec,nzevolve))
+    &       nh(nzevolve),th(nhmx,nzevolve),t9h(nhmx,nzevolve),rhoh(nhmx,nzevolve), &
+    &       yeh(nhmx,nzevolve),tmevnu(nhmx,nnuspec,nzevolve),fluxcms(nhmx,nnuspec,nzevolve))
+  tstart = 0.0 ; tstop   = 0.0 ; tdelstart = 0.0 ; th      = 0.0
+  nstart = 0   ; t9start = 0.0 ; rhostart  = 0.0 ; yestart = 0.0
+  nh     = 0   ; t9h     = 0.0 ; rhoh      = 0.0 ; yeh     = 0.0
+  tmevnu = 0.0 ; fluxcms = 0.0
 
   ! Allocate zone description arrays
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
@@ -207,8 +220,12 @@ Program net
     Call read_thermo_file(thermo_file,thermo_desc,ierr)
 
     ! Determine thermodynamic conditions at tstart
-    Call t9rhofind(0,tstart(zb_lo:zb_hi),nstart(zb_lo:zb_hi),t9start(zb_lo:zb_hi), &
-      & rhostart(zb_lo:zb_hi))
+    Do izb = zb_lo, zb_hi
+      If ( lzactive(izb) ) Then
+        Call t9rhofind(0,tstart(izb),nstart(izb),t9start(izb),rhostart(izb), &
+          & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
+      EndIf
+    EndDo
 
     ! Determine initial abundances
     Call load_initial_abundances(inab_file,abund_desc,ierr)
