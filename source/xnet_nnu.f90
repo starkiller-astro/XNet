@@ -116,14 +116,14 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: nzevolve, zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
     Integer, Intent(in) :: nnnu
-    Real(dp), Intent(in) :: time(nzevolve)
+    Real(dp), Intent(in) :: time(zb_lo:zb_hi)
 
     ! Output variables
     Real(dp), Intent(out) :: rate(nnnu,nnuspec,zb_lo:zb_hi)

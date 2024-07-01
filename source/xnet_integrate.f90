@@ -239,12 +239,12 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the value of the iweak flag to control the treatment of strong reactions.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, nzevolve, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(nzevolve)
+    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -305,12 +305,9 @@ Contains
     start_timer = xnet_wtime()
     timer_eos = timer_eos - start_timer
 
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        call eos_interface(t9t(izb),rhot(izb),yt(:,izb),yet(izb),cv(izb),etae(izb),detaedt9(izb), &
-          & xext(izb),aext(izb),zext(izb))
-      EndIf
-    EndDo
+    Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
+      & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
 
     stop_timer = xnet_wtime()
     timer_eos = timer_eos + stop_timer
@@ -329,7 +326,8 @@ Contains
       & n22, n31, n32, n33, n41, n42, n43, n44, csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i
     Use xnet_abundances, Only: yt, ydot
     Use xnet_conditions, Only: cv, t9t, t9dot
-    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
+      & lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_deriv
     Use xnet_types, Only: dp
     Implicit None
@@ -545,7 +543,7 @@ Contains
     Call update_eos(mask_in = mask)
 
     ! Check for any changes to iweak
-    Call update_iweak(t9t,mask_in = mask)
+    Call update_iweak(t9t(zb_lo:zb_hi),mask_in = mask)
 
     ! Calculate the screening terms
     If ( iscrn >= 1 ) Then
@@ -594,13 +592,14 @@ Contains
     EndIf
 
     ! Calculate partition functions for each nucleus at t9t
-    Call partf(t9t,mask_in = mask)
+    Call partf(t9t(zb_lo:zb_hi),mask_in = mask)
 
     ! If there are any FFN reactions, calculate their rates
-    If ( nffn > 0 ) Call ffn_rate(nffn,t9t,ene,rffn,dlnrffndt9,mask_in = mask)
+    If ( nffn > 0 ) Call ffn_rate(nffn,t9t(zb_lo:zb_hi),ene, &
+      & rffn(:,zb_lo:zb_hi),dlnrffndt9(:,zb_lo:zb_hi),mask_in = mask)
 
     ! If there are any neutrino-nucleus reactions, calculate their rates
-    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt,rnnu,mask_in = mask)
+    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask)
 
     ! Calculate cross sections
     Do izb = zb_lo, zb_hi
