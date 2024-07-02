@@ -26,12 +26,17 @@ Module xnet_screening
   ! Screening factors from Table 4 of Graboske+ (1973)
   Real(dp), Allocatable :: zeta2w(:), zeta2i(:), zeta3w(:), zeta3i(:), zeta4w(:), zeta4i(:) ! Reaction charge parameter
 
+  Real(dp), Allocatable :: ztilde(:), zinter(:), lambda0(:), gammae(:), dztildedt9(:)
+
   Real(dp), Parameter :: lam_1 = 0.1_dp
   Real(dp), Parameter :: lam_2 = 0.125_dp
   Real(dp), Parameter :: lam_3 = 2.0_dp
   Real(dp), Parameter :: lam_4 = 2.15_dp
   Real(dp), Parameter :: lam_5 = 4.85_dp
   Real(dp), Parameter :: lam_6 = 5.0_dp
+  Real(dp), Parameter :: rdlam12 = 1.0_dp / (lam_1 - lam_2)
+  Real(dp), Parameter :: rdlam34 = 1.0_dp / (lam_3 - lam_4)
+  Real(dp), Parameter :: rdlam56 = 1.0_dp / (lam_6 - lam_5)
 
 Contains
 
@@ -100,26 +105,35 @@ Contains
       z4c = real(iz4c,dp)
       zeta4w = z41*(z42 + z43 + z44) + z42*(z43 + z44) + z43 * z44
       zeta4i = z4c**bip1 - z41**bip1 - z42**bip1 - z43**bip1 - z44**bip1
+
+      Allocate (ztilde(nzevolve))
+      Allocate (zinter(nzevolve))
+      Allocate (lambda0(nzevolve))
+      Allocate (gammae(nzevolve))
+      Allocate (dztildedt9(nzevolve))
+      ztilde = 0.0
+      zinter = 0.0
+      lambda0 = 0.0
+      gammae = 0.0
+      dztildedt9 = 0.0
     EndIf
 
     Allocate (h1(nr1,nzevolve))
     Allocate (h2(nr2,nzevolve))
     Allocate (h3(nr3,nzevolve))
     Allocate (h4(nr4,nzevolve))
-    h1 = 0.0d0
-    h2 = 0.0d0
-    h3 = 0.0d0
-    h4 = 0.0d0
-    If ( iheat > 0 ) Then
-      Allocate (dh1dt9(nr1,nzevolve))
-      Allocate (dh2dt9(nr2,nzevolve))
-      Allocate (dh3dt9(nr3,nzevolve))
-      Allocate (dh4dt9(nr4,nzevolve))
-      dh1dt9 = 0.0d0
-      dh2dt9 = 0.0d0
-      dh3dt9 = 0.0d0
-      dh4dt9 = 0.0d0
-    EndIf
+    Allocate (dh1dt9(nr1,nzevolve))
+    Allocate (dh2dt9(nr2,nzevolve))
+    Allocate (dh3dt9(nr3,nzevolve))
+    Allocate (dh4dt9(nr4,nzevolve))
+    h1 = 0.0
+    h2 = 0.0
+    h3 = 0.0
+    h4 = 0.0
+    dh1dt9 = 0.0
+    dh2dt9 = 0.0
+    dh3dt9 = 0.0
+    dh4dt9 = 0.0
 
     Return
   End Subroutine screening_init
@@ -154,18 +168,12 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
+    Real(dp) :: fhs(0:izmax+2), dfhsdt9(0:izmax+2)
+    Real(dp) :: gammaz, gammaz5, lgammaz, lambda
+    Real(dp) :: hw0, hi0, dlnhw0dt9, dlnhi0dt9
+    Real(dp) :: h, hw, hi, hs
+    Real(dp) :: dhdt9, dhwdt9, dhidt9, dhsdt9
     Integer :: j, mu, izb, izone
-    Real(dp), Dimension(nreac(2)) :: h2w, h2i, h2s, lambda12
-    Real(dp), Dimension(nreac(2)) :: dh2wdt9, dh2idt9, dh2sdt9
-    Real(dp), Dimension(nreac(2)) :: theta12iw, theta12is, theta12si
-    Real(dp), Dimension(nreac(3)) :: h3w, h3i, h3s, lambda123
-    Real(dp), Dimension(nreac(3)) :: dh3wdt9, dh3idt9, dh3sdt9
-    Real(dp), Dimension(nreac(3)) :: theta123iw, theta123is, theta123si
-    Real(dp), Dimension(nreac(4)) :: h4w, h4i, h4s, lambda1234
-    Real(dp), Dimension(nreac(4)) :: dh4wdt9, dh4idt9, dh4sdt9
-    Real(dp), Dimension(nreac(4)) :: theta1234iw, theta1234is, theta1234si
-    Real(dp), Dimension(0:izmax+2) :: gammaz, fhs, fhi, dfhsdt9
-    Real(dp) :: ztilde, zinter, lambda0, gammae, dztildedt9
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -176,203 +184,253 @@ Contains
     If ( .not. any(mask) ) Return
 
     start_timer = xnet_wtime()
+    timer_prescrn = timer_prescrn - start_timer
+
+    ! Call EOS to get plasma quantities
+    Call eos_screen(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi),etae(zb_lo:zb_hi), &
+      & detaedt9(zb_lo:zb_hi),ztilde(zb_lo:zb_hi),zinter(zb_lo:zb_hi),lambda0(zb_lo:zb_hi), &
+      & gammae(zb_lo:zb_hi),dztildedt9(zb_lo:zb_hi),xext(zb_lo:zb_hi),aext(zb_lo:zb_hi), &
+      & zext(zb_lo:zb_hi),mask_in = mask)
+
+    stop_timer = xnet_wtime()
+    timer_prescrn = timer_prescrn + stop_timer
+
+    start_timer = xnet_wtime()
     timer_scrn = timer_scrn - start_timer
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
-        ! Call EOS to get plasma quantities
-        call eos_screen(t9t(izb),rhot(izb),yt(:,izb),etae(izb),detaedt9(izb), &
-          & ztilde,zinter,lambda0,gammae,dztildedt9,xext(izb),aext(izb),zext(izb))
-
         ! Calculate screening energies as a function of Z, for prescriptions that follow this approach
-        gammaz(0) = 0.0d0
-        gammaz(1:izmax+2) = gammae * zseq53(1:izmax+2)
-        fhi(0) = 0.0d0
-        fhi(1:izmax+2) = kbi * zinter * lambda0**bi * zseqi(1:izmax+2)
-        fhs(0) = 0.0d0
-        fhs(1:izmax+2) = + cds(1) * gammaz(1:izmax+2) &
-          &              + cds(2) * gammaz(1:izmax+2)**cds(5) / cds(5) &
-          &              + cds(3) * log(gammaz(1:izmax+2)) &
-          &              + cds(4)
-        dfhsdt9(0) = 0.0d0
-        dfhsdt9(1:izmax+2) = + cds(1) * gammaz(1:izmax+2) &
-          &                  + cds(2) * gammaz(1:izmax+2)**cds(5) &
-          &                  + cds(3)
-        dfhsdt9(1:izmax+2) = -dfhsdt9(1:izmax+2) / t9t(izb)
+        fhs(0) = 0.0
+        dfhsdt9(0) = 0.0
+        Do j = 1, izmax+2
+          gammaz = gammae(izb) * zseq53(j)
+          gammaz5 = gammaz**cds(5)
+          lgammaz = log(gammaz)
+          fhs(j) = cds(1)*gammaz + cds(2)/cds(5)*gammaz5 + cds(3)*lgammaz + cds(4)
+          dfhsdt9(j) = -(cds(1)*gammaz + cds(2)*gammaz5 + cds(3))/t9t(izb)
+        EndDo
 
         ! No screening term for 1-reactant reactions
-        h1(:,izb) = 0.0d0
-        If ( iheat > 0 ) dh1dt9(:,izb) = 0.0d0
+        Do mu = 1, nreac(1)
+          h1(mu,izb) = 0.0
+          dh1dt9(mu,izb) = 0.0
+        EndDo
 
-        ! Weak and intermediate screening factors, Table 4 of Graboske et al. (1973)
-        lambda12 = zeta2w * ztilde * lambda0
-        h2w = lambda12
-        h2i = kbi * zinter * lambda0**bi * zeta2i
-        !h2i = fhi(iz2c) - fhi(iz21) - fhi(iz22)
+        hw0 = ztilde(izb) * lambda0(izb)
+        hi0 = kbi * zinter(izb) * lambda0(izb)**bi
+        dlnhw0dt9 = dztildedt9(izb)/ztilde(izb) - 1.5/t9t(izb)
+        dlnhi0dt9 = - thbim2*dztildedt9(izb)/ztilde(izb) - 1.5*bi/t9t(izb)
 
-        ! Strong screening from Dewitt & Slattery (2003) using linear mixing.
-        h2s = fhs(iz21) + fhs(iz22) - fhs(iz2c)
+        ! 2-reactant screening
+        Do mu = 1, nreac(2)
+          If ( zeta2w(mu) > 0.0 ) Then
 
-        ! Blending factors
-        theta12iw = max( 0.0d0, min( 1.0d0, (lambda12 - lam_1) / (lam_2 - lam_1) ) )
-        theta12is = max( 0.0d0, min( 1.0d0, (lambda12 - lam_5) / (lam_6 - lam_5) ) )
-        theta12si = max( 0.0d0, min( 1.0d0, (lambda12 - lam_3) / (lam_4 - lam_3) ) )
+            lambda = hw0 * zeta2w(mu)
+            hw = lambda
+            hi = hi0 * zeta2i(mu)
+            hs = fhs(iz21(mu)) + fhs(iz22(mu)) - fhs(iz2c(mu))
 
-        ! Select Screening factor for 2 reactant reactions
-        Where ( iz2c == 0 )
-          h2(:,izb) = 0.0d0
-        ElseWhere ( lambda12 < lam_1 )
-          h2(:,izb) = h2w
-        ElseWhere ( lambda12 < lam_3 )
-          h2(:,izb) = theta12iw*h2i + (1.0d0 - theta12iw)*h2w
-        ElseWhere ( lambda12 > lam_6 )
-          h2(:,izb) = h2s
-        ElseWhere ( h2i < h2s )
-          h2(:,izb) = theta12is*h2s + (1.0d0 - theta12is)*h2i
-        ElseWhere
-          h2(:,izb) = theta12si*h2s + (1.0d0 - theta12si)*h2i
-        EndWhere
-        If ( iheat > 0 ) Then
-          dh2wdt9 = +h2w * (dztildedt9/ztilde - 1.5/t9t(izb))
-          dh2idt9 = -h2i * (thbim2*dztildedt9/ztilde + bi*1.5/t9t(izb))
-          dh2sdt9 = dfhsdt9(iz21) + dfhsdt9(iz22) - dfhsdt9(iz2c)
-          Where ( iz2c == 0 )
-            dh2dt9(:,izb) = 0.0d0
-          ElseWhere ( lambda12 < lam_1 )
-            dh2dt9(:,izb) = dh2wdt9
-          ElseWhere ( lambda12 < lam_3 )
-            dh2dt9(:,izb) = theta12iw*dh2idt9 + (1.0d0 - theta12iw)*dh2wdt9
-          ElseWhere ( lambda12 > lam_6 )
-            dh2dt9(:,izb) = dh2sdt9
-          ElseWhere ( h2i < h2s )
-            dh2dt9(:,izb) = theta12is*dh2sdt9 + (1.0d0 - theta12is)*dh2idt9
-          ElseWhere
-            dh2dt9(:,izb) = theta12si*dh2sdt9 + (1.0d0 - theta12si)*dh2idt9
-          EndWhere
-        EndIf
+            dhwdt9 = hw * dlnhw0dt9
+            dhidt9 = hi * dlnhi0dt9
+            dhsdt9 = dfhsdt9(iz21(mu)) + dfhsdt9(iz22(mu)) - dfhsdt9(iz2c(mu))
 
-        ! Weak and intermediate screening factors, Table 4 of Graboske+ (1973)
-        lambda123 = zeta3w * ztilde * lambda0
-        h3w = lambda123
-        !h3i = kbi * zinter * lambda0**bi * zeta3i
-        h3i = fhi(iz3c) - fhi(iz31) - fhi(iz32) - fhi(iz33)
-
-        ! Strong screening from Dewitt & Slattery (2003) using linear mixing.
-        h3s = fhs(iz31) + fhs(iz32) + fhs(iz33) - fhs(iz3c)
-
-        ! Blending factors
-        theta123iw = max( 0.0d0, min( 1.0d0, (lambda123 - lam_1) / (lam_2 - lam_1) ) )
-        theta123is = max( 0.0d0, min( 1.0d0, (lambda123 - lam_5) / (lam_6 - lam_5) ) )
-        theta123si = max( 0.0d0, min( 1.0d0, (lambda123 - lam_3) / (lam_4 - lam_3) ) )
-
-        ! Select screening factor for 3 reactant reactions
-        Where ( iz3c == 0 )
-          h3(:,izb) = 0.0d0
-        ElseWhere ( lambda123 < lam_1 )
-          h3(:,izb) = h3w
-        ElseWhere ( lambda123 < lam_3 )
-          h3(:,izb) = theta123iw*h3i + (1.0d0 - theta123iw)*h3w
-        ElseWhere ( lambda123 > lam_6 )
-          h3(:,izb) = h3s
-        ElseWhere ( h3i < h3s )
-          h3(:,izb) = theta123is*h3s + (1.0d0 - theta123is)*h3i
-        ElseWhere
-          h3(:,izb) = theta123si*h3s + (1.0d0 - theta123si)*h3i
-        EndWhere
-
-        If ( iheat > 0 ) Then
-          dh3wdt9 = +h3w * (dztildedt9/ztilde - 1.5d0/t9t(izb))
-          dh3idt9 = -h3i * (thbim2*dztildedt9/ztilde + bi*1.5d0/t9t(izb))
-          dh3sdt9 = dfhsdt9(iz31) + dfhsdt9(iz32) + dfhsdt9(iz33) - dfhsdt9(iz3c)
-          Where ( iz3c == 0 )
-            dh3dt9(:,izb) = 0.0d0
-          ElseWhere ( lambda123 < lam_1 )
-            dh3dt9(:,izb) = dh3wdt9
-          ElseWhere ( lambda123 < lam_3 )
-            dh3dt9(:,izb) = theta123iw*dh3idt9 + (1.0d0 - theta123iw)*dh3wdt9
-          ElseWhere ( lambda123 > lam_6 )
-            dh3dt9(:,izb) = dh3sdt9
-          ElseWhere ( h3i < h3s )
-            dh3dt9(:,izb) = theta123is*dh3sdt9 + (1.0d0 - theta123is)*dh3idt9
-          ElseWhere
-            dh3dt9(:,izb) = theta123si*dh3sdt9 + (1.0d0 - theta123si)*dh3idt9
-          EndWhere
-        EndIf
-
-        ! Weak and intermediate screening factors, Table 4 of Graboske+ (1973)
-        lambda1234 = zeta4w * ztilde * lambda0
-        h4w = lambda1234
-        !h4i = kbi * zinter * lambda0**bi * zeta4i
-        h4i = fhi(iz4c) - fhi(iz41) - fhi(iz42) - fhi(iz43) - fhi(iz44)
-
-        ! Strong screening from Dewitt & Slattery (2003) using linear mixing.
-        h4s = fhs(iz41) + fhs(iz42) + fhs(iz43) + fhs(iz44) - fhs(iz4c)
-
-        ! Blending factors
-        theta1234iw = max( 0.0d0, min( 1.0d0, (lambda1234 - lam_1) / (lam_2 - lam_1) ) )
-        theta1234is = max( 0.0d0, min( 1.0d0, (lambda1234 - lam_5) / (lam_6 - lam_5) ) )
-        theta1234si = max( 0.0d0, min( 1.0d0, (lambda1234 - lam_3) / (lam_4 - lam_3) ) )
-
-        ! Select screening factor for 4 reactant reactions
-        Where ( iz4c == 0 )
-          h4(:,izb) = 0.0d0
-        ElseWhere ( lambda1234 < lam_1 )
-          h4(:,izb) = h4w
-        ElseWhere ( lambda1234 < lam_3 )
-          h4(:,izb) = theta1234iw*h4i + (1.0d0 - theta1234iw)*h4w
-        ElseWhere ( lambda1234 > lam_6 )
-          h4(:,izb) = h4s
-        ElseWhere ( h4i < h4s )
-          h4(:,izb) = theta1234is*h4s + (1.0d0 - theta1234is)*h4i
-        ElseWhere
-          h4(:,izb) = theta1234si*h4s + (1.0d0 - theta1234si)*h4i
-        EndWhere
-
-        If ( iheat > 0 ) Then
-          dh4wdt9 = +h4w * (dztildedt9/ztilde - 1.5d0/t9t(izb))
-          dh4idt9 = -h4i * (thbim2*dztildedt9/ztilde + bi*1.5d0/t9t(izb))
-          dh4sdt9 = dfhsdt9(iz41) + dfhsdt9(iz42) + dfhsdt9(iz43) + dfhsdt9(iz44) - dfhsdt9(iz4c)
-          Where ( iz4c == 0 )
-            dh4dt9(:,izb) = 0.0d0
-          ElseWhere ( lambda1234 < lam_1 )
-            dh4dt9(:,izb) = dh4wdt9
-          ElseWhere ( lambda1234 < lam_3 )
-            dh4dt9(:,izb) = theta1234iw*dh4idt9 + (1.0d0 - theta1234iw)*dh4wdt9
-          ElseWhere ( lambda1234 > lam_6 )
-            dh4dt9(:,izb) = dh4sdt9
-          ElseWhere ( h4i < h4s )
-            dh4dt9(:,izb) = theta1234is*dh4sdt9 + (1.0d0 - theta1234is)*dh4idt9
-          ElseWhere
-            dh4dt9(:,izb) = theta1234si*dh4sdt9 + (1.0d0 - theta1234si)*dh4idt9
-          EndWhere
-        EndIf
-
-        If ( idiag >= 5 ) Then
-          izone = izb + szbatch - zb_lo
-          Write(lun_diag,"(a,i5)") 'SCREEN',izone
-          Write(lun_diag,"(3a5,i6,5es23.15)") &
-            & ('H2',(nname(n2i(j,mu)),j=1,2),mu,lambda12(mu),  h2(mu,izb),h2w(mu),h2i(mu),h2s(mu),mu=1,nreac(2))
-          Write(lun_diag,"(4a5,i6,5es23.15)") &
-            & ('H3',(nname(n3i(j,mu)),j=1,3),mu,lambda123(mu), h3(mu,izb),h3w(mu),h3i(mu),h3s(mu),mu=1,nreac(3))
-          Write(lun_diag,"(5a5,i6,5es23.15)") &
-            & ('H4',(nname(n4i(j,mu)),j=1,4),mu,lambda1234(mu),h4(mu,izb),h4w(mu),h4i(mu),h4s(mu),mu=1,nreac(4))
-          If ( iheat > 0 ) Then
-            Write(lun_diag,"(a7,2a5,i6,4es23.15)") &
-              & ('dH2/dT9',(nname(n2i(j,mu)),j=1,2),mu,dh2dt9(mu,izb),dh2wdt9(mu),dh2idt9(mu),dh2sdt9(mu),mu=1,nreac(2))
-            Write(lun_diag,"(a7,3a5,i6,4es23.15)") &
-              & ('dH3/dT9',(nname(n3i(j,mu)),j=1,3),mu,dh3dt9(mu,izb),dh3wdt9(mu),dh3idt9(mu),dh3sdt9(mu),mu=1,nreac(3))
-            Write(lun_diag,"(a7,4a5,i6,4es23.15)") &
-              & ('dH4/dT9',(nname(n4i(j,mu)),j=1,4),mu,dh4dt9(mu,izb),dh4wdt9(mu),dh4idt9(mu),dh4sdt9(mu),mu=1,nreac(4))
+            ! Select Screening factor for 2 reactant reactions
+            Call screen_blend(lambda,hw,hi,hs,dhwdt9,dhidt9,dhsdt9,h,dhdt9)
+            h2(mu,izb) = h
+            dh2dt9(mu,izb) = dhdt9
+          Else
+            h2(mu,izb) = 0.0
+            dh2dt9(mu,izb) = 0.0
           EndIf
-        EndIf
+        EndDo
+
+        ! 3-reactant screening
+        Do mu = 1, nreac(3)
+          If ( zeta3w(mu) > 0.0 ) Then
+
+            lambda = hw0 * zeta3w(mu)
+            hw = lambda
+            hi = hi0 * zeta3i(mu)
+            hs = fhs(iz31(mu)) + fhs(iz33(mu)) - fhs(iz3c(mu))
+
+            dhwdt9 = hw * dlnhw0dt9
+            dhidt9 = hi * dlnhi0dt9
+            dhsdt9 = dfhsdt9(iz31(mu)) + dfhsdt9(iz32(mu)) + dfhsdt9(iz33(mu)) - dfhsdt9(iz3c(mu))
+
+            ! Select Screening factor for 3 reactant reactions
+            Call screen_blend(lambda,hw,hi,hs,dhwdt9,dhidt9,dhsdt9,h,dhdt9)
+            h3(mu,izb) = h
+            dh3dt9(mu,izb) = dhdt9
+          Else
+            h3(mu,izb) = 0.0
+            dh3dt9(mu,izb) = 0.0
+          EndIf
+        EndDo
+
+        ! 4-reactant screening
+        Do mu = 1, nreac(4)
+          If ( zeta4w(mu) > 0.0 ) Then
+
+            lambda = hw0 * zeta4w(mu)
+            hw = lambda
+            hi = hi0 * zeta4i(mu)
+            hs = fhs(iz41(mu)) + fhs(iz42(mu)) + fhs(iz43(mu)) + fhs(iz44(mu)) - fhs(iz4c(mu))
+
+            dhwdt9 = hw * dlnhw0dt9
+            dhidt9 = hi * dlnhi0dt9
+            dhsdt9 = dfhsdt9(iz41(mu)) + dfhsdt9(iz42(mu)) + dfhsdt9(iz43(mu)) + dfhsdt9(iz44(mu)) - dfhsdt9(iz4c(mu))
+
+            ! Select Screening factor for 4 reactant reactions
+            Call screen_blend(lambda,hw,hi,hs,dhwdt9,dhidt9,dhsdt9,h,dhdt9)
+            h4(mu,izb) = h
+            dh4dt9(mu,izb) = dhdt9
+          Else
+            h4(mu,izb) = 0.0
+            dh4dt9(mu,izb) = 0.0
+          EndIf
+        EndDo
       EndIf
     EndDo
+
+    If ( idiag >= 5 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a,i5)") 'SCREEN',izone
+          hw0 = ztilde(izb) * lambda0(izb)
+          hi0 = kbi * zinter(izb) * lambda0(izb)**bi
+          dlnhw0dt9 = dztildedt9(izb)/ztilde(izb) - 1.5/t9t(izb)
+          dlnhi0dt9 = - thbim2*dztildedt9(izb)/ztilde(izb) - 1.5*bi/t9t(izb)
+          fhs(0) = 0.0
+          dfhsdt9(0) = 0.0
+          Do j = 1, izmax+2
+            gammaz = gammae(izb) * zseq53(j)
+            gammaz5 = gammaz**cds(5)
+            lgammaz = log(gammaz)
+            fhs(j) = cds(1)*gammaz + cds(2)/cds(5)*gammaz5 + cds(3)*lgammaz + cds(4)
+            dfhsdt9(j) = -(cds(1)*gammaz + cds(2)*gammaz5 + cds(3))/t9t(izb)
+          EndDo
+          Do mu = 1, nreac(2)
+            lambda = hw0 * zeta2w(mu)
+            hw = lambda
+            hi = hi0 * zeta2i(mu)
+            hs = fhs(iz21(mu)) + fhs(iz22(mu)) - fhs(iz2c(mu))
+            Write(lun_diag,"(3a5,i6,5es23.15)") &
+              & 'H2',(nname(n2i(j,mu)),j=1,2),mu,lambda,h2(mu,izb),hw,hi,hs
+          EndDo
+          Do mu = 1, nreac(3)
+            lambda = hw0 * zeta3w(mu)
+            hw = lambda
+            hi = hi0 * zeta3i(mu)
+            hs = fhs(iz31(mu)) + fhs(iz32(mu)) + fhs(iz33(mu)) - fhs(iz3c(mu))
+            Write(lun_diag,"(4a5,i6,5es23.15)") &
+              & 'H3',(nname(n3i(j,mu)),j=1,3),mu,lambda,h3(mu,izb),hw,hi,hs
+          EndDo
+          Do mu = 1, nreac(4)
+            lambda = hw0 * zeta4w(mu)
+            hw = lambda
+            hi = hi0 * zeta4i(mu)
+            hs = fhs(iz41(mu)) + fhs(iz42(mu)) + fhs(iz43(mu)) + fhs(iz44(mu)) - fhs(iz4c(mu))
+            Write(lun_diag,"(5a5,i6,5es23.15)") &
+              & 'H4',(nname(n4i(j,mu)),j=1,4),mu,lambda,h4(mu,izb),hw,hi,hs
+          EndDo
+          If ( iheat > 0 ) Then
+            Do mu = 1, nreac(2)
+              lambda = hw0 * zeta2w(mu)
+              hw = lambda
+              hi = hi0 * zeta2i(mu)
+              hs = fhs(iz21(mu)) + fhs(iz22(mu)) - fhs(iz2c(mu))
+              dhwdt9 = hw * dlnhw0dt9
+              dhidt9 = hi * dlnhi0dt9
+              dhsdt9 = dfhsdt9(iz21(mu)) + dfhsdt9(iz22(mu)) - dfhsdt9(iz2c(mu))
+              Write(lun_diag,"(a7,2a5,i6,4es23.15)") &
+                & 'dH2/dT9',(nname(n2i(j,mu)),j=1,2),mu,dh2dt9(mu,izb),dhwdt9,dhidt9,dhsdt9
+            EndDo
+            Do mu = 1, nreac(3)
+              lambda = hw0 * zeta3w(mu)
+              hw = lambda
+              hi = hi0 * zeta3i(mu)
+              hs = fhs(iz31(mu)) + fhs(iz32(mu)) + fhs(iz33(mu)) - fhs(iz3c(mu))
+              dhwdt9 = hw * dlnhw0dt9
+              dhidt9 = hi * dlnhi0dt9
+              dhsdt9 = dfhsdt9(iz31(mu)) + dfhsdt9(iz32(mu)) + dfhsdt9(iz33(mu)) - dfhsdt9(iz3c(mu))
+              Write(lun_diag,"(a7,3a5,i6,4es23.15)") &
+                & 'dH3/dT9',(nname(n3i(j,mu)),j=1,3),mu,dh3dt9(mu,izb),dhwdt9,dhidt9,dhsdt9
+            EndDo
+            Do mu = 1, nreac(4)
+              lambda = hw0 * zeta4w(mu)
+              hw = lambda
+              hi = hi0 * zeta4i(mu)
+              hs = fhs(iz41(mu)) + fhs(iz42(mu)) + fhs(iz43(mu)) + fhs(iz44(mu)) - fhs(iz4c(mu))
+              dhwdt9 = hw * dlnhw0dt9
+              dhidt9 = hi * dlnhi0dt9
+              dhsdt9 = dfhsdt9(iz41(mu)) + dfhsdt9(iz42(mu)) + dfhsdt9(iz43(mu)) + dfhsdt9(iz44(mu)) - dfhsdt9(iz4c(mu))
+              Write(lun_diag,"(a7,4a5,i6,4es23.15)") &
+                & 'dH4/dT9',(nname(n4i(j,mu)),j=1,4),mu,dh4dt9(mu,izb),dhwdt9,dhidt9,dhsdt9
+            EndDo
+          EndIf
+        EndIf
+      EndDo
+    EndIf
 
     stop_timer = xnet_wtime()
     timer_scrn = timer_scrn + stop_timer
 
     Return
   End Subroutine screening
+
+  Subroutine screen_blend(lambda,hw,hi,hs,dhwdt9,dhidt9,dhsdt9,h,dhdt9)
+    !-----------------------------------------------------------------------------------------------
+    ! This function linearly blends screening prescriptions
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: lambda, hw, hi, hs, dhwdt9, dhidt9, dhsdt9
+
+    ! Output variables
+    Real(dp), Intent(out) :: h, dhdt9
+
+    ! Local variables
+    Real(dp) :: theta
+
+    If ( lambda <= lam_1 ) Then
+      h = hw
+      dhdt9 = dhwdt9
+    ElseIf ( lambda <= lam_2 ) Then
+      theta = (lambda - lam_2) * rdlam12
+      h = theta*hw + (1.0 - theta)*hi
+      dhdt9 = theta*dhwdt9 + (1.0 - theta)*dhidt9
+    ElseIf ( lambda <= lam_3 ) Then
+      h = hi
+      dhdt9 = dhidt9
+    ElseIf ( lambda > lam_6 ) Then
+      h = hs
+      dhdt9 = dhsdt9
+    ElseIf ( hi >= hs ) Then
+      If ( lambda <= lam_4 ) Then
+        theta = (lambda - lam_4) * rdlam34
+        h = theta*hi + (1.0 - theta)*hs
+        dhdt9 = theta*dhidt9 + (1.0 - theta)*dhsdt9
+      Else
+        h = hs
+        dhdt9 = dhsdt9
+      EndIf
+    Else
+      If ( lambda <= lam_5 ) Then
+        h = hi
+        dhdt9 = dhidt9
+      Else
+        theta = (lambda - lam_5) * rdlam56
+        h = theta*hs + (1.0 - theta)*hi
+        dhdt9 = theta*dhsdt9 + (1.0 - theta)*dhidt9
+      EndIf
+    EndIf
+
+    Return
+  End Subroutine screen_blend
 
 End Module xnet_screening
