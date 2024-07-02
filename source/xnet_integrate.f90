@@ -399,16 +399,21 @@ Contains
           ! Sum the 4 components of Ydot
           ydot(i0,izb) = s1 + s2 + s3 + s4
         EndDo
+      EndIf
+    EndDo
 
-        If ( iheat > 0 ) Then
+    If ( iheat > 0 ) Then
+
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
           sdot = 0.0
           Do i0 = 1, ny
             sdot = sdot - mex(i0)*ydot(i0,izb) / cv(izb)
           EndDo
           t9dot(izb) = sdot
         EndIf
-      EndIf
-    EndDo
+      EndDo
+    EndIf
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
