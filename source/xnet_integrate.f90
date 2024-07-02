@@ -37,7 +37,7 @@ Contains
 
     ! Local variables
     Real(dp), Parameter :: changeth = 0.1
-    Real(dp) :: changest
+    Real(dp) :: changest, yfloor
     Real(dp) :: rtau_y(ny), changey, tdel_dy(zb_lo:zb_hi)
     Real(dp) :: rtau_t9, changet9, tdel_dt9(zb_lo:zb_hi)
     Real(dp) :: tdel_stop(zb_lo:zb_hi), tdel_init
@@ -100,12 +100,13 @@ Contains
           ! Calculate timescales for abundance changes, Y/(dY/dt)
           Do k = 1, ny
             If ( y(k,izb) > ymin ) Then
+              yfloor = max(y(k,izb),yacc)
               If ( mask_init(izb) ) Then
                 ! Calculate timescale directly from derivatives.
-                rtau_y(k) = abs(ydot(k,izb)/max(y(k,izb),yacc))
+                rtau_y(k) = abs(ydot(k,izb)/yfloor)
               Else
                 ! Calculate timescale from changes in last timestep.
-                rtau_y(k) = abs((y(k,izb)-yo(k,izb))/max(y(k,izb),yacc) / tdel_old(izb))
+                rtau_y(k) = abs((y(k,izb)-yo(k,izb))/yfloor) / tdel_old(izb)
               EndIf
             Else
               rtau_y(k) = 0.0
