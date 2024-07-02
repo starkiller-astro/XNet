@@ -21,8 +21,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: y, yo, yt, ydot
-    Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, rhot, &
-      & t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
+    Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
+      & rhot, t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
       & ymin, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
