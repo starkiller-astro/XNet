@@ -526,6 +526,7 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+    nzmask = count(mask)
 
     nr1 = nreac(1)
     nr2 = nreac(2)
@@ -534,9 +535,6 @@ Contains
 
     ! Update thermodynamic state
     Call update_eos(mask_in = mask)
-
-    ! Check for any changes to iweak
-    Call update_iweak(t9t(zb_lo:zb_hi),mask_in = mask)
 
     ! Calculate the screening terms
     If ( iscrn >= 1 ) Then
@@ -548,6 +546,12 @@ Contains
 
     start_timer = xnet_wtime()
     timer_csect = timer_csect - start_timer
+
+    ! Check for any changes to iweak
+    Call update_iweak(t9t(zb_lo:zb_hi),mask_in = mask)
+
+    ! Calculate partition functions for each nucleus at t9t
+    Call partf(t9t(zb_lo:zb_hi),mask_in = mask)
 
     ! Calculate necessary thermodynamic moments
     ene = 0.0
@@ -566,8 +570,14 @@ Contains
       EndIf
     EndDo
 
+    ! If there are any FFN reactions, calculate their rates
+    If ( nffn > 0 ) Call ffn_rate(nffn,t9t(zb_lo:zb_hi),ene, &
+      & rffn(:,zb_lo:zb_hi),dlnrffndt9(:,zb_lo:zb_hi),mask_in = mask)
+
+    ! If there are any neutrino-nucleus reactions, calculate their rates
+    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask)
+
     ! Calculate the REACLIB exponent polynomials, adding screening terms
-    nzmask = count(mask)
     If ( nzmask >= dgemm_nzbatch ) Then
       If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
       If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
@@ -583,16 +593,6 @@ Contains
         EndIf
       EndDo
     EndIf
-
-    ! Calculate partition functions for each nucleus at t9t
-    Call partf(t9t(zb_lo:zb_hi),mask_in = mask)
-
-    ! If there are any FFN reactions, calculate their rates
-    If ( nffn > 0 ) Call ffn_rate(nffn,t9t(zb_lo:zb_hi),ene, &
-      & rffn(:,zb_lo:zb_hi),dlnrffndt9(:,zb_lo:zb_hi),mask_in = mask)
-
-    ! If there are any neutrino-nucleus reactions, calculate their rates
-    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask)
 
     ! Calculate cross sections
     Do izb = zb_lo, zb_hi
@@ -736,6 +736,9 @@ Contains
             EndIf
           EndIf
         EndDo
+
+        ! Increment counter
+        ktot(5,izb) = ktot(5,izb) + 1
       EndIf
     EndDo
 
@@ -876,12 +879,6 @@ Contains
         EndIf
       EndDo
     EndIf
-
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        ktot(5,izb) = ktot(5,izb) + 1
-      EndIf
-    EndDo
 
     stop_timer = xnet_wtime()
     timer_csect = timer_csect + stop_timer
