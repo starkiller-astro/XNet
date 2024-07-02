@@ -220,10 +220,12 @@ Contains
         Do izb = zb_lo, zb_hi
           If ( mask(izb) .and. nh(izb) > 1 ) Then
             izone = izb + szbatch - zb_lo
-            If ( dtherm(izb) >= changeth ) Write(lun_diag,"(a,i2,a,i5,3es24.16)") &
-              & 'Error in Thermo variations after ',i,' reductions',izone,tdel(izb),t9t(izb),rhot(izb)
+            If ( dtherm(izb) >= changeth ) Then
+              Write(lun_diag,"(a,i2,a,i5,3es24.16)") &
+                & 'Error in Thermo variations after ',i,' reductions',izone,tdel(izb),t9t(izb),rhot(izb)
+              Call xnet_terminate('Error in Thermo variations')
+            EndIf
             Write(lun_diag,"(a5,2i5,2es23.15)") 'T9del',kstep,izone,tdel(izb),dtherm(izb)
-            Call xnet_terminate('Error in Thermo variations')
           EndIf
         EndDo
       EndIf
