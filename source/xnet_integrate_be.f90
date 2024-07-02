@@ -224,9 +224,6 @@ Contains
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
-    ! Create mask for active zone integrations
-    iterate = ( inr == 0 )
-
     ! Calculate initial total mass fraction
     Do izb = zb_lo, zb_hi
       If ( inr(izb) == 0 ) Then
