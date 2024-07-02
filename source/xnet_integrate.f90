@@ -23,9 +23,10 @@ Contains
     Use xnet_abundances, Only: y, yo, yt, ydot
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, rhot, &
       & t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
-    Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iweak, lun_diag, yacc, &
-      & szbatch, zb_lo, zb_hi, lzactive, iscrn, ymin
+    Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
+      & ymin, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -35,11 +36,14 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, izb, izone
-    Real(dp) :: ydotoy(ny), t9dotot9
-    Real(dp) :: changest, changeth, dtherm(zb_lo:zb_hi)
-    Real(dp) :: tdel_stop, tdel_deriv, tdel_fine, tdel_t9, tdel_init
-    Logical :: mask_deriv(zb_lo:zb_hi), mask_profile(zb_lo:zb_hi)
+    Real(dp), Parameter :: changeth = 0.1
+    Real(dp) :: changest
+    Real(dp) :: rtau_y(ny), changey, tdel_dy(zb_lo:zb_hi)
+    Real(dp) :: rtau_t9, changet9, tdel_dt9(zb_lo:zb_hi)
+    Real(dp) :: tdel_stop(zb_lo:zb_hi), tdel_init
+    Real(dp) :: dtherm(zb_lo:zb_hi)
+    Integer :: i, j, k, izb, izone
+    Logical :: mask_init(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -50,113 +54,121 @@ Contains
     If ( .not. any(mask) ) Return
 
     ! Retain old values of timestep and thermo and calculate remaining time
-    changeth = 0.1
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel_old(izb) = tdel(izb)
+        mask_init(izb) = ( abs(tdel_old(izb)) < tiny(0.0) )
+      Else
+        mask_init(izb) = .false.
       EndIf
-      mask_deriv(izb) = ( mask(izb) .and. abs(tdel_old(izb)) < tiny(0.0) )
     EndDo
-    Call cross_sect(mask_in = mask_deriv)
-    Call yderiv(mask_in = mask_deriv)
+    Call cross_sect(mask_in = mask_init)
+    Call yderiv(mask_in = mask_init)
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        izone = izb + szbatch - zb_lo
+        tdel_stop(izb) = tstop(izb) - t(izb)
+        tdel_dy(izb) = 0.0
+        tdel_dt9(izb) = 0.0
+        If ( mask_init(izb) ) Then
+          intso(izb) = 0
+          If ( tdelstart(izb) < 0.0 ) Then
+            changest = 0.5
+          Else
+            changest = 0.01
+          EndIf
 
-        tdel_stop = tstop(izb) - t(izb)
-        tdel_fine = 0.0
-        tdel_t9 = 0.0
-        If ( tdelstart(izb) < 0.0 ) Then
-          changest = 0.5
+          ! For unevolved initial abundances, as often found in test problems, derivatives may
+          ! produce large jumps from zero abundance in the first timestep, though generally 
+          ! inconsequential; an additional factor, changest, is used to increase accuracy.
+          changey = changest*min(0.1,changemx)
+          changet9 = changest*min(0.01,changemxt)
+          tdel_init = min(changest*abs(tdelstart(izb)),tdel_stop(izb))
+          If ( nh(izb) > 2 ) Then
+            tdel_next(izb) = 1.0e-4*tdel_stop(izb)
+          Else
+            tdel_next(izb) = tdel_stop(izb)
+          EndIf
         Else
-          changest = 0.01
+          changey = changemx
+          changet9 = changemxt
+          tdel_init = 0.0
         EndIf
 
-        tdel_init = min(changest*abs(tdelstart(izb)),tdel_stop)
-
-        ! If this is not the initial timestep, calculate timestep from changes in last timestep.
-        If ( tdel_old(izb) > 0.0 ) Then
-          Where ( y(:,izb) > yacc )
-            ydotoy = abs((y(:,izb)-yo(:,izb))/y(:,izb))
-          ElseWhere ( y(:,izb) > ymin )
-            ydotoy = abs((y(:,izb)-yo(:,izb))/yacc)
-          ElseWhere
-            ydotoy = 0.0
-          EndWhere
-          ints(izb) = maxloc(ydotoy,dim=1)
-          If ( abs(ydotoy(ints(izb))) > 0.0 ) Then
-            tdel_deriv = tdel_old(izb) * changemx/ydotoy(ints(izb))
-          Else
-            tdel_deriv = tdel_next(izb)
-          EndIf
-          If ( iheat > 0 ) Then
-            t9dotot9 = abs((t9(izb)-t9o(izb))/t9(izb))
-            If ( t9dotot9 > 0.0 ) Then
-              tdel_t9 = tdel_old(izb) * changemxt/t9dotot9
+        ! Estimate timestep from relevant timescales
+        If ( tdel_old(izb) >= 0.0 ) Then
+          ! Calculate timescales for abundance changes, Y/(dY/dt)
+          Do k = 1, ny
+            If ( y(k,izb) > ymin ) Then
+              If ( mask_init(izb) ) Then
+                ! Calculate timescale directly from derivatives.
+                rtau_y(k) = abs(ydot(k,izb)/max(y(k,izb),yacc))
+              Else
+                ! Calculate timescale from changes in last timestep.
+                rtau_y(k) = abs((y(k,izb)-yo(k,izb))/max(y(k,izb),yacc) / tdel_old(izb))
+              EndIf
             Else
-              tdel_t9 = tdel_next(izb)
+              rtau_y(k) = 0.0
             EndIf
-          Else
-            tdel_t9 = tdel_next(izb)
-          EndIf
-          tdel(izb) = min( tdel_deriv, tdel_stop, tdel_next(izb), tdel_t9 )
-
-        ! If this is an initial timestep, yo does not exist, so calculate timestep directly from derivatives.
-        ElseIf ( abs(tdel_old(izb)) < tiny(0.0) ) Then
-          If ( nh(izb) > 2 ) tdel_stop = 1.0e-4*tdel_stop
-          intso(izb) = 0
-
-          Where ( y(:,izb) > yacc )
-            ydotoy = abs(ydot(:,izb)/y(:,izb))
-          ElseWhere ( y(:,izb) > ymin )
-            ydotoy = abs(ydot(:,izb)/yacc)
-          ElseWhere
-            ydotoy = 0.0
-          EndWhere
+          EndDo
 
           ! If derivatives are non-zero, use Y/(dY/dt).
-          ints(izb) = maxloc(ydotoy,dim=1)
-          If ( abs(ydotoy(ints(izb))) > 0.0 ) Then
-            tdel_deriv = changemx/ydotoy(ints(izb))
-
-            ! For unevolved initial abundances, as often found in test problems,
-            ! tdel_deriv may produce large jumps from zero abundance in the first
-            ! timestep. While generally inconsequential, tdel_fine limits these
-            ! to the accuracy abundance limit.
-            tdel_fine = changest*min(0.1d0,changemx)/ydotoy(ints(izb))
-
-            ! If derivatives are zero, take a small step.
+          ints(izb) = maxloc(rtau_y,dim=1)
+          If ( abs(rtau_y(ints(izb))) > 0.0 ) Then
+            tdel_dy(izb) = changey/rtau_y(ints(izb))
           Else
-            tdel_deriv = tdel_stop
-            tdel_fine = tdel_stop
+            tdel_dy(izb) = tdel_next(izb)
           EndIf
+
+          ! Calculate timescale for temperature changes, T/(dT/dt)
           If ( iheat > 0 ) Then
-            tdel_t9 = changest*min(0.01d0,changemxt) * abs(t9(izb)/t9dot(izb))
+            If ( mask_init(izb) ) Then
+              rtau_t9 = abs(t9dot(izb)/t9(izb))
+            Else
+              rtau_t9 = abs((t9(izb)-t9o(izb))/t9(izb)) / tdel_old(izb)
+            EndIf
           Else
-            tdel_t9 = tdel_stop
+            rtau_t9 = 0.0
           EndIf
-          tdel(izb) = min( tdel_stop, tdel_deriv, tdel_fine, tdel_t9 )
+          If ( rtau_t9 > 0.0 ) Then
+            tdel_dt9(izb) = changet9/rtau_t9
+          Else
+            tdel_dt9(izb) = tdel_next(izb)
+          EndIf
+
+          ! Estimate timestep
+          tdel(izb) = min( tdel_stop(izb), tdel_next(izb), tdel_dy(izb), tdel_dt9(izb) )
 
           ! Use the user-defined initial timestep if it is larger than the estimated timestep
           tdel(izb) = max( tdel_init, tdel(izb) )
 
-          ! Keep timestep constant
         Else
+          ! Keep timestep constant
           tdel(izb) = -tdel_old(izb)
         EndIf
 
-        If ( idiag >= 2 ) Write(lun_diag,"(a4,2i5,7es23.8,i5)") &
-          & 'tdel',kstep,izone,tdel(izb),tdel_deriv,tdel_old(izb),tdel_stop,tdel_next(izb),tdel_fine,tdel_t9,ints(izb)
-        !If ( idiag >= 2 ) Write(lun_diag,"(a5,i4,2es12.4)") (nname(k),k,y(k,izb),ydotoy(k),k=1,ny)
-
-        ! Retain the index of the species setting the timestep
-        If ( ints(izb) /= intso(izb) ) Then
-          If ( idiag >= 2 ) Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
-          intso(izb) = ints(izb)
-        EndIf
+        ! Update trial time
+        tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
       EndIf
     EndDo
+
+    If ( idiag >= 2 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a4,2i5,6es12.4,i5)") &
+            & 'tdel',kstep,izone,tdel(izb),tdel_old(izb),tdel_stop(izb),tdel_next(izb), &
+            & tdel_dy(izb),tdel_dt9(izb),ints(izb)
+          !Write(lun_diag,"(a5,i4,2es12.4)") (nname(k),k,y(k,izb),rtau_y(k),k=1,ny)
+
+          ! Retain the index of the species setting the timestep
+          If ( ints(izb) /= intso(izb) ) Then
+            Write(lun_diag,"(a4,a5,3es24.16)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
+            intso(izb) = ints(izb)
+          EndIf
+        EndIf
+      EndDo
+    EndIf
 
     ! For varying temperature and density, capture thermodynamic features
     If ( iheat == 0 ) Then
@@ -164,73 +176,58 @@ Contains
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
       Do izb = zb_lo, zb_hi
-        mask_profile(izb) = ( mask(izb) .and. nh(izb) > 1 )
-        If ( mask_profile(izb) ) Then
-          tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
-        EndIf
-      EndDo
-      Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi), &
-        & mask_in = mask_profile)
-      Do izb = zb_lo, zb_hi
-        If ( mask_profile(izb) .and. ntt(izb)-1 > nt(izb) ) Then
-          Do j = nt(izb), ntt(izb)-1
-            If ( t9h(j,izb) > t9(izb) .and. t9h(j,izb) > t9t(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
+        If ( mask(izb) .and. nh(izb) > 1 ) Then
+          Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
+            & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
+          If ( ntt(izb)-1 > nt(izb) ) Then
+            Do j = nt(izb), ntt(izb)-1
+              If ( t9h(j,izb) > t9(izb) .and. t9h(j,izb) > t9t(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              ElseIf ( t9h(j,izb) < t9(izb) .and. t9h(j,izb) < t9t(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              ElseIf ( rhoh(j,izb) > rho(izb) .and. rhoh(j,izb) > rhot(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              ElseIf ( rhoh(j,izb) < rho(izb) .and. rhoh(j,izb) < rhot(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              EndIf
+            EndDo
+            tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+          EndIf
+
+          ! Limit timestep if fractional density change is larger than changeth (10% by default)
+          ! or fraction temperature change is larger than 0.1*changeth (1% by default)
+          dtherm(izb) = 0.0
+          Do i = 1, 10
+            Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
+              & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
+            If ( t9(izb) > 0.0 ) Then
+              dtherm(izb) = 10.0*abs(t9t(izb)-t9(izb))/t9(izb) + abs(rhot(izb)-rho(izb))/rho(izb)
+            EndIf
+            If ( dtherm(izb) < changeth ) Then
               Exit
-            ElseIf ( t9h(j,izb) < t9(izb) .and. t9h(j,izb) < t9t(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
-              Exit
-            ElseIf ( rhoh(j,izb) > rho(izb) .and. rhoh(j,izb) > rhot(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
-              Exit
-            ElseIf ( rhoh(j,izb) < rho(izb) .and. rhoh(j,izb) < rhot(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
-              Exit
+            Else
+              tdel(izb) = 0.5*tdel(izb)
+              tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
             EndIf
           EndDo
         EndIf
       EndDo
-
-      ! Limit timestep if fractional density change is larger than changeth (10% by default)
-      ! or fraction temperature change is larger than 0.1*changeth (1% by default)
-      dtherm = 0.0
-      Do i = 1, 10
-        Do izb = zb_lo, zb_hi
-          If ( mask_profile(izb) ) Then
-            tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
-          EndIf
-        EndDo
-        Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi), &
-          & mask_in = mask_profile)
-        Do izb = zb_lo, zb_hi
-          If ( mask_profile(izb) .and. t9(izb) > 0.0 ) Then
-            dtherm(izb) = 10.0*abs(t9t(izb)-t9(izb))/t9(izb) + abs(rhot(izb)-rho(izb))/rho(izb)
-          EndIf
-        EndDo
-        If ( all( dtherm < changeth ) ) Exit
-        Do izb = zb_lo, zb_hi
-          If ( dtherm(izb) >= changeth ) Then
-            tdel(izb) = 0.5*tdel(izb)
-          EndIf
-        EndDo
-      EndDo
       If ( idiag >= 2 ) Then
         Do izb = zb_lo, zb_hi
-          If ( mask_profile(izb) ) Then
+          If ( mask(izb) .and. nh(izb) > 1 ) Then
             izone = izb + szbatch - zb_lo
-            If ( dtherm(izb) >= changeth ) Write(lun_diag,"(a,i2,a,i5,3es23.15)") &
+            If ( dtherm(izb) >= changeth ) Write(lun_diag,"(a,i2,a,i5,3es24.16)") &
               & 'Error in Thermo variations after ',i,' reductions',izone,tdel(izb),t9t(izb),rhot(izb)
             Write(lun_diag,"(a5,2i5,2es23.15)") 'T9del',kstep,izone,tdel(izb),dtherm(izb)
+            Call xnet_terminate('Error in Thermo variations')
           EndIf
         EndDo
       EndIf
     EndIf
-
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
-      EndIf
-    EndDo
 
     Return
   End Subroutine timestep
