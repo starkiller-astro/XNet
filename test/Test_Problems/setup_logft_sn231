@@ -1,0 +1,20 @@
+
+## Output Controls
+3         Diagnostic Output Level
+2         Per Timestep Output Level
+# ASCII output filename root, network will append zone number
+Test_Results/ev_logft_sn160_
+# Binary output filename root, network will append zone number
+Test_Results/ts_logft_sn160_
+# Species to output in ASCII output (format 14a5): 14
+    p  he4  c12  o16 ne20 mg24 si28 ca40 ti44 cr48 fe52 fe54 ni56 zn60
+## Input Controls
+# Nuclear Data Directory
+Data_SN231_logft
+# Initial Abundance and Thermodynamic Trajectory Files
+Data_SN231_logft/ab_co
+Test_Problems/th_co_burn_1
+Data_SN231_logft/ab_co
+Test_Problems/th_co_burn_2
+Data_SN231_logft/ab_co
+Test_Problems/th_co_burn_3
