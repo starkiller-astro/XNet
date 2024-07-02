@@ -518,6 +518,7 @@ Contains
     Real(dp) :: ascrn, rhot2, rhot3
     Real(dp) :: rpf1, rpf2, rpf3, rpf4
     Real(dp) :: dlnrpf1dt9, dlnrpf2dt9, dlnrpf3dt9, dlnrpf4dt9
+    Real(dp) :: p1, p2, p3, p4, s1, s2, s3, s4
     Real(dp) :: lambda1, lambda2, lambda3, lambda4
     Real(dp) :: dlam1dt9, dlam2dt9, dlam3dt9, dlam4dt9
     Integer :: j, k, izb, izone, nzmask
@@ -671,43 +672,29 @@ Contains
 
         ! Calculate the csect for reactions with 1 reactant
         Do k = 1, nr1
-          If ( irev1(k) == 1 ) Then
-            rpf1 =   ( gg(n1i(2,k),izb) * gg(n1i(3,k),izb) * gg(n1i(4,k),izb) * gg(n1i(5,k),izb) ) &
-              &    / ( gg(n1i(1,k),izb) )
+          If ( (iweak(izb) <  0 .and. iwk1(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk1(k) /= 0) ) Then
+            csect1(k,izb) = 0.0
           Else
             rpf1 = 1.0
-          EndIf
-          If ( iweak(izb) > 0 ) Then
-            If ( iwk1(k) == 0 .or. iwk1(k) == 4 ) Then
-              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
-            ElseIf ( iwk1(k) == 1 ) Then
-              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb)) * ene(izb)
+            If ( irev1(k) == 1 ) Then
+              p1 = gg(n1i(1,k),izb)
+              s1 = dlngdt9(n1i(1,k),izb)
+              Do j = 2, 5
+                rpf1 = rpf1 * gg(n1i(j,k),izb)
+              EndDo
+              rpf1 = rpf1 / p1
+            EndIf
+            If ( iwk1(k) == 1 ) Then
+              csect1(k,izb) = ene(izb) * rpf1 * safe_exp(h1(k,izb))
             ElseIf ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
               csect1(k,izb) = rffn(iffn(k),izb)
             ElseIf ( iwk1(k) == 7 ) Then ! Electron neutrino capture
               csect1(k,izb) = rpf1 * rnnu(innu(k),1,izb)
             ElseIf ( iwk1(k) == 8 ) Then ! Electron anti-neutrino capture
               csect1(k,izb) = rpf1 * rnnu(innu(k),2,izb)
-            EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk1(k) == 0 ) Then
-              csect1(k,izb) = 0.0
-            ElseIf ( iwk1(k) == 1 ) Then
-              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb)) * ene(izb)
-            ElseIf ( iwk1(k) == 4 ) Then
-              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
-            ElseIf ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
-              csect1(k,izb) = rffn(iffn(k),izb)
-            ElseIf ( iwk1(k) == 7 ) Then ! Electron neutrino capture
-              csect1(k,izb) = rpf1 * rnnu(innu(k),1,izb)
-            ElseIf ( iwk1(k) == 8 ) Then ! Electron anti-neutrino capture
-              csect1(k,izb) = rpf1 * rnnu(innu(k),2,izb)
-            EndIf
-          Else
-            If ( iwk1(k) == 0 ) Then
-              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
             Else
-              csect1(k,izb) = 0.0
+              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
             EndIf
           EndIf
         EndDo
