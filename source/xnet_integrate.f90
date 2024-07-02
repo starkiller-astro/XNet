@@ -499,8 +499,8 @@ Contains
     Use xnet_constants, Only: third, two3rd, four3rd, five3rd
     Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, &
       & zb_lo, zb_hi, lzactive
-    Use xnet_ffn, Only: ffn_rate
-    Use xnet_nnu, Only: nnu_rate, nnuspec
+    Use xnet_ffn, Only: ffn_rate, rffn, dlnrffndt9
+    Use xnet_nnu, Only: nnu_rate, nnuspec, rnnu
     Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9, screening
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_csect
     Use xnet_types, Only: dp
@@ -513,9 +513,6 @@ Contains
     Integer, Parameter :: dgemm_nzbatch = 200 ! Min number of zones to use dgemm, otherwise use dgemv
     Real(dp) :: t09(7,zb_lo:zb_hi), dt09(7,zb_lo:zb_hi)
     Real(dp) :: ene(zb_lo:zb_hi), ytot, abar, zbar, z2bar, zibar
-    Real(dp) :: rffn(max(nffn,1),zb_lo:zb_hi)          ! FFN reaction rates
-    Real(dp) :: dlnrffndt9(max(nffn,1),zb_lo:zb_hi)    ! log FFN reaction rates derivatives
-    Real(dp) :: rnnu(max(nnnu,1),nnuspec,zb_lo:zb_hi)  ! Neutrino reaction rates
     Real(dp) :: ascrn, rhot2, rhot3
     Real(dp) :: rpf1, rpf2, rpf3, rpf4
     Real(dp) :: dlnrpf1dt9, dlnrpf2dt9, dlnrpf3dt9, dlnrpf4dt9
