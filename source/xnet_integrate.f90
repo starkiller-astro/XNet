@@ -675,15 +675,19 @@ Contains
           If ( (iweak(izb) <  0 .and. iwk1(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk1(k) /= 0) ) Then
             csect1(k,izb) = 0.0
+            dcsect1dt9(k,izb) = 0.0
           Else
             rpf1 = 1.0
+            dlnrpf1dt9 = 0.0
             If ( irev1(k) == 1 ) Then
               p1 = gg(n1i(1,k),izb)
               s1 = dlngdt9(n1i(1,k),izb)
               Do j = 2, 5
                 rpf1 = rpf1 * gg(n1i(j,k),izb)
+                dlnrpf1dt9 = dlnrpf1dt9 + dlngdt9(n1i(j,k),izb)
               EndDo
               rpf1 = rpf1 / p1
+              dlnrpf1dt9 = dlnrpf1dt9 - s1
             EndIf
             If ( iwk1(k) == 1 ) Then
               csect1(k,izb) = ene(izb) * rpf1 * safe_exp(h1(k,izb))
@@ -696,6 +700,15 @@ Contains
             Else
               csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
             EndIf
+            If ( iheat > 0 ) Then
+              If ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
+                dcsect1dt9(k,izb) = csect1(k,izb)*dlnrffndt9(iffn(k),izb)
+              ElseIf ( iwk1(k) == 7 .or. iwk1(k) == 8 ) Then ! NNU reaction
+                dcsect1dt9(k,izb) = csect1(k,izb)*dlnrpf1dt9
+              Else
+                dcsect1dt9(k,izb) = csect1(k,izb)*(dh1dt9(k,izb)+dlnrpf1dt9)
+              EndIf
+            EndIf
           EndIf
         EndDo
 
@@ -704,23 +717,30 @@ Contains
           If ( (iweak(izb) <  0 .and. iwk2(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk2(k) /= 0) ) Then
             csect2(k,izb) = 0.0
+            dcsect2dt9(k,izb) = 0.0
           Else
             rpf2 = 1.0
+            dlnrpf2dt9 = 0.0
             If ( irev2(k) == 1 ) Then
               p2 = 1.0
+              s2 = 0.0
               Do j = 1, 2
                 p2 = p2 * gg(n2i(j,k),izb)
+                s2 = s2 + dlngdt9(n2i(j,k),izb)
               EndDo
               Do j = 3, 6
                 rpf2 = rpf2 * gg(n2i(j,k),izb)
+                dlnrpf2dt9 = dlnrpf2dt9 + dlngdt9(n2i(j,k),izb)
               EndDo
               rpf2 = rpf2 / p2
+              dlnrpf2dt9 = dlnrpf2dt9 - s2
             EndIf
             If ( iwk2(k) == 1 ) Then
               csect2(k,izb) = rhot(izb) * ene(izb) * rpf2 * safe_exp(h2(k,izb))
             Else
               csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
             EndIf
+            If ( iheat > 0 ) dcsect2dt9(k,izb) = csect2(k,izb)*(dh2dt9(k,izb)+dlnrpf2dt9)
           EndIf
         EndDo
 
@@ -729,17 +749,23 @@ Contains
           If ( (iweak(izb) <  0 .and. iwk3(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk3(k) /= 0) ) Then
             csect3(k,izb) = 0.0
+            dcsect3dt9(k,izb) = 0.0
           Else
             rpf3 = 1.0
+            dlnrpf3dt9 = 0.0
             If ( irev3(k) == 1 ) Then
               p3 = 1.0
+              s3 = 0.0
               Do j = 1, 3
                 p3 = p3 * gg(n3i(j,k),izb)
+                s3 = s3 + dlngdt9(n3i(j,k),izb)
               EndDo
               Do j = 4, 6
                 rpf3 = rpf3 * gg(n3i(j,k),izb)
+                dlnrpf3dt9 = dlnrpf3dt9 + dlngdt9(n3i(j,k),izb)
               EndDo
               rpf3 = rpf3 / p3
+              dlnrpf3dt9 = dlnrpf3dt9 - s3
             EndIf
             rhot2 = rhot(izb)**2
             If ( iwk3(k) == 1 ) Then
@@ -748,6 +774,7 @@ Contains
               csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
             EndIf
             If ( csect3(k,izb) < 1.0e-20 ) csect3(k,izb) = 0.0
+            If ( iheat > 0 ) dcsect3dt9(k,izb) = csect3(k,izb)*(dh3dt9(k,izb)+dlnrpf3dt9)
           EndIf
         EndDo
 
@@ -756,17 +783,23 @@ Contains
           If ( (iweak(izb) <  0 .and. iwk4(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk4(k) /= 0) ) Then
             csect4(k,izb) = 0.0
+            dcsect4dt9(k,izb) = 0.0
           Else
             rpf4 = 1.0
+            dlnrpf4dt9 = 0.0
             If ( irev4(k) == 1 ) Then
               p4 = 1.0
+              s4 = 0.0
               Do j = 1, 4
                 p4 = p4 * gg(n4i(j,k),izb)
+                s4 = s4 + dlngdt9(n4i(j,k),izb)
               EndDo
               Do j = 5, 6
                 rpf4 = rpf4 * gg(n4i(j,k),izb)
+                dlnrpf4dt9 = dlnrpf4dt9 + dlngdt9(n4i(j,k),izb)
               EndDo
               rpf4 = rpf4 / p4
+              dlnrpf4dt9 = dlnrpf4dt9 - s4
             EndIf
             rhot3 = rhot(izb)**3
             If ( iwk4(k) == 1 ) Then
@@ -774,6 +807,7 @@ Contains
             Else
               csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
             EndIf
+            If ( iheat > 0 ) dcsect4dt9(k,izb) = csect4(k,izb)*(dh4dt9(k,izb)+dlnrpf4dt9)
           EndIf
         EndDo
 
@@ -781,71 +815,6 @@ Contains
         ktot(5,izb) = ktot(5,izb) + 1
       EndIf
     EndDo
-
-    If ( iheat > 0 ) Then
-
-
-      ! Calculate cross-section derivatives
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-
-          ! 1-reactant reactions
-          Do k = 1, nr1
-            If ( irev1(k) == 1 ) Then
-              dlnrpf1dt9 =   (   dlngdt9(n1i(2,k),izb) + dlngdt9(n1i(3,k),izb) &
-                &              + dlngdt9(n1i(4,k),izb) + dlngdt9(n1i(5,k),izb) ) &
-                &          - (   dlngdt9(n1i(1,k),izb) )
-            Else
-              dlnrpf1dt9 = 0.0
-            EndIf
-            If ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then  ! FFN reaction
-              dcsect1dt9(k,izb) = rffn(iffn(k),izb)*dlnrffndt9(iffn(k),izb)
-            ElseIf ( iwk1(k) == 7 ) Then  ! Electron neutrino capture
-              dcsect1dt9(k,izb) = rnnu(innu(k),1,izb)*dlnrpf1dt9
-            ElseIf ( iwk1(k) == 8 ) Then  ! Electron anti-neutrino capture
-              dcsect1dt9(k,izb) = rnnu(innu(k),2,izb)*dlnrpf1dt9
-            Else
-              dcsect1dt9(k,izb) = csect1(k,izb)*(dh1dt9(k,izb)+dlnrpf1dt9)
-            EndIf
-          EndDo
-
-          ! 2-reactant reactions
-          Do k = 1, nr2
-            If ( irev2(k) == 1 ) Then
-              dlnrpf2dt9 =   (   dlngdt9(n2i(3,k),izb) + dlngdt9(n2i(4,k),izb) &
-                               + dlngdt9(n2i(5,k),izb) + dlngdt9(n2i(6,k),izb) ) &
-                &          - (   dlngdt9(n2i(1,k),izb) + dlngdt9(n2i(2,k),izb) )
-            Else
-              dlnrpf2dt9 = 0.0
-            EndIf
-            dcsect2dt9(k,izb) = csect2(k,izb)*(dh2dt9(k,izb)+dlnrpf2dt9)
-          EndDo
-
-          ! 3-reactant reactions
-          Do k = 1, nr3
-            If ( irev3(k) == 1 ) Then
-              dlnrpf3dt9 =   ( dlngdt9(n3i(4,k),izb) + dlngdt9(n3i(5,k),izb) + dlngdt9(n3i(6,k),izb) ) &
-                &          - ( dlngdt9(n3i(1,k),izb) + dlngdt9(n3i(2,k),izb) + dlngdt9(n3i(3,k),izb) )
-            Else
-              dlnrpf3dt9 = 0.0
-            EndIf
-            dcsect3dt9(k,izb) = csect3(k,izb)*(dh3dt9(k,izb)+dlnrpf3dt9)
-          EndDo
-
-          ! 4-reactant reactions
-          Do k = 1, nr4
-            If ( irev4(k) == 1 ) Then
-              dlnrpf4dt9 =   (   dlngdt9(n4i(5,k),izb) + dlngdt9(n4i(6,k),izb) ) &
-                &          - (   dlngdt9(n4i(1,k),izb) + dlngdt9(n4i(2,k),izb) &
-                &              + dlngdt9(n4i(3,k),izb) + dlngdt9(n4i(4,k),izb) )
-            Else
-              dlnrpf4dt9 = 0.0
-            EndIf
-            dcsect4dt9(k,izb) = csect4(k,izb)*(dh4dt9(k,izb)+dlnrpf4dt9)
-          EndDo
-        EndIf
-      EndDo
-    EndIf
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
