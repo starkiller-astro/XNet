@@ -504,6 +504,7 @@ Contains
     Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9, screening
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_csect
     Use xnet_types, Only: dp
+    Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Optional variables
@@ -678,9 +679,9 @@ Contains
           EndIf
           If ( iweak(izb) > 0 ) Then
             If ( iwk1(k) == 0 .or. iwk1(k) == 4 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb))
+              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
             ElseIf ( iwk1(k) == 1 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb)) * ene(izb)
+              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb)) * ene(izb)
             ElseIf ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
               csect1(k,izb) = rffn(iffn(k),izb)
             ElseIf ( iwk1(k) == 7 ) Then ! Electron neutrino capture
@@ -692,9 +693,9 @@ Contains
             If ( iwk1(k) == 0 ) Then
               csect1(k,izb) = 0.0
             ElseIf ( iwk1(k) == 1 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb)) * ene(izb)
+              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb)) * ene(izb)
             ElseIf ( iwk1(k) == 4 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb))
+              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
             ElseIf ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
               csect1(k,izb) = rffn(iffn(k),izb)
             ElseIf ( iwk1(k) == 7 ) Then ! Electron neutrino capture
@@ -704,7 +705,7 @@ Contains
             EndIf
           Else
             If ( iwk1(k) == 0 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb))
+              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
             Else
               csect1(k,izb) = 0.0
             EndIf
@@ -721,21 +722,21 @@ Contains
           EndIf
           If ( iweak(izb) > 0 ) Then
             If ( iwk2(k) == 1 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb)) * ene(izb)
+              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb)) * ene(izb)
             Else
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb))
+              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
             EndIf
           ElseIf ( iweak(izb) < 0 ) Then
             If ( iwk2(k) == 0 ) Then
               csect2(k,izb) = 0.0
             ElseIf ( iwk2(k) == 1 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb)) * ene(izb)
+              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb)) * ene(izb)
             Else
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb))
+              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
             EndIf
           Else
             If ( iwk2(k) == 0 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb))
+              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
             Else
               csect2(k,izb) = 0.0
             EndIf
@@ -753,21 +754,21 @@ Contains
           rhot2 = rhot(izb)**2
           If ( iweak(izb) > 0 ) Then
             If ( iwk3(k) == 1 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb)) * ene(izb)
+              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb)) * ene(izb)
             Else
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb))
+              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
             EndIf
           ElseIf ( iweak(izb) < 0 ) Then
             If ( iwk3(k) == 0 ) Then
               csect3(k,izb) = 0.0
             ElseIf ( iwk3(k) == 1 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb)) * ene(izb)
+              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb)) * ene(izb)
             Else
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb))
+              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
             EndIf
           Else
             If ( iwk3(k) == 0 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb))
+              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
             Else
               csect3(k,izb) = 0.0
             EndIf
@@ -786,21 +787,21 @@ Contains
           rhot3 = rhot(izb)**3
           If ( iweak(izb) > 0 ) Then
             If ( iwk4(k) == 1 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb)) * ene(izb)
+              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb)) * ene(izb)
             Else
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb))
+              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
             EndIf
           ElseIf ( iweak(izb) < 0 ) Then
             If ( iwk4(k) == 0 ) Then
               csect4(k,izb) = 0.0
             ElseIf ( iwk4(k) == 1 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb)) * ene(izb)
+              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb)) * ene(izb)
             Else
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb))
+              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
             EndIf
           Else
             If ( iwk4(k) == 0 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb))
+              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
             Else
               csect4(k,izb) = 0.0
             EndIf
