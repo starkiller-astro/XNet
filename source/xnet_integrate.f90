@@ -701,96 +701,78 @@ Contains
 
         ! Calculate the csect for reactions with 2 reactants
         Do k = 1, nr2
-          If ( irev2(k) == 1 ) Then
-            rpf2 =   ( gg(n2i(3,k),izb) * gg(n2i(4,k),izb) * gg(n2i(5,k),izb) * gg(n2i(6,k),izb) ) &
-              &    / ( gg(n2i(1,k),izb) * gg(n2i(2,k),izb) )
+          If ( (iweak(izb) <  0 .and. iwk2(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk2(k) /= 0) ) Then
+            csect2(k,izb) = 0.0
           Else
             rpf2 = 1.0
-          EndIf
-          If ( iweak(izb) > 0 ) Then
+            If ( irev2(k) == 1 ) Then
+              p2 = 1.0
+              Do j = 1, 2
+                p2 = p2 * gg(n2i(j,k),izb)
+              EndDo
+              Do j = 3, 6
+                rpf2 = rpf2 * gg(n2i(j,k),izb)
+              EndDo
+              rpf2 = rpf2 / p2
+            EndIf
             If ( iwk2(k) == 1 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb)) * ene(izb)
+              csect2(k,izb) = rhot(izb) * ene(izb) * rpf2 * safe_exp(h2(k,izb))
             Else
               csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
-            EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk2(k) == 0 ) Then
-              csect2(k,izb) = 0.0
-            ElseIf ( iwk2(k) == 1 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb)) * ene(izb)
-            Else
-              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
-            EndIf
-          Else
-            If ( iwk2(k) == 0 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
-            Else
-              csect2(k,izb) = 0.0
             EndIf
           EndIf
         EndDo
 
         ! Calculate the csect for reactions with 3 reactants
         Do k = 1, nr3
-          If ( irev3(k) == 1 ) Then
-            rpf3 =   ( gg(n3i(4,k),izb) * gg(n3i(5,k),izb) * gg(n3i(6,k),izb) ) &
-              &    / ( gg(n3i(1,k),izb) * gg(n3i(2,k),izb) * gg(n3i(3,k),izb) )
+          If ( (iweak(izb) <  0 .and. iwk3(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk3(k) /= 0) ) Then
+            csect3(k,izb) = 0.0
           Else
             rpf3 = 1.0
-          EndIf
-          rhot2 = rhot(izb)**2
-          If ( iweak(izb) > 0 ) Then
+            If ( irev3(k) == 1 ) Then
+              p3 = 1.0
+              Do j = 1, 3
+                p3 = p3 * gg(n3i(j,k),izb)
+              EndDo
+              Do j = 4, 6
+                rpf3 = rpf3 * gg(n3i(j,k),izb)
+              EndDo
+              rpf3 = rpf3 / p3
+            EndIf
+            rhot2 = rhot(izb)**2
             If ( iwk3(k) == 1 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb)) * ene(izb)
+              csect3(k,izb) = rhot2 * ene(izb) * rpf3 * safe_exp(h3(k,izb))
             Else
               csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
             EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk3(k) == 0 ) Then
-              csect3(k,izb) = 0.0
-            ElseIf ( iwk3(k) == 1 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb)) * ene(izb)
-            Else
-              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
-            EndIf
-          Else
-            If ( iwk3(k) == 0 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
-            Else
-              csect3(k,izb) = 0.0
-            EndIf
+            If ( csect3(k,izb) < 1.0e-20 ) csect3(k,izb) = 0.0
           EndIf
-          If ( csect3(k,izb) < 1.0e-20 ) csect3(k,izb) = 0.0
         EndDo
 
         ! Calculate the csect for reactions with 4 reactants
         Do k = 1, nr4
-          If ( irev4(k) == 1 ) Then
-            rpf4 =   ( gg(n4i(5,k),izb) * gg(n4i(6,k),izb) ) &
-              &    / ( gg(n4i(1,k),izb) * gg(n4i(2,k),izb) * gg(n4i(3,k),izb) * gg(n4i(4,k),izb ) )
+          If ( (iweak(izb) <  0 .and. iwk4(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk4(k) /= 0) ) Then
+            csect4(k,izb) = 0.0
           Else
             rpf4 = 1.0
-          EndIf
-          rhot3 = rhot(izb)**3
-          If ( iweak(izb) > 0 ) Then
+            If ( irev4(k) == 1 ) Then
+              p4 = 1.0
+              Do j = 1, 4
+                p4 = p4 * gg(n4i(j,k),izb)
+              EndDo
+              Do j = 5, 6
+                rpf4 = rpf4 * gg(n4i(j,k),izb)
+              EndDo
+              rpf4 = rpf4 / p4
+            EndIf
+            rhot3 = rhot(izb)**3
             If ( iwk4(k) == 1 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb)) * ene(izb)
+              csect4(k,izb) = rhot3 * ene(izb) * rpf4 * safe_exp(h4(k,izb))
             Else
               csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
-            EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk4(k) == 0 ) Then
-              csect4(k,izb) = 0.0
-            ElseIf ( iwk4(k) == 1 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb)) * ene(izb)
-            Else
-              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
-            EndIf
-          Else
-            If ( iwk4(k) == 0 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
-            Else
-              csect4(k,izb) = 0.0
             EndIf
           EndIf
         EndDo
