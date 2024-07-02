@@ -163,7 +163,7 @@ Contains
 
           ! Retain the index of the species setting the timestep
           If ( ints(izb) /= intso(izb) ) Then
-            Write(lun_diag,"(a4,a5,3es24.16)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
+            Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
             intso(izb) = ints(izb)
           EndIf
         EndIf
