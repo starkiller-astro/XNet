@@ -336,7 +336,7 @@ Contains
 
     ! Local variables
     Integer :: i, j, i0, i1, la1, le1, la2, le2, la3, le3, la4, le4, izb, izone
-    Real(dp) :: s1, s2, s3, s4, s11, s22, s33, s44
+    Real(dp) :: s1, s2, s3, s4, s11, s22, s33, s44, sdot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -349,16 +349,11 @@ Contains
     start_timer = xnet_wtime()
     timer_deriv = timer_deriv - start_timer
 
+    ! From the cross sections and the counting array, calculate the reaction rates
+    ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
-        ! From the cross sections and the counting array, calculate the reaction rates
-        b1(:,izb) = a1*csect1(mu1,izb)
-        b2(:,izb) = a2*csect2(mu2,izb)
-        b3(:,izb) = a3*csect3(mu3,izb)
-        b4(:,izb) = a4*csect4(mu4,izb)
-
-        ! Calculate Ydot for each nucleus, summing over the reactions which affect it.
         Do i0 = 1, ny
           la1 = la(1,i0)
           la2 = la(2,i0)
@@ -372,6 +367,7 @@ Contains
           ! Sum over the reactions with 1 reactant
           s1 = 0.0
           Do i1 = la1, le1
+            b1(i1,izb) = a1(i1)*csect1(mu1(i1),izb)
             s11 = b1(i1,izb)*yt(n11(i1),izb)
             s1 = s1 + s11
           EndDo
@@ -379,6 +375,7 @@ Contains
           ! Sum over the reactions with 2 reactants
           s2 = 0.0
           Do i1 = la2, le2
+            b2(i1,izb) = a2(i1)*csect2(mu2(i1),izb)
             s22 = b2(i1,izb)*yt(n21(i1),izb)*yt(n22(i1),izb)
             s2 = s2 + s22
           EndDo
@@ -386,6 +383,7 @@ Contains
           ! Sum over the reactions with 3 reactants
           s3 = 0.0
           Do i1 = la3, le3
+            b3(i1,izb) = a3(i1)*csect3(mu3(i1),izb)
             s33 = b3(i1,izb)*yt(n31(i1),izb)*yt(n32(i1),izb)*yt(n33(i1),izb)
             s3 = s3 + s33
           EndDo
@@ -393,6 +391,7 @@ Contains
           ! Sum over the reactions with 4 reactants
           s4 = 0.0
           Do i1 = la4, le4
+            b4(i1,izb) = a4(i1)*csect4(mu4(i1),izb)
             s44 = b4(i1,izb)*yt(n41(i1),izb)*yt(n42(i1),izb)*yt(n43(i1),izb)*yt(n44(i1),izb)
             s4 = s4 + s44
           EndDo
@@ -402,21 +401,20 @@ Contains
         EndDo
 
         If ( iheat > 0 ) Then
-          ! Surprisingly, this seems to perform better than the DGEMV below
-          s1 = 0.0
+          sdot = 0.0
           Do i0 = 1, ny
-              s1 = s1 + mex(i0)*ydot(i0,izb)
+            sdot = sdot - mex(i0)*ydot(i0,izb) / cv(izb)
           EndDo
-          t9dot(izb) = -s1 / cv(izb)
+          t9dot(izb) = sdot
         EndIf
       EndIf
     EndDo
-    !If ( iheat > 0 ) Then
-    !  Call dgemv('T',ny,nzbatchmx,1.0,ydot(1,zb_lo),ny,mex,1,0.0,t9dot(zb_lo),1)
-    !  Where ( mask )
-    !    t9dot = -t9dot / cv
-    !  EndWhere
-    !EndIf
+
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        ktot(4,izb) = ktot(4,izb) + 1
+      EndIf
+    EndDo
 
     ! Separate loop for diagnostics so compiler can properly vectorize
     If ( idiag >= 5 ) Then
@@ -478,12 +476,6 @@ Contains
         EndIf
       EndDo
     EndIf
-
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        ktot(4,izb) = ktot(4,izb) + 1
-      EndIf
-    EndDo
 
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer
