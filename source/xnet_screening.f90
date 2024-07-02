@@ -198,7 +198,7 @@ Contains
         dfhsdt9(0) = 0.0d0
         dfhsdt9(1:izmax+2) = + cds(1) * gammaz(1:izmax+2) &
           &                  + cds(2) * gammaz(1:izmax+2)**cds(5) &
-          &                  + cds(3) * log(gammaz(1:izmax+2))
+          &                  + cds(3)
         dfhsdt9(1:izmax+2) = -dfhsdt9(1:izmax+2) / t9t(izb)
 
         ! No screening term for 1-reactant reactions
