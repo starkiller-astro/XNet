@@ -510,12 +510,15 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
+    Logical, Parameter :: use_blas = .true.
     Integer, Parameter :: dgemm_nzbatch = 200 ! Min number of zones to use dgemm, otherwise use dgemv
     Real(dp) :: t09(7,zb_lo:zb_hi), dt09(7,zb_lo:zb_hi)
     Real(dp) :: ene(zb_lo:zb_hi), ytot, abar, zbar, z2bar, zibar
     Real(dp) :: ascrn, rhot2, rhot3
     Real(dp) :: rpf1, rpf2, rpf3, rpf4
     Real(dp) :: dlnrpf1dt9, dlnrpf2dt9, dlnrpf3dt9, dlnrpf4dt9
+    Real(dp) :: lambda1, lambda2, lambda3, lambda4
+    Real(dp) :: dlam1dt9, dlam2dt9, dlam3dt9, dlam4dt9
     Integer :: j, k, izb, izone, nzmask
     Integer :: nr1, nr2, nr3, nr4
     Logical, Pointer :: mask(:)
@@ -554,8 +557,6 @@ Contains
     Call partf(t9t(zb_lo:zb_hi),mask_in = mask)
 
     ! Calculate necessary thermodynamic moments
-    ene = 0.0
-    t09 = 0.0
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ene(izb) = yet(izb)*rhot(izb)
@@ -567,6 +568,15 @@ Contains
         t09(5,izb) = t9t(izb)
         t09(6,izb) = t9t(izb)**(+5.0/3.0)
         t09(7,izb) = log(t9t(izb))
+
+        ! Calculate reaction rate coefficient derivatives
+        dt09(1,izb) = 0.0
+        dt09(2,izb) = -t9t(izb)**(-2)
+        dt09(3,izb) = -t9t(izb)**(-4.0/3.0) / 3.0
+        dt09(4,izb) = +t9t(izb)**(-2.0/3.0) / 3.0
+        dt09(5,izb) = 1.0
+        dt09(6,izb) = +t9t(izb)**(+2.0/3.0) * 5.0/3.0
+        dt09(7,izb) = 1.0 / t9t(izb)
       EndIf
     EndDo
 
@@ -577,19 +587,79 @@ Contains
     ! If there are any neutrino-nucleus reactions, calculate their rates
     If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask)
 
-    ! Calculate the REACLIB exponent polynomials, adding screening terms
-    If ( nzmask >= dgemm_nzbatch ) Then
-      If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
-      If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
-      If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
-      If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
+    ! Calculate the REACLIB exponent polynomials and derivatives, adding screening terms
+    If ( use_blas ) Then
+      If ( nzmask >= dgemm_nzbatch ) Then
+        If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
+        If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
+        If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
+        If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
+
+        If ( iheat > 0 ) Then
+          If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
+          If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
+          If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
+          If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
+        EndIf
+      Else
+        Do izb = zb_lo, zb_hi
+          If ( mask(izb) ) Then
+            If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
+            If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
+            If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
+            If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
+            If ( iheat > 0 ) Then
+              If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
+              If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
+              If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
+              If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
+            EndIf
+          EndIf
+        EndDo
+      EndIf
     Else
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
-          If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
-          If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
-          If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
+          Do k = 1, nr1
+            lambda1 = 0.0
+            dlam1dt9 = 0.0
+            Do j = 1, 7
+              lambda1 = lambda1 + rc1(j,k)*t09(j,izb)
+              dlam1dt9 = dlam1dt9 + rc1(j,k)*dt09(j,izb)
+            EndDo
+            h1(k,izb) = ascrn*h1(k,izb) + lambda1
+            dh1dt9(k,izb) = ascrn*dh1dt9(k,izb) + dlam1dt9
+          EndDo
+          Do k = 1, nr2
+            lambda2 = 0.0
+            dlam2dt9 = 0.0
+            Do j = 1, 7
+              lambda2 = lambda2 + rc2(j,k)*t09(j,izb)
+              dlam2dt9 = dlam2dt9 + rc2(j,k)*dt09(j,izb)
+            EndDo
+            h2(k,izb) = ascrn*h2(k,izb) + lambda2
+            dh2dt9(k,izb) = ascrn*dh2dt9(k,izb) + dlam2dt9
+          EndDo
+          Do k = 1, nr3
+            lambda3 = 0.0
+            dlam3dt9 = 0.0
+            Do j = 1, 7
+              lambda3 = lambda3 + rc3(j,k)*t09(j,izb)
+              dlam3dt9 = dlam3dt9 + rc3(j,k)*dt09(j,izb)
+            EndDo
+            h3(k,izb) = ascrn*h3(k,izb) + lambda3
+            dh3dt9(k,izb) = ascrn*dh3dt9(k,izb) + dlam3dt9
+          EndDo
+          Do k = 1, nr4
+            lambda4 = 0.0
+            dlam4dt9 = 0.0
+            Do j = 1, 7
+              lambda4 = lambda4 + rc4(j,k)*t09(j,izb)
+              dlam4dt9 = dlam4dt9 + rc4(j,k)*dt09(j,izb)
+            EndDo
+            h4(k,izb) = ascrn*h4(k,izb) + lambda4
+            dh4dt9(k,izb) = ascrn*dh4dt9(k,izb) + dlam4dt9
+          EndDo
         EndIf
       EndDo
     EndIf
@@ -744,36 +814,6 @@ Contains
 
     If ( iheat > 0 ) Then
 
-      ! Calculate reaction rate coefficient derivatives
-      dt09 = 0.0
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          dt09(1,izb) = 0.0
-          dt09(2,izb) = -t9t(izb)**(-2)
-          dt09(3,izb) = -t9t(izb)**(-4.0/3.0) / 3.0
-          dt09(4,izb) = +t9t(izb)**(-2.0/3.0) / 3.0
-          dt09(5,izb) = 1.0
-          dt09(6,izb) = +t9t(izb)**(+2.0/3.0) * 5.0/3.0
-          dt09(7,izb) = 1.0 / t9t(izb)
-        EndIf
-      EndDo
-
-      ! Calculate the derivatives of REACLIB exponent polynomials, adding screening terms
-      If ( nzmask >= dgemm_nzbatch ) Then
-        If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
-        If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
-        If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
-        If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
-      Else
-        Do izb = zb_lo, zb_hi
-          If ( mask(izb) ) Then
-            If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
-            If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
-            If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
-            If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
-          EndIf
-        EndDo
-      EndIf
 
       ! Calculate cross-section derivatives
       Do izb = zb_lo, zb_hi
