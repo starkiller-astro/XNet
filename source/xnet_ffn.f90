@@ -191,10 +191,9 @@ Contains
         i3 = nt9grid*le1 + lt1
         i4 = i3 + 1
 
-        cheme = etae(izb)*bok*t9(izb)+m_e
+        cheme = etae(izb)*bok*t9(izb) + m_e
         Do k = 1, nffn
-
-          If (has_logft(k) > 0) then
+          If ( has_logft(k) > 0 ) then
 
              ! Calculate phase space integral and derivative
              If ( has_logft(k) == 1 ) Then
@@ -231,6 +230,7 @@ Contains
                rf(k,izb) = 0.0
                dlnrfdt9(k,izb) = 0.0
              Else
+
                ! Temperature derivative
                If (rf_ec < rfmin) Then
                   dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
@@ -248,18 +248,18 @@ Contains
 
              EndIf
           Else
-             dr1 = ffnsum(k,i2) - ffnsum(k,i1)
-             dr2 = ffnsum(k,i4) - ffnsum(k,i3)
-             r1 = ffnsum(k,i1) + rdt9*dr1
-             r2 = ffnsum(k,i3) + rdt9*dr2
-             rf(k,izb) = r1 + rdene*(r2 - r1)
-             If ( rf(k,izb) < lrfmin ) Then
-               rf(k,izb) = 0.0
-               dlnrfdt9(k,izb) = 0.0
-             Else
-               rf(k,izb) = 10.0**rf(k,izb)
-               dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
-             EndIf
+            dr1 = ffnsum(k,i2) - ffnsum(k,i1)
+            dr2 = ffnsum(k,i4) - ffnsum(k,i3)
+            r1 = ffnsum(k,i1) + rdt9*dr1
+            r2 = ffnsum(k,i3) + rdt9*dr2
+            rf(k,izb) = r1 + rdene*(r2 - r1)
+            If ( rf(k,izb) < lrfmin ) Then
+              rf(k,izb) = 0.0
+              dlnrfdt9(k,izb) = 0.0
+            Else
+              rf(k,izb) = 10.0**rf(k,izb)
+              dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+            EndIf
           EndIf
         EndDo
       EndIf
