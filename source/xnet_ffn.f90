@@ -212,43 +212,43 @@ Contains
         Do k = 1, nffn
           If ( has_logft(k) > 0 ) Then
 
-             dr1_ec = ffn_ec(k,i2) - ffn_ec(k,i1)
-             dr2_ec = ffn_ec(k,i4) - ffn_ec(k,i3)
-             r1 = ffn_ec(k,i1) + rdt9*dr1_ec
-             r2 = ffn_ec(k,i3) + rdt9*dr2_ec
-             rf_ec = r1 + rdene*(r2 - r1) ! logft
-             If ( phasei(k,izb) > rfmin .and. rf_ec > lrfmin ) then
-               rf_ec = ln_2 * phasei(k,izb) / 10.0**rf_ec ! turn into rate
-             Else
-               rf_ec = 0.0
-             EndIf
+            dr1_ec = ffn_ec(k,i2) - ffn_ec(k,i1)
+            dr2_ec = ffn_ec(k,i4) - ffn_ec(k,i3)
+            r1 = ffn_ec(k,i1) + rdt9*dr1_ec
+            r2 = ffn_ec(k,i3) + rdt9*dr2_ec
+            rf_ec = r1 + rdene*(r2 - r1) ! logft
+            If ( phasei(k,izb) > rfmin .and. rf_ec > lrfmin ) then
+              rf_ec = ln_2 * phasei(k,izb) / 10.0**rf_ec ! turn into rate
+            Else
+              rf_ec = 0.0
+            EndIf
 
-             dr1 = ffn_beta(k,i2) - ffn_beta(k,i1)
-             dr2 = ffn_beta(k,i4) - ffn_beta(k,i3)
-             r1 = ffn_beta(k,i1) + rdt9*dr1
-             r2 = ffn_beta(k,i3) + rdt9*dr2
-             rf_beta = r1 + rdene*(r2 - r1)
-             If ( rf_beta > lrfmin ) Then
-               rf_beta = 10.0**rf_beta
-             Else
-               rf_beta = 0.0
-             EndIf
+            dr1 = ffn_beta(k,i2) - ffn_beta(k,i1)
+            dr2 = ffn_beta(k,i4) - ffn_beta(k,i3)
+            r1 = ffn_beta(k,i1) + rdt9*dr1
+            r2 = ffn_beta(k,i3) + rdt9*dr2
+            rf_beta = r1 + rdene*(r2 - r1)
+            If ( rf_beta > lrfmin ) Then
+              rf_beta = 10.0**rf_beta
+            Else
+              rf_beta = 0.0
+            EndIf
 
-             rf(k,izb) = rf_beta + rf_ec
+            rf(k,izb) = rf_beta + rf_ec
 
-             If ( rf_beta < rfmin .and. rf_ec < rfmin ) Then
-               rf(k,izb) = 0.0
-               dlnrfdt9(k,izb) = 0.0
-             Else
-               If (rf_ec < rfmin) Then
-                  dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
-               Else
-                  drbeta_dt = rf_beta*ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
-                  drec_dt = rf_ec * ( -ln_10 * ( rdene*dr2_ec + (1.0-rdene)*dr1_ec ) / dt9 &
-                    & + dphaseidt9(k,izb) / phasei(k,izb) )
-                  dlnrfdt9(k,izb) = ( drbeta_dt + drec_dt ) / rf(k,izb)
-               EndIf
-             EndIf
+            If ( rf_beta < rfmin .and. rf_ec < rfmin ) Then
+              rf(k,izb) = 0.0
+              dlnrfdt9(k,izb) = 0.0
+            Else
+              If (rf_ec < rfmin) Then
+                dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+              Else
+                drbeta_dt = rf_beta*ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+                drec_dt = rf_ec * ( -ln_10 * ( rdene*dr2_ec + (1.0-rdene)*dr1_ec ) / dt9 &
+                  & + dphaseidt9(k,izb) / phasei(k,izb) )
+                dlnrfdt9(k,izb) = ( drbeta_dt + drec_dt ) / rf(k,izb)
+              EndIf
+            EndIf
           Else
             dr1 = ffnsum(k,i2) - ffnsum(k,i1)
             dr2 = ffnsum(k,i4) - ffnsum(k,i3)
