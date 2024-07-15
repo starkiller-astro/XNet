@@ -171,11 +171,7 @@ Contains
 
     ! Local variables
     Integer :: i, j, i0, j1, izb, izone
-    Integer :: la1, le1, la2, le2, la3, le3, la4, le4
-    Integer :: i11, i21, i22, i31, i32, i33, i41, i42, i43, i44
-    Real(dp) :: s1, s2, s3, s4, sdot, r1, r2, r3, r4
-    Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
-    Real(dp) :: dr1dt9, dr2dt9, dr3dt9, dr4dt9
+    Real(dp) :: s1, s2, s3, s4, sdot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
