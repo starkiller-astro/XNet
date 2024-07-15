@@ -17,7 +17,9 @@ Module xnet_jacobian
   Implicit None
   Real(dp), Allocatable :: dydotdy(:,:,:) ! dYdot/dY part of jac
   Real(dp), Allocatable :: jac(:,:,:)     ! the Jacobian matrix
+  Real(dp), Allocatable :: rhs(:,:)       ! the right-hand-side of linear system
   Integer, Allocatable :: indx(:,:)       ! Pivots in the LU decomposition
+  Integer, Allocatable :: info(:)
   Integer :: msize                        ! Size of linear system to be solved
 
   Real(dp), Allocatable, Target :: diag0(:)
@@ -30,24 +32,32 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzevolve, nzbatchmx
+    Use xnet_controls, Only: iheat, nzevolve
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: data_dir
 
+    ! Calculate array sizes
     If ( iheat > 0 ) Then
       msize = ny + 1
     Else
       msize = ny
     EndIf
 
-    Allocate (dydotdy(msize,msize,nzevolve),jac(msize,msize,nzevolve),indx(msize,nzevolve))
+    Allocate (dydotdy(msize,msize,nzevolve))
+    Allocate (jac(msize,msize,nzevolve))
+    Allocate (rhs(msize,nzevolve))
+    Allocate (indx(msize,nzevolve))
+    Allocate (info(nzevolve))
     dydotdy = 0.0
     jac = 0.0
+    rhs = 0.0
     indx = 0
+    info = 0
 
-    Allocate (diag0(nzbatchmx),mult1(nzbatchmx))
+    Allocate (diag0(nzevolve))
+    Allocate (mult1(nzevolve))
     diag0 = 0.0
     mult1 = 1.0
 
@@ -56,12 +66,12 @@ Contains
 
   Subroutine jacobian_finalize
     Implicit None
-    Deallocate (dydotdy,jac,indx)
+    Deallocate (dydotdy,jac,rhs,indx,info)
     Deallocate (diag0,mult1)
     Return
   End Subroutine jacobian_finalize
 
-  Subroutine jacobian_scale(diag,mult,mask_in)
+  Subroutine jacobian_scale(diag_in,mult_in,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! This augments a previously calculation Jacobian matrix by multiplying all elements by mult and
     ! adding diag to the diagonal elements.
@@ -72,13 +82,15 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
+    Real(dp), Optional, Target, Intent(in) :: diag_in(zb_lo:zb_hi), mult_in(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, i0, izb, izone
+    Integer :: i, j, i0, j1, izb, izone
+    Real(dp) :: rsum
+    Real(dp), Pointer :: diag(:), mult(:)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -88,13 +100,29 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    If ( present(diag_in) ) Then
+      diag(zb_lo:) => diag_in
+    Else
+      diag(zb_lo:) => diag0(zb_lo:zb_hi)
+    EndIf
+    If ( present(mult_in) ) Then
+      mult(zb_lo:) => mult_in
+    Else
+      mult(zb_lo:) => mult1(zb_lo:zb_hi)
+    EndIf
+
     Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        jac(:,:,izb) = mult(izb) * dydotdy(:,:,izb)
-        Do i0 = 1, msize
-          jac(i0,i0,izb) = jac(i0,i0,izb) + diag(izb)
-        EndDo
-      EndIf
+      Do j1 = 1, msize
+        If ( mask(izb) ) Then
+          Do i0 = 1, msize
+            jac(i0,j1,izb) = mult(izb) * dydotdy(j1,i0,izb)
+            If ( i0 == j1 ) Then
+              jac(i0,j1,izb) = jac(i0,j1,izb) + diag(izb)
+            Else
+            EndIf
+          EndDo
+        EndIf
+      EndDo
     EndDo
 
     If ( idiag >= 5 ) Then
@@ -128,7 +156,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, mex, nname
     Use reaction_data, Only: a1, a2, a3, a4, b1, b2, b3, b4, la, le, mu1, mu2, mu3, mu4, n11, n21, &
-      & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
+      & n22, n31, n32, n33, n41, n42, n43, n44, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9, nan, &
+      & n10, n20, n30, n40
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
     Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
@@ -144,10 +173,9 @@ Contains
     Integer :: i, j, i0, j1, izb, izone
     Integer :: la1, le1, la2, le2, la3, le3, la4, le4
     Integer :: i11, i21, i22, i31, i32, i33, i41, i42, i43, i44
-    Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
+    Real(dp) :: s1, s2, s3, s4, sdot, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
-    Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
-    Real(dp), Pointer :: diag(:), mult(:)
+    Real(dp) :: dr1dt9, dr2dt9, dr3dt9, dr4dt9
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -160,155 +188,77 @@ Contains
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
-    If ( present(diag_in) ) Then
-      diag(zb_lo:) => diag_in
-    Else
-      diag(zb_lo:) => diag0
-    EndIf
-    If ( present(mult_in) ) Then
-      mult(zb_lo:) => mult_in
-    Else
-      mult(zb_lo:) => mult1
-    EndIf
-
     ! Build the Jacobian
     Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        dydotdy(:,:,izb) = 0.0
-        Do i0 = 1, ny
-          la1 = la(1,i0)
-          la2 = la(2,i0)
-          la3 = la(3,i0)
-          la4 = la(4,i0)
-          le1 = le(1,i0)
-          le2 = le(2,i0)
-          le3 = le(3,i0)
-          le4 = le(4,i0)
-          Do j1 = la1, le1
-            r1 = b1(j1,izb)
-            i11 = n11(j1)
-            dydotdy(i0,i11,izb) = dydotdy(i0,i11,izb) + r1
+      Do i0 = 1, ny
+        If ( mask(izb) ) Then
+          Do j1 = 1, msize
+            dydotdy(j1,i0,izb) = 0.0
           EndDo
-          Do j1 = la2, le2
-            r2 = b2(j1,izb)
-            i21 = n21(j1)
-            i22 = n22(j1)
-            y21 = yt(i21,izb)
-            y22 = yt(i22,izb)
-            dydotdy(i0,i21,izb) = dydotdy(i0,i21,izb) + r2 * y22
-            dydotdy(i0,i22,izb) = dydotdy(i0,i22,izb) + r2 * y21
+          Do j1 = la(1,i0), le(1,i0)
+            dydotdy(n11(j1),i0,izb) = dydotdy(n11(j1),i0,izb) + b1(j1,izb)
           EndDo
-          Do j1 = la3, le3
-            r3 = b3(j1,izb)
-            i31 = n31(j1)
-            i32 = n32(j1)
-            i33 = n33(j1)
-            y31 = yt(i31,izb)
-            y32 = yt(i32,izb)
-            y33 = yt(i33,izb)
-            dydotdy(i0,i31,izb) = dydotdy(i0,i31,izb) + r3 * y32 * y33
-            dydotdy(i0,i32,izb) = dydotdy(i0,i32,izb) + r3 * y33 * y31
-            dydotdy(i0,i33,izb) = dydotdy(i0,i33,izb) + r3 * y31 * y32
+          Do j1 = la(2,i0), le(2,i0)
+            dydotdy(n21(j1),i0,izb) = dydotdy(n21(j1),i0,izb) + b2(j1,izb) * yt(n22(j1),izb)
+            dydotdy(n22(j1),i0,izb) = dydotdy(n22(j1),i0,izb) + b2(j1,izb) * yt(n21(j1),izb)
           EndDo
-          Do j1 = la4, le4
-            r4 = b4(j1,izb)
-            i41 = n41(j1)
-            i42 = n42(j1)
-            i43 = n43(j1)
-            i44 = n44(j1)
-            y41 = yt(i41,izb)
-            y42 = yt(i42,izb)
-            y43 = yt(i43,izb)
-            y44 = yt(i44,izb)
-            dydotdy(i0,i41,izb) = dydotdy(i0,i41,izb) + r4 * y42 * y43 * y44
-            dydotdy(i0,i42,izb) = dydotdy(i0,i42,izb) + r4 * y43 * y44 * y41
-            dydotdy(i0,i43,izb) = dydotdy(i0,i43,izb) + r4 * y44 * y41 * y42
-            dydotdy(i0,i44,izb) = dydotdy(i0,i44,izb) + r4 * y41 * y42 * y43
+          Do j1 = la(3,i0), le(3,i0)
+            dydotdy(n31(j1),i0,izb) = dydotdy(n31(j1),i0,izb) + b3(j1,izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
+            dydotdy(n32(j1),i0,izb) = dydotdy(n32(j1),i0,izb) + b3(j1,izb) * yt(n33(j1),izb) * yt(n31(j1),izb)
+            dydotdy(n33(j1),i0,izb) = dydotdy(n33(j1),i0,izb) + b3(j1,izb) * yt(n31(j1),izb) * yt(n32(j1),izb)
           EndDo
-        EndDo
-      EndIf
+          Do j1 = la(4,i0), le(4,i0)
+            dydotdy(n41(j1),i0,izb) = dydotdy(n41(j1),i0,izb) + b4(j1,izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
+            dydotdy(n42(j1),i0,izb) = dydotdy(n42(j1),i0,izb) + b4(j1,izb) * yt(n43(j1),izb) * yt(n44(j1),izb) * yt(n41(j1),izb)
+            dydotdy(n43(j1),i0,izb) = dydotdy(n43(j1),i0,izb) + b4(j1,izb) * yt(n44(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb)
+            dydotdy(n44(j1),i0,izb) = dydotdy(n44(j1),i0,izb) + b4(j1,izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb)
+          EndDo
+
+          If ( iheat > 0 ) Then
+            s1 = 0.0
+            Do j1 = la(1,i0), le(1,i0)
+              s1 = s1 + a1(j1) * dcsect1dt9(mu1(j1),izb) * yt(n11(j1),izb)
+            EndDo
+            s2 = 0.0
+            Do j1 = la(2,i0), le(2,i0)
+              s2 = s2 + a2(j1) * dcsect2dt9(mu2(j1),izb) * yt(n21(j1),izb) * yt(n22(j1),izb)
+            EndDo
+            s3 = 0.0
+            Do j1 = la(3,i0), le(3,i0)
+              s3 = s3 + a3(j1) * dcsect3dt9(mu3(j1),izb) * yt(n31(j1),izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
+            EndDo
+            s4 = 0.0
+            Do j1 = la(4,i0), le(4,i0)
+              s4 = s4 + a4(j1) * dcsect4dt9(mu4(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
+            EndDo
+            dydotdy(ny+1,i0,izb) = s1 + s2 + s3 + s4
+          EndIf
+        EndIf
+      EndDo
     EndDo
 
     If ( iheat > 0 ) Then
       Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          Do i0 = 1, ny
-            la1 = la(1,i0)
-            la2 = la(2,i0)
-            la3 = la(3,i0)
-            la4 = la(4,i0)
-            le1 = le(1,i0)
-            le2 = le(2,i0)
-            le3 = le(3,i0)
-            le4 = le(4,i0)
-            s1 = 0.0
-            Do j1 = la1, le1
-              dr1dt9 = a1(j1)*dcsect1dt9(mu1(j1),izb)
-              i11 = n11(j1)
-              y11 = yt(i11,izb)
-              s1 = s1 + dr1dt9 * y11
+        Do j1 = 1, msize
+          If ( mask(izb) ) Then
+            sdot = 0.0
+            Do i0 = 1, ny
+              sdot = sdot - mex(i0)*dydotdy(j1,i0,izb) / cv(izb)
             EndDo
-            s2 = 0.0
-            Do j1 = la2, le2
-              dr2dt9 = a2(j1)*dcsect2dt9(mu2(j1),izb)
-              i21 = n21(j1)
-              i22 = n22(j1)
-              y21 = yt(i21,izb)
-              y22 = yt(i22,izb)
-              s2 = s2 + dr2dt9 * y21 * y22
-            EndDo
-            s3 = 0.0
-            Do j1 = la3, le3
-              dr3dt9 = a3(j1)*dcsect3dt9(mu3(j1),izb)
-              i31 = n31(j1)
-              i32 = n32(j1)
-              i33 = n33(j1)
-              y31 = yt(i31,izb)
-              y32 = yt(i32,izb)
-              y33 = yt(i33,izb)
-              s3 = s3 + dr3dt9 * y31 * y32 * y33
-            EndDo
-            s4 = 0.0
-            Do j1 = la4, le4
-              dr4dt9 = a4(j1)*dcsect4dt9(mu4(j1),izb)
-              i41 = n41(j1)
-              i42 = n42(j1)
-              i43 = n43(j1)
-              i44 = n44(j1)
-              y41 = yt(i41,izb)
-              y42 = yt(i42,izb)
-              y43 = yt(i43,izb)
-              y44 = yt(i44,izb)
-              s4 = s4 + dr4dt9 * y41 * y42 * y43 * y44
-            EndDo
-            dydotdy(i0,ny+1,izb)= s1 + s2 + s3 + s4
-          EndDo
-
-          ! The BLAS version of dydotdy(ny+1,i,izb) = -sum(mex*dydotdy(1:ny,i,izb))/cv(izb)
-          Call dgemv('T',ny,msize,1.0/cv(izb),dydotdy(1,1,izb),msize,mex,1,0.0,dt9dotdy,1)
-          dydotdy(ny+1,:,izb) = -dt9dotdy
-        EndIf
+            dydotdy(j1,ny+1,izb) = sdot
+          EndIf
+        EndDo
       EndDo
-
-      ! This also works, but could be inefficient if there are few active zones in batch
-      !Call dgemv('T',ny,msize*nzbatchmx,1.0,dydotdy(1,1,1),msize,mex,1,0.0,dt9dotdy,1)
-      !ForAll ( izb = 1:nzbatchmx, j1 = 1:msize, mask(izb) )
-      !  dydotdy(ny+1,j1,izb) = -dt9dotdy(j1,izb) / cv(izb)
-      !EndForAll
     EndIf
+
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        ktot(3,izb) = ktot(3,izb) + 1
+      EndIf
+    EndDo
 
     ! Apply the externally provided factors
-    If ( present(diag_in) ) Then
-      diag = diag_in
-    Else
-      diag = 0.0
-    EndIf
-    If ( present(mult_in) ) Then
-      mult = mult_in
-    Else
-      mult = 1.0
-    EndIf
-    Call jacobian_scale(diag,mult,mask_in = mask)
+    Call jacobian_scale(diag_in,mult_in,mask_in = mask)
 
     If ( idiag >= 5 ) Then
       Do izb = zb_lo, zb_hi
@@ -330,22 +280,6 @@ Contains
         EndIf
       EndDo
     EndIf
-
-    If ( idiag >= 6 ) Then
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          izone = izb + szbatch - zb_lo
-          Write(lun_diag,"(a9,i5,2es14.7)") 'JAC_BUILD',izone,diag(izb),mult(izb)
-          Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
-        EndIf
-      EndDo
-    EndIf
-
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        ktot(3,izb) = ktot(3,izb) + 1
-      EndIf
-    EndDo
 
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
@@ -376,8 +310,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp) :: rhs(msize)
-    Integer :: i, izb, izone, info(zb_lo:zb_hi)
+    Integer :: i, izb, izone
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -390,14 +323,32 @@ Contains
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        Do i = 1, ny
+          rhs(i,izb) = yrhs(i,izb)
+        EndDo
+        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
+      Else
+        Do i = 1, msize
+          rhs(i,izb) = 0.0
+        EndDo
+      EndIf
+    EndDo
+
     ! Solve the linear system
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        rhs(1:ny) = yrhs(:,izb)
-        If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
-        Call dgesv(msize,1,jac(1,1,izb),msize,indx(1,izb),rhs,msize,info(izb))
-        dy(:,izb) = rhs(1:ny)
-        If ( iheat > 0 ) dt9(izb) = rhs(ny+1)
+        Call dgesv(msize,1,jac(1,1,izb),msize,indx(1,izb),rhs(1,izb),msize,info(izb))
+      EndIf
+    EndDo
+
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        Do i = 1, ny
+          dy(i,izb) = rhs(i,izb)
+        EndDo
+        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)
       EndIf
     EndDo
 
@@ -433,7 +384,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, izb, izone, info(zb_lo:zb_hi)
+    Integer :: i, j, izb, izone
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -494,8 +445,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp) :: rhs(msize)
-    Integer :: i, izb, izone, info(zb_lo:zb_hi)
+    Integer :: i, izb, izone
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -509,14 +459,32 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        Do i = 1, ny
+          rhs(i,izb) = yrhs(i,izb)
+        EndDo
+        If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
+      Else
+        Do i = 1, msize
+          rhs(i,izb) = 0.0
+        EndDo
+      EndIf
+    EndDo
+
     ! Solve the LU-decomposed triangular system via back-substitution
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        rhs(1:ny) = yrhs(:,izb)
-        If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
-        Call dgetrs('N',msize,1,jac(1,1,izb),msize,indx(1,izb),rhs,msize,info(izb))
-        dy(:,izb) = rhs(1:ny)
-        If ( iheat > 0 ) dt9(izb) = rhs(ny+1)
+        Call dgetrs('N',msize,1,jac(1,1,izb),msize,indx(1,izb),rhs(1,izb),msize,info(izb))
+      EndIf
+    EndDo
+
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        Do i = 1, ny
+          dy(i,izb) = rhs(i,izb)
+        EndDo
+        If ( iheat > 0 ) dt9(izb) = rhs(ny+1,izb)
       EndIf
     EndDo
 
