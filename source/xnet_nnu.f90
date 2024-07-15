@@ -259,7 +259,7 @@ Contains
               If (  nuspec(k) == j .or. &
                 & ( nuspec(k) == 3 .and. j == 1 ) .or. &
                 & ( nuspec(k) == 4 .and. j == 2 ) ) Then
-                xrate = fluxnu(j,izb)*rcsnu*1e-42
+                xrate = fluxnu(j,izb)*rcsnu*1e-42 ! Not a fan of 1e-42 being hard-coded here
                 If ( xrate > 1.0e-80 ) Then
                   rate(k,j,izb) = xrate
                 Else
