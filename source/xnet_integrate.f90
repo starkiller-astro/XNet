@@ -21,11 +21,12 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: y, yo, yt, ydot
-    Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, rhot, &
-      & t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
-    Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iweak, lun_diag, yacc, &
-      & szbatch, zb_lo, zb_hi, lzactive, iscrn, ymin
+    Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
+      & rhot, t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
+    Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
+      & ymin, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -35,11 +36,14 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, izb, izone
-    Real(dp) :: ydotoy(ny), t9dotot9
-    Real(dp) :: changest, changeth, dtherm(zb_lo:zb_hi)
-    Real(dp) :: tdel_stop, tdel_deriv, tdel_fine, tdel_t9, tdel_init
-    Logical :: mask_deriv(zb_lo:zb_hi), mask_profile(zb_lo:zb_hi)
+    Real(dp), Parameter :: changeth = 0.1
+    Real(dp) :: changest, yfloor
+    Real(dp) :: rtau_y(ny), changey, tdel_dy(zb_lo:zb_hi)
+    Real(dp) :: rtau_t9, changet9, tdel_dt9(zb_lo:zb_hi)
+    Real(dp) :: tdel_stop(zb_lo:zb_hi), tdel_init
+    Real(dp) :: dtherm(zb_lo:zb_hi)
+    Integer :: i, j, k, izb, izone
+    Logical :: mask_init(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -50,113 +54,122 @@ Contains
     If ( .not. any(mask) ) Return
 
     ! Retain old values of timestep and thermo and calculate remaining time
-    changeth = 0.1
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel_old(izb) = tdel(izb)
+        mask_init(izb) = ( abs(tdel_old(izb)) < tiny(0.0) )
+      Else
+        mask_init(izb) = .false.
       EndIf
-      mask_deriv(izb) = ( mask(izb) .and. abs(tdel_old(izb)) < tiny(0.0) )
     EndDo
-    Call cross_sect(mask_in = mask_deriv)
-    Call yderiv(mask_in = mask_deriv)
+    Call cross_sect(mask_in = mask_init)
+    Call yderiv(mask_in = mask_init)
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        izone = izb + szbatch - zb_lo
+        tdel_stop(izb) = tstop(izb) - t(izb)
+        tdel_dy(izb) = 0.0
+        tdel_dt9(izb) = 0.0
+        If ( mask_init(izb) ) Then
+          intso(izb) = 0
+          If ( tdelstart(izb) < 0.0 ) Then
+            changest = 0.5
+          Else
+            changest = 0.01
+          EndIf
 
-        tdel_stop = tstop(izb) - t(izb)
-        tdel_fine = 0.0
-        tdel_t9 = 0.0
-        If ( tdelstart(izb) < 0.0 ) Then
-          changest = 0.5
+          ! For unevolved initial abundances, as often found in test problems, derivatives may
+          ! produce large jumps from zero abundance in the first timestep, though generally 
+          ! inconsequential; an additional factor, changest, is used to increase accuracy.
+          changey = changest*min(0.1,changemx)
+          changet9 = changest*min(0.01,changemxt)
+          tdel_init = min(changest*abs(tdelstart(izb)),tdel_stop(izb))
+          If ( nh(izb) > 2 ) Then
+            tdel_next(izb) = 1.0e-4*tdel_stop(izb)
+          Else
+            tdel_next(izb) = tdel_stop(izb)
+          EndIf
         Else
-          changest = 0.01
+          changey = changemx
+          changet9 = changemxt
+          tdel_init = 0.0
         EndIf
 
-        tdel_init = min(changest*abs(tdelstart(izb)),tdel_stop)
-
-        ! If this is not the initial timestep, calculate timestep from changes in last timestep.
-        If ( tdel_old(izb) > 0.0 ) Then
-          Where ( y(:,izb) > yacc )
-            ydotoy = abs((y(:,izb)-yo(:,izb))/y(:,izb))
-          ElseWhere ( y(:,izb) > ymin )
-            ydotoy = abs((y(:,izb)-yo(:,izb))/yacc)
-          ElseWhere
-            ydotoy = 0.0
-          EndWhere
-          ints(izb) = maxloc(ydotoy,dim=1)
-          If ( abs(ydotoy(ints(izb))) > 0.0 ) Then
-            tdel_deriv = tdel_old(izb) * changemx/ydotoy(ints(izb))
-          Else
-            tdel_deriv = tdel_next(izb)
-          EndIf
-          If ( iheat > 0 ) Then
-            t9dotot9 = abs((t9(izb)-t9o(izb))/t9(izb))
-            If ( t9dotot9 > 0.0 ) Then
-              tdel_t9 = tdel_old(izb) * changemxt/t9dotot9
+        ! Estimate timestep from relevant timescales
+        If ( tdel_old(izb) >= 0.0 ) Then
+          ! Calculate timescales for abundance changes, Y/(dY/dt)
+          Do k = 1, ny
+            If ( y(k,izb) > ymin ) Then
+              yfloor = max(y(k,izb),yacc)
+              If ( mask_init(izb) ) Then
+                ! Calculate timescale directly from derivatives.
+                rtau_y(k) = abs(ydot(k,izb)/yfloor)
+              Else
+                ! Calculate timescale from changes in last timestep.
+                rtau_y(k) = abs((y(k,izb)-yo(k,izb))/yfloor) / tdel_old(izb)
+              EndIf
             Else
-              tdel_t9 = tdel_next(izb)
+              rtau_y(k) = 0.0
             EndIf
-          Else
-            tdel_t9 = tdel_next(izb)
-          EndIf
-          tdel(izb) = min( tdel_deriv, tdel_stop, tdel_next(izb), tdel_t9 )
-
-        ! If this is an initial timestep, yo does not exist, so calculate timestep directly from derivatives.
-        ElseIf ( abs(tdel_old(izb)) < tiny(0.0) ) Then
-          If ( nh(izb) > 2 ) tdel_stop = 1.0e-4*tdel_stop
-          intso(izb) = 0
-
-          Where ( y(:,izb) > yacc )
-            ydotoy = abs(ydot(:,izb)/y(:,izb))
-          ElseWhere ( y(:,izb) > ymin )
-            ydotoy = abs(ydot(:,izb)/yacc)
-          ElseWhere
-            ydotoy = 0.0
-          EndWhere
+          EndDo
 
           ! If derivatives are non-zero, use Y/(dY/dt).
-          ints(izb) = maxloc(ydotoy,dim=1)
-          If ( abs(ydotoy(ints(izb))) > 0.0 ) Then
-            tdel_deriv = changemx/ydotoy(ints(izb))
-
-            ! For unevolved initial abundances, as often found in test problems,
-            ! tdel_deriv may produce large jumps from zero abundance in the first
-            ! timestep. While generally inconsequential, tdel_fine limits these
-            ! to the accuracy abundance limit.
-            tdel_fine = changest*min(0.1d0,changemx)/ydotoy(ints(izb))
-
-            ! If derivatives are zero, take a small step.
+          ints(izb) = maxloc(rtau_y,dim=1)
+          If ( abs(rtau_y(ints(izb))) > 0.0 ) Then
+            tdel_dy(izb) = changey/rtau_y(ints(izb))
           Else
-            tdel_deriv = tdel_stop
-            tdel_fine = tdel_stop
+            tdel_dy(izb) = tdel_next(izb)
           EndIf
+
+          ! Calculate timescale for temperature changes, T/(dT/dt)
           If ( iheat > 0 ) Then
-            tdel_t9 = changest*min(0.01d0,changemxt) * abs(t9(izb)/t9dot(izb))
+            If ( mask_init(izb) ) Then
+              rtau_t9 = abs(t9dot(izb)/t9(izb))
+            Else
+              rtau_t9 = abs((t9(izb)-t9o(izb))/t9(izb)) / tdel_old(izb)
+            EndIf
           Else
-            tdel_t9 = tdel_stop
+            rtau_t9 = 0.0
           EndIf
-          tdel(izb) = min( tdel_stop, tdel_deriv, tdel_fine, tdel_t9 )
+          If ( rtau_t9 > 0.0 ) Then
+            tdel_dt9(izb) = changet9/rtau_t9
+          Else
+            tdel_dt9(izb) = tdel_next(izb)
+          EndIf
+
+          ! Estimate timestep
+          tdel(izb) = min( tdel_stop(izb), tdel_next(izb), tdel_dy(izb), tdel_dt9(izb) )
 
           ! Use the user-defined initial timestep if it is larger than the estimated timestep
           tdel(izb) = max( tdel_init, tdel(izb) )
 
-          ! Keep timestep constant
         Else
+          ! Keep timestep constant
           tdel(izb) = -tdel_old(izb)
         EndIf
 
-        If ( idiag >= 2 ) Write(lun_diag,"(a4,2i5,7es23.8,i5)") &
-          & 'tdel',kstep,izone,tdel(izb),tdel_deriv,tdel_old(izb),tdel_stop,tdel_next(izb),tdel_fine,tdel_t9,ints(izb)
-        !If ( idiag >= 2 ) Write(lun_diag,"(a5,i4,2es12.4)") (nname(k),k,y(k,izb),ydotoy(k),k=1,ny)
-
-        ! Retain the index of the species setting the timestep
-        If ( ints(izb) /= intso(izb) ) Then
-          If ( idiag >= 2 ) Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
-          intso(izb) = ints(izb)
-        EndIf
+        ! Update trial time
+        tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
       EndIf
     EndDo
+
+    If ( idiag >= 2 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a4,2i5,6es12.4,i5)") &
+            & 'tdel',kstep,izone,tdel(izb),tdel_old(izb),tdel_stop(izb),tdel_next(izb), &
+            & tdel_dy(izb),tdel_dt9(izb),ints(izb)
+          !Write(lun_diag,"(a5,i4,2es12.4)") (nname(k),k,y(k,izb),rtau_y(k),k=1,ny)
+
+          ! Retain the index of the species setting the timestep
+          If ( ints(izb) /= intso(izb) ) Then
+            Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
+            intso(izb) = ints(izb)
+          EndIf
+        EndIf
+      EndDo
+    EndIf
 
     ! For varying temperature and density, capture thermodynamic features
     If ( iheat == 0 ) Then
@@ -164,73 +177,60 @@ Contains
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
       Do izb = zb_lo, zb_hi
-        mask_profile(izb) = ( mask(izb) .and. nh(izb) > 1 )
-        If ( mask_profile(izb) ) Then
-          tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
-        EndIf
-      EndDo
-      Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi), &
-        & mask_in = mask_profile)
-      Do izb = zb_lo, zb_hi
-        If ( mask_profile(izb) .and. ntt(izb)-1 > nt(izb) ) Then
-          Do j = nt(izb), ntt(izb)-1
-            If ( t9h(j,izb) > t9(izb) .and. t9h(j,izb) > t9t(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
+        If ( mask(izb) .and. nh(izb) > 1 ) Then
+          Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
+            & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
+          If ( ntt(izb)-1 > nt(izb) ) Then
+            Do j = nt(izb), ntt(izb)-1
+              If ( t9h(j,izb) > t9(izb) .and. t9h(j,izb) > t9t(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              ElseIf ( t9h(j,izb) < t9(izb) .and. t9h(j,izb) < t9t(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              ElseIf ( rhoh(j,izb) > rho(izb) .and. rhoh(j,izb) > rhot(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              ElseIf ( rhoh(j,izb) < rho(izb) .and. rhoh(j,izb) < rhot(izb) ) Then
+                tdel(izb) = th(j,izb) - t(izb)
+                Exit
+              EndIf
+            EndDo
+            tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
+          EndIf
+
+          ! Limit timestep if fractional density change is larger than changeth (10% by default)
+          ! or fraction temperature change is larger than 0.1*changeth (1% by default)
+          dtherm(izb) = 0.0
+          Do i = 1, 10
+            Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
+              & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
+            If ( t9(izb) > 0.0 ) Then
+              dtherm(izb) = 10.0*abs(t9t(izb)-t9(izb))/t9(izb) + abs(rhot(izb)-rho(izb))/rho(izb)
+            EndIf
+            If ( dtherm(izb) < changeth ) Then
               Exit
-            ElseIf ( t9h(j,izb) < t9(izb) .and. t9h(j,izb) < t9t(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
-              Exit
-            ElseIf ( rhoh(j,izb) > rho(izb) .and. rhoh(j,izb) > rhot(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
-              Exit
-            ElseIf ( rhoh(j,izb) < rho(izb) .and. rhoh(j,izb) < rhot(izb) ) Then
-              tdel(izb) = th(j,izb) - t(izb)
-              Exit
+            Else
+              tdel(izb) = 0.5*tdel(izb)
+              tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
             EndIf
           EndDo
         EndIf
       EndDo
-
-      ! Limit timestep if fractional density change is larger than changeth (10% by default)
-      ! or fraction temperature change is larger than 0.1*changeth (1% by default)
-      dtherm = 0.0
-      Do i = 1, 10
-        Do izb = zb_lo, zb_hi
-          If ( mask_profile(izb) ) Then
-            tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
-          EndIf
-        EndDo
-        Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi), &
-          & mask_in = mask_profile)
-        Do izb = zb_lo, zb_hi
-          If ( mask_profile(izb) .and. t9(izb) > 0.0 ) Then
-            dtherm(izb) = 10.0*abs(t9t(izb)-t9(izb))/t9(izb) + abs(rhot(izb)-rho(izb))/rho(izb)
-          EndIf
-        EndDo
-        If ( all( dtherm < changeth ) ) Exit
-        Do izb = zb_lo, zb_hi
-          If ( dtherm(izb) >= changeth ) Then
-            tdel(izb) = 0.5*tdel(izb)
-          EndIf
-        EndDo
-      EndDo
       If ( idiag >= 2 ) Then
         Do izb = zb_lo, zb_hi
-          If ( mask_profile(izb) ) Then
+          If ( mask(izb) .and. nh(izb) > 1 ) Then
             izone = izb + szbatch - zb_lo
-            If ( dtherm(izb) >= changeth ) Write(lun_diag,"(a,i2,a,i5,3es23.15)") &
-              & 'Error in Thermo variations after ',i,' reductions',izone,tdel(izb),t9t(izb),rhot(izb)
+            If ( dtherm(izb) >= changeth ) Then
+              Write(lun_diag,"(a,i2,a,i5,3es24.16)") &
+                & 'Error in Thermo variations after ',i,' reductions',izone,tdel(izb),t9t(izb),rhot(izb)
+              Call xnet_terminate('Error in Thermo variations')
+            EndIf
             Write(lun_diag,"(a5,2i5,2es23.15)") 'T9del',kstep,izone,tdel(izb),dtherm(izb)
           EndIf
         EndDo
       EndIf
     EndIf
-
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        tt(izb) = min(t(izb) + tdel(izb), tstop(izb))
-      EndIf
-    EndDo
 
     Return
   End Subroutine timestep
@@ -239,12 +239,12 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the value of the iweak flag to control the treatment of strong reactions.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, nzevolve, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(nzevolve)
+    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -305,12 +305,9 @@ Contains
     start_timer = xnet_wtime()
     timer_eos = timer_eos - start_timer
 
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        call eos_interface(t9t(izb),rhot(izb),yt(:,izb),yet(izb),cv(izb),etae(izb),detaedt9(izb), &
-          & xext(izb),aext(izb),zext(izb))
-      EndIf
-    EndDo
+    Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
+      & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
 
     stop_timer = xnet_wtime()
     timer_eos = timer_eos + stop_timer
@@ -329,7 +326,8 @@ Contains
       & n22, n31, n32, n33, n41, n42, n43, n44, csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i
     Use xnet_abundances, Only: yt, ydot
     Use xnet_conditions, Only: cv, t9t, t9dot
-    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
+      & lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_deriv
     Use xnet_types, Only: dp
     Implicit None
@@ -339,7 +337,7 @@ Contains
 
     ! Local variables
     Integer :: i, j, i0, i1, la1, le1, la2, le2, la3, le3, la4, le4, izb, izone
-    Real(dp) :: s1, s2, s3, s4, s11, s22, s33, s44
+    Real(dp) :: s1, s2, s3, s4, s11, s22, s33, s44, sdot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -352,16 +350,11 @@ Contains
     start_timer = xnet_wtime()
     timer_deriv = timer_deriv - start_timer
 
+    ! From the cross sections and the counting array, calculate the reaction rates
+    ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
-        ! From the cross sections and the counting array, calculate the reaction rates
-        b1(:,izb) = a1*csect1(mu1,izb)
-        b2(:,izb) = a2*csect2(mu2,izb)
-        b3(:,izb) = a3*csect3(mu3,izb)
-        b4(:,izb) = a4*csect4(mu4,izb)
-
-        ! Calculate Ydot for each nucleus, summing over the reactions which affect it.
         Do i0 = 1, ny
           la1 = la(1,i0)
           la2 = la(2,i0)
@@ -375,6 +368,7 @@ Contains
           ! Sum over the reactions with 1 reactant
           s1 = 0.0
           Do i1 = la1, le1
+            b1(i1,izb) = a1(i1)*csect1(mu1(i1),izb)
             s11 = b1(i1,izb)*yt(n11(i1),izb)
             s1 = s1 + s11
           EndDo
@@ -382,6 +376,7 @@ Contains
           ! Sum over the reactions with 2 reactants
           s2 = 0.0
           Do i1 = la2, le2
+            b2(i1,izb) = a2(i1)*csect2(mu2(i1),izb)
             s22 = b2(i1,izb)*yt(n21(i1),izb)*yt(n22(i1),izb)
             s2 = s2 + s22
           EndDo
@@ -389,6 +384,7 @@ Contains
           ! Sum over the reactions with 3 reactants
           s3 = 0.0
           Do i1 = la3, le3
+            b3(i1,izb) = a3(i1)*csect3(mu3(i1),izb)
             s33 = b3(i1,izb)*yt(n31(i1),izb)*yt(n32(i1),izb)*yt(n33(i1),izb)
             s3 = s3 + s33
           EndDo
@@ -396,6 +392,7 @@ Contains
           ! Sum over the reactions with 4 reactants
           s4 = 0.0
           Do i1 = la4, le4
+            b4(i1,izb) = a4(i1)*csect4(mu4(i1),izb)
             s44 = b4(i1,izb)*yt(n41(i1),izb)*yt(n42(i1),izb)*yt(n43(i1),izb)*yt(n44(i1),izb)
             s4 = s4 + s44
           EndDo
@@ -403,23 +400,27 @@ Contains
           ! Sum the 4 components of Ydot
           ydot(i0,izb) = s1 + s2 + s3 + s4
         EndDo
-
-        If ( iheat > 0 ) Then
-          ! Surprisingly, this seems to perform better than the DGEMV below
-          s1 = 0.0
-          Do i0 = 1, ny
-              s1 = s1 + mex(i0)*ydot(i0,izb)
-          EndDo
-          t9dot(izb) = -s1 / cv(izb)
-        EndIf
       EndIf
     EndDo
-    !If ( iheat > 0 ) Then
-    !  Call dgemv('T',ny,nzbatchmx,1.0,ydot(1,zb_lo),ny,mex,1,0.0,t9dot(zb_lo),1)
-    !  Where ( mask )
-    !    t9dot = -t9dot / cv
-    !  EndWhere
-    !EndIf
+
+    If ( iheat > 0 ) Then
+
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          sdot = 0.0
+          Do i0 = 1, ny
+            sdot = sdot - mex(i0)*ydot(i0,izb) / cv(izb)
+          EndDo
+          t9dot(izb) = sdot
+        EndIf
+      EndDo
+    EndIf
+
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        ktot(4,izb) = ktot(4,izb) + 1
+      EndIf
+    EndDo
 
     ! Separate loop for diagnostics so compiler can properly vectorize
     If ( idiag >= 5 ) Then
@@ -482,12 +483,6 @@ Contains
       EndDo
     EndIf
 
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        ktot(4,izb) = ktot(4,izb) + 1
-      EndIf
-    EndDo
-
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer
 
@@ -510,18 +505,23 @@ Contains
     Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9, screening
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_csect
     Use xnet_types, Only: dp
+    Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
+    Logical, Parameter :: use_blas = .true.
     Integer, Parameter :: dgemm_nzbatch = 200 ! Min number of zones to use dgemm, otherwise use dgemv
     Real(dp) :: t09(7,zb_lo:zb_hi), dt09(7,zb_lo:zb_hi)
     Real(dp) :: ene(zb_lo:zb_hi), ytot, abar, zbar, z2bar, zibar
     Real(dp) :: ascrn, rhot2, rhot3
     Real(dp) :: rpf1, rpf2, rpf3, rpf4
     Real(dp) :: dlnrpf1dt9, dlnrpf2dt9, dlnrpf3dt9, dlnrpf4dt9
+    Real(dp) :: p1, p2, p3, p4, s1, s2, s3, s4
+    Real(dp) :: lambda1, lambda2, lambda3, lambda4
+    Real(dp) :: dlam1dt9, dlam2dt9, dlam3dt9, dlam4dt9
     Integer :: j, k, izb, izone, nzmask
     Integer :: nr1, nr2, nr3, nr4
     Logical, Pointer :: mask(:)
@@ -532,6 +532,7 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+    nzmask = count(mask)
 
     nr1 = nreac(1)
     nr2 = nreac(2)
@@ -540,9 +541,6 @@ Contains
 
     ! Update thermodynamic state
     Call update_eos(mask_in = mask)
-
-    ! Check for any changes to iweak
-    Call update_iweak(t9t,mask_in = mask)
 
     ! Calculate the screening terms
     If ( iscrn >= 1 ) Then
@@ -555,9 +553,13 @@ Contains
     start_timer = xnet_wtime()
     timer_csect = timer_csect - start_timer
 
+    ! Check for any changes to iweak
+    Call update_iweak(t9t(zb_lo:zb_hi),mask_in = mask)
+
+    ! Calculate partition functions for each nucleus at t9t
+    Call partf(t9t(zb_lo:zb_hi),mask_in = mask)
+
     ! Calculate necessary thermodynamic moments
-    ene = 0.0
-    t09 = 0.0
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ene(izb) = yet(izb)*rhot(izb)
@@ -569,35 +571,101 @@ Contains
         t09(5,izb) = t9t(izb)
         t09(6,izb) = t9t(izb)**(+5.0/3.0)
         t09(7,izb) = log(t9t(izb))
+
+        ! Calculate reaction rate coefficient derivatives
+        dt09(1,izb) = 0.0
+        dt09(2,izb) = -t9t(izb)**(-2)
+        dt09(3,izb) = -t9t(izb)**(-4.0/3.0) / 3.0
+        dt09(4,izb) = +t9t(izb)**(-2.0/3.0) / 3.0
+        dt09(5,izb) = 1.0
+        dt09(6,izb) = +t9t(izb)**(+2.0/3.0) * 5.0/3.0
+        dt09(7,izb) = 1.0 / t9t(izb)
       EndIf
     EndDo
 
-    ! Calculate the REACLIB exponent polynomials, adding screening terms
-    nzmask = count(mask)
-    If ( nzmask >= dgemm_nzbatch ) Then
-      If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
-      If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
-      If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
-      If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
+    ! If there are any FFN reactions, calculate their rates
+    If ( nffn > 0 ) Call ffn_rate(nffn,t9t(zb_lo:zb_hi),ene, &
+      & rffn(:,zb_lo:zb_hi),dlnrffndt9(:,zb_lo:zb_hi),mask_in = mask)
+
+    ! If there are any neutrino-nucleus reactions, calculate their rates
+    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask)
+
+    ! Calculate the REACLIB exponent polynomials and derivatives, adding screening terms
+    If ( use_blas ) Then
+      If ( nzmask >= dgemm_nzbatch ) Then
+        If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
+        If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
+        If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
+        If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
+
+        If ( iheat > 0 ) Then
+          If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
+          If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
+          If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
+          If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
+        EndIf
+      Else
+        Do izb = zb_lo, zb_hi
+          If ( mask(izb) ) Then
+            If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
+            If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
+            If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
+            If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
+            If ( iheat > 0 ) Then
+              If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
+              If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
+              If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
+              If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
+            EndIf
+          EndIf
+        EndDo
+      EndIf
     Else
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
-          If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
-          If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
-          If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
+          Do k = 1, nr1
+            lambda1 = 0.0
+            dlam1dt9 = 0.0
+            Do j = 1, 7
+              lambda1 = lambda1 + rc1(j,k)*t09(j,izb)
+              dlam1dt9 = dlam1dt9 + rc1(j,k)*dt09(j,izb)
+            EndDo
+            h1(k,izb) = ascrn*h1(k,izb) + lambda1
+            dh1dt9(k,izb) = ascrn*dh1dt9(k,izb) + dlam1dt9
+          EndDo
+          Do k = 1, nr2
+            lambda2 = 0.0
+            dlam2dt9 = 0.0
+            Do j = 1, 7
+              lambda2 = lambda2 + rc2(j,k)*t09(j,izb)
+              dlam2dt9 = dlam2dt9 + rc2(j,k)*dt09(j,izb)
+            EndDo
+            h2(k,izb) = ascrn*h2(k,izb) + lambda2
+            dh2dt9(k,izb) = ascrn*dh2dt9(k,izb) + dlam2dt9
+          EndDo
+          Do k = 1, nr3
+            lambda3 = 0.0
+            dlam3dt9 = 0.0
+            Do j = 1, 7
+              lambda3 = lambda3 + rc3(j,k)*t09(j,izb)
+              dlam3dt9 = dlam3dt9 + rc3(j,k)*dt09(j,izb)
+            EndDo
+            h3(k,izb) = ascrn*h3(k,izb) + lambda3
+            dh3dt9(k,izb) = ascrn*dh3dt9(k,izb) + dlam3dt9
+          EndDo
+          Do k = 1, nr4
+            lambda4 = 0.0
+            dlam4dt9 = 0.0
+            Do j = 1, 7
+              lambda4 = lambda4 + rc4(j,k)*t09(j,izb)
+              dlam4dt9 = dlam4dt9 + rc4(j,k)*dt09(j,izb)
+            EndDo
+            h4(k,izb) = ascrn*h4(k,izb) + lambda4
+            dh4dt9(k,izb) = ascrn*dh4dt9(k,izb) + dlam4dt9
+          EndDo
         EndIf
       EndDo
     EndIf
-
-    ! Calculate partition functions for each nucleus at t9t
-    Call partf(t9t,mask_in = mask)
-
-    ! If there are any FFN reactions, calculate their rates
-    If ( nffn > 0 ) Call ffn_rate(nffn,t9t,ene,rffn,dlnrffndt9,mask_in = mask)
-
-    ! If there are any neutrino-nucleus reactions, calculate their rates
-    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt,rnnu,mask_in = mask)
 
     ! Calculate cross sections
     Do izb = zb_lo, zb_hi
@@ -605,239 +673,149 @@ Contains
 
         ! Calculate the csect for reactions with 1 reactant
         Do k = 1, nr1
-          If ( irev1(k) == 1 ) Then
-            rpf1 =   ( gg(n1i(2,k),izb) * gg(n1i(3,k),izb) * gg(n1i(4,k),izb) * gg(n1i(5,k),izb) ) &
-              &    / ( gg(n1i(1,k),izb) )
+          If ( (iweak(izb) <  0 .and. iwk1(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk1(k) /= 0) ) Then
+            csect1(k,izb) = 0.0
+            dcsect1dt9(k,izb) = 0.0
           Else
             rpf1 = 1.0
-          EndIf
-          If ( iweak(izb) > 0 ) Then
-            If ( iwk1(k) == 0 .or. iwk1(k) == 4 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb))
-            ElseIf ( iwk1(k) == 1 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb)) * ene(izb)
+            dlnrpf1dt9 = 0.0
+            If ( irev1(k) == 1 ) Then
+              p1 = gg(n1i(1,k),izb)
+              s1 = dlngdt9(n1i(1,k),izb)
+              Do j = 2, 5
+                rpf1 = rpf1 * gg(n1i(j,k),izb)
+                dlnrpf1dt9 = dlnrpf1dt9 + dlngdt9(n1i(j,k),izb)
+              EndDo
+              rpf1 = rpf1 / p1
+              dlnrpf1dt9 = dlnrpf1dt9 - s1
+            EndIf
+            If ( iwk1(k) == 1 ) Then
+              csect1(k,izb) = ene(izb) * rpf1 * safe_exp(h1(k,izb))
             ElseIf ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
               csect1(k,izb) = rffn(iffn(k),izb)
             ElseIf ( iwk1(k) == 7 ) Then ! Electron neutrino capture
               csect1(k,izb) = rpf1 * rnnu(innu(k),1,izb)
             ElseIf ( iwk1(k) == 8 ) Then ! Electron anti-neutrino capture
               csect1(k,izb) = rpf1 * rnnu(innu(k),2,izb)
-            EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk1(k) == 0 ) Then
-              csect1(k,izb) = 0.0
-            ElseIf ( iwk1(k) == 1 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb)) * ene(izb)
-            ElseIf ( iwk1(k) == 4 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb))
-            ElseIf ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
-              csect1(k,izb) = rffn(iffn(k),izb)
-            ElseIf ( iwk1(k) == 7 ) Then ! Electron neutrino capture
-              csect1(k,izb) = rpf1 * rnnu(innu(k),1,izb)
-            ElseIf ( iwk1(k) == 8 ) Then ! Electron anti-neutrino capture
-              csect1(k,izb) = rpf1 * rnnu(innu(k),2,izb)
-            EndIf
-          Else
-            If ( iwk1(k) == 0 ) Then
-              csect1(k,izb) = rpf1 * exp(h1(k,izb))
             Else
-              csect1(k,izb) = 0.0
+              csect1(k,izb) = rpf1 * safe_exp(h1(k,izb))
+            EndIf
+            If ( iheat > 0 ) Then
+              If ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then ! FFN reaction
+                dcsect1dt9(k,izb) = csect1(k,izb)*dlnrffndt9(iffn(k),izb)
+              ElseIf ( iwk1(k) == 7 .or. iwk1(k) == 8 ) Then ! NNU reaction
+                dcsect1dt9(k,izb) = csect1(k,izb)*dlnrpf1dt9
+              Else
+                dcsect1dt9(k,izb) = csect1(k,izb)*(dh1dt9(k,izb)+dlnrpf1dt9)
+              EndIf
             EndIf
           EndIf
         EndDo
 
         ! Calculate the csect for reactions with 2 reactants
         Do k = 1, nr2
-          If ( irev2(k) == 1 ) Then
-            rpf2 =   ( gg(n2i(3,k),izb) * gg(n2i(4,k),izb) * gg(n2i(5,k),izb) * gg(n2i(6,k),izb) ) &
-              &    / ( gg(n2i(1,k),izb) * gg(n2i(2,k),izb) )
+          If ( (iweak(izb) <  0 .and. iwk2(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk2(k) /= 0) ) Then
+            csect2(k,izb) = 0.0
+            dcsect2dt9(k,izb) = 0.0
           Else
             rpf2 = 1.0
-          EndIf
-          If ( iweak(izb) > 0 ) Then
+            dlnrpf2dt9 = 0.0
+            If ( irev2(k) == 1 ) Then
+              p2 = 1.0
+              s2 = 0.0
+              Do j = 1, 2
+                p2 = p2 * gg(n2i(j,k),izb)
+                s2 = s2 + dlngdt9(n2i(j,k),izb)
+              EndDo
+              Do j = 3, 6
+                rpf2 = rpf2 * gg(n2i(j,k),izb)
+                dlnrpf2dt9 = dlnrpf2dt9 + dlngdt9(n2i(j,k),izb)
+              EndDo
+              rpf2 = rpf2 / p2
+              dlnrpf2dt9 = dlnrpf2dt9 - s2
+            EndIf
             If ( iwk2(k) == 1 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb)) * ene(izb)
+              csect2(k,izb) = rhot(izb) * ene(izb) * rpf2 * safe_exp(h2(k,izb))
             Else
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb))
+              csect2(k,izb) = rhot(izb) * rpf2 * safe_exp(h2(k,izb))
             EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk2(k) == 0 ) Then
-              csect2(k,izb) = 0.0
-            ElseIf ( iwk2(k) == 1 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb)) * ene(izb)
-            Else
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb))
-            EndIf
-          Else
-            If ( iwk2(k) == 0 ) Then
-              csect2(k,izb) = rhot(izb) * rpf2 * exp(h2(k,izb))
-            Else
-              csect2(k,izb) = 0.0
-            EndIf
+            If ( iheat > 0 ) dcsect2dt9(k,izb) = csect2(k,izb)*(dh2dt9(k,izb)+dlnrpf2dt9)
           EndIf
         EndDo
 
         ! Calculate the csect for reactions with 3 reactants
         Do k = 1, nr3
-          If ( irev3(k) == 1 ) Then
-            rpf3 =   ( gg(n3i(4,k),izb) * gg(n3i(5,k),izb) * gg(n3i(6,k),izb) ) &
-              &    / ( gg(n3i(1,k),izb) * gg(n3i(2,k),izb) * gg(n3i(3,k),izb) )
+          If ( (iweak(izb) <  0 .and. iwk3(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk3(k) /= 0) ) Then
+            csect3(k,izb) = 0.0
+            dcsect3dt9(k,izb) = 0.0
           Else
             rpf3 = 1.0
-          EndIf
-          rhot2 = rhot(izb)**2
-          If ( iweak(izb) > 0 ) Then
+            dlnrpf3dt9 = 0.0
+            If ( irev3(k) == 1 ) Then
+              p3 = 1.0
+              s3 = 0.0
+              Do j = 1, 3
+                p3 = p3 * gg(n3i(j,k),izb)
+                s3 = s3 + dlngdt9(n3i(j,k),izb)
+              EndDo
+              Do j = 4, 6
+                rpf3 = rpf3 * gg(n3i(j,k),izb)
+                dlnrpf3dt9 = dlnrpf3dt9 + dlngdt9(n3i(j,k),izb)
+              EndDo
+              rpf3 = rpf3 / p3
+              dlnrpf3dt9 = dlnrpf3dt9 - s3
+            EndIf
+            rhot2 = rhot(izb)**2
             If ( iwk3(k) == 1 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb)) * ene(izb)
+              csect3(k,izb) = rhot2 * ene(izb) * rpf3 * safe_exp(h3(k,izb))
             Else
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb))
+              csect3(k,izb) = rhot2 * rpf3 * safe_exp(h3(k,izb))
             EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk3(k) == 0 ) Then
-              csect3(k,izb) = 0.0
-            ElseIf ( iwk3(k) == 1 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb)) * ene(izb)
-            Else
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb))
-            EndIf
-          Else
-            If ( iwk3(k) == 0 ) Then
-              csect3(k,izb) = rhot2 * rpf3 * exp(h3(k,izb))
-            Else
-              csect3(k,izb) = 0.0
-            EndIf
+            If ( csect3(k,izb) < 1.0e-20 ) csect3(k,izb) = 0.0
+            If ( iheat > 0 ) dcsect3dt9(k,izb) = csect3(k,izb)*(dh3dt9(k,izb)+dlnrpf3dt9)
           EndIf
-          If ( csect3(k,izb) < 1.0e-20 ) csect3(k,izb) = 0.0
         EndDo
 
         ! Calculate the csect for reactions with 4 reactants
         Do k = 1, nr4
-          If ( irev4(k) == 1 ) Then
-            rpf4 =   ( gg(n4i(5,k),izb) * gg(n4i(6,k),izb) ) &
-              &    / ( gg(n4i(1,k),izb) * gg(n4i(2,k),izb) * gg(n4i(3,k),izb) * gg(n4i(4,k),izb ) )
+          If ( (iweak(izb) <  0 .and. iwk4(k) == 0) .or. &
+            &  (iweak(izb) == 0 .and. iwk4(k) /= 0) ) Then
+            csect4(k,izb) = 0.0
+            dcsect4dt9(k,izb) = 0.0
           Else
             rpf4 = 1.0
-          EndIf
-          rhot3 = rhot(izb)**3
-          If ( iweak(izb) > 0 ) Then
+            dlnrpf4dt9 = 0.0
+            If ( irev4(k) == 1 ) Then
+              p4 = 1.0
+              s4 = 0.0
+              Do j = 1, 4
+                p4 = p4 * gg(n4i(j,k),izb)
+                s4 = s4 + dlngdt9(n4i(j,k),izb)
+              EndDo
+              Do j = 5, 6
+                rpf4 = rpf4 * gg(n4i(j,k),izb)
+                dlnrpf4dt9 = dlnrpf4dt9 + dlngdt9(n4i(j,k),izb)
+              EndDo
+              rpf4 = rpf4 / p4
+              dlnrpf4dt9 = dlnrpf4dt9 - s4
+            EndIf
+            rhot3 = rhot(izb)**3
             If ( iwk4(k) == 1 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb)) * ene(izb)
+              csect4(k,izb) = rhot3 * ene(izb) * rpf4 * safe_exp(h4(k,izb))
             Else
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb))
+              csect4(k,izb) = rhot3 * rpf4 * safe_exp(h4(k,izb))
             EndIf
-          ElseIf ( iweak(izb) < 0 ) Then
-            If ( iwk4(k) == 0 ) Then
-              csect4(k,izb) = 0.0
-            ElseIf ( iwk4(k) == 1 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb)) * ene(izb)
-            Else
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb))
-            EndIf
-          Else
-            If ( iwk4(k) == 0 ) Then
-              csect4(k,izb) = rhot3 * rpf4 * exp(h4(k,izb))
-            Else
-              csect4(k,izb) = 0.0
-            EndIf
+            If ( iheat > 0 ) dcsect4dt9(k,izb) = csect4(k,izb)*(dh4dt9(k,izb)+dlnrpf4dt9)
           EndIf
         EndDo
+
+        ! Increment counter
+        ktot(5,izb) = ktot(5,izb) + 1
       EndIf
     EndDo
-
-    If ( iheat > 0 ) Then
-
-      ! Calculate reaction rate coefficient derivatives
-      dt09 = 0.0
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          dt09(1,izb) = 0.0
-          dt09(2,izb) = -t9t(izb)**(-2)
-          dt09(3,izb) = -t9t(izb)**(-4.0/3.0) / 3.0
-          dt09(4,izb) = +t9t(izb)**(-2.0/3.0) / 3.0
-          dt09(5,izb) = 1.0
-          dt09(6,izb) = +t9t(izb)**(+2.0/3.0) * 5.0/3.0
-          dt09(7,izb) = 1.0 / t9t(izb)
-        EndIf
-      EndDo
-
-      ! Calculate the derivatives of REACLIB exponent polynomials, adding screening terms
-      If ( nzmask >= dgemm_nzbatch ) Then
-        If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
-        If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
-        If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
-        If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
-      Else
-        Do izb = zb_lo, zb_hi
-          If ( mask(izb) ) Then
-            If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
-            If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
-            If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
-            If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
-          EndIf
-        EndDo
-      EndIf
-
-      ! Calculate cross-section derivatives
-      Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-
-          ! 1-reactant reactions
-          Do k = 1, nr1
-            If ( irev1(k) == 1 ) Then
-              dlnrpf1dt9 =   (   dlngdt9(n1i(2,k),izb) + dlngdt9(n1i(3,k),izb) &
-                &              + dlngdt9(n1i(4,k),izb) + dlngdt9(n1i(5,k),izb) ) &
-                &          - (   dlngdt9(n1i(1,k),izb) )
-            Else
-              dlnrpf1dt9 = 0.0
-            EndIf
-            If ( iwk1(k) == 2 .or. iwk1(k) == 3 ) Then  ! FFN reaction
-              dcsect1dt9(k,izb) = rffn(iffn(k),izb)*dlnrffndt9(iffn(k),izb)
-            ElseIf ( iwk1(k) == 7 ) Then  ! Electron neutrino capture
-              dcsect1dt9(k,izb) = rnnu(innu(k),1,izb)*dlnrpf1dt9
-            ElseIf ( iwk1(k) == 8 ) Then  ! Electron anti-neutrino capture
-              dcsect1dt9(k,izb) = rnnu(innu(k),2,izb)*dlnrpf1dt9
-            Else
-              dcsect1dt9(k,izb) = csect1(k,izb)*(dh1dt9(k,izb)+dlnrpf1dt9)
-            EndIf
-          EndDo
-
-          ! 2-reactant reactions
-          Do k = 1, nr2
-            If ( irev2(k) == 1 ) Then
-              dlnrpf2dt9 =   (   dlngdt9(n2i(3,k),izb) + dlngdt9(n2i(4,k),izb) &
-                               + dlngdt9(n2i(5,k),izb) + dlngdt9(n2i(6,k),izb) ) &
-                &          - (   dlngdt9(n2i(1,k),izb) + dlngdt9(n2i(2,k),izb) )
-            Else
-              dlnrpf2dt9 = 0.0
-            EndIf
-            dcsect2dt9(k,izb) = csect2(k,izb)*(dh2dt9(k,izb)+dlnrpf2dt9)
-          EndDo
-
-          ! 3-reactant reactions
-          Do k = 1, nr3
-            If ( irev3(k) == 1 ) Then
-              dlnrpf3dt9 =   ( dlngdt9(n3i(4,k),izb) + dlngdt9(n3i(5,k),izb) + dlngdt9(n3i(6,k),izb) ) &
-                &          - ( dlngdt9(n3i(1,k),izb) + dlngdt9(n3i(2,k),izb) + dlngdt9(n3i(3,k),izb) )
-            Else
-              dlnrpf3dt9 = 0.0
-            EndIf
-            dcsect3dt9(k,izb) = csect3(k,izb)*(dh3dt9(k,izb)+dlnrpf3dt9)
-          EndDo
-
-          ! 4-reactant reactions
-          Do k = 1, nr4
-            If ( irev4(k) == 1 ) Then
-              dlnrpf4dt9 =   (   dlngdt9(n4i(5,k),izb) + dlngdt9(n4i(6,k),izb) ) &
-                &          - (   dlngdt9(n4i(1,k),izb) + dlngdt9(n4i(2,k),izb) &
-                &              + dlngdt9(n4i(3,k),izb) + dlngdt9(n4i(4,k),izb) )
-            Else
-              dlnrpf4dt9 = 0.0
-            EndIf
-            dcsect4dt9(k,izb) = csect4(k,izb)*(dh4dt9(k,izb)+dlnrpf4dt9)
-          EndDo
-        EndIf
-      EndDo
-    EndIf
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
@@ -881,12 +859,6 @@ Contains
         EndIf
       EndDo
     EndIf
-
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-        ktot(5,izb) = ktot(5,izb) + 1
-      EndIf
-    EndDo
 
     stop_timer = xnet_wtime()
     timer_csect = timer_csect + stop_timer

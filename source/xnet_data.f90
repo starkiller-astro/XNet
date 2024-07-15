@@ -108,19 +108,19 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: t9(nzevolve)
+    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, ii, izb
+    Integer :: i, ii, k, izb
     Real(dp) :: rdt9
     Logical, Pointer :: mask(:)
 
@@ -139,27 +139,39 @@ Contains
         ii = i
 
         ! Linear interpolation in log-space
+        gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
         Select Case (ii)
         Case (1)
-          gg(1:ny,izb) = g(1,1:ny)
+          Do k = 1, ny
+            gg(k,izb) = g(1,k)
+          EndDo
         Case (ng+1)
-          gg(1:ny,izb) = g(ng,1:ny)
+          Do k = 1, ny
+            gg(k,izb) = g(ng,k)
+          EndDo
         Case Default
           rdt9 = (t9(izb)-t9i(ii-1)) / (t9i(ii)-t9i(ii-1))
-          gg(1:ny,izb) = safe_exp( rdt9*log(g(ii,1:ny)) + (1.0-rdt9)*log(g(ii-1,1:ny)) )
+          Do k = 1, ny
+            gg(k,izb) = safe_exp( rdt9*log(g(ii,k)) + (1.0-rdt9)*log(g(ii-1,k)) )
+          EndDo
         End Select
-        gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
 
         If ( iheat > 0 ) Then
+          dlngdt9(0,izb) = 0.0
           Select Case (ii)
           Case (1)
-            dlngdt9(1:ny,izb) = log(g(2,1:ny)/g(1,1:ny)) / (t9i(2)-t9i(1))
+            Do k = 1, ny
+              dlngdt9(k,izb) = log(g(2,k)/g(1,k)) / (t9i(2)-t9i(1))
+            EndDo
           Case (ng+1)
-            dlngdt9(1:ny,izb) = log(g(ng,1:ny)/g(ng-1,1:ny)) / (t9i(ng)-t9i(ng-1))
+            Do k = 1, ny
+              dlngdt9(k,izb) = log(g(ng,k)/g(ng-1,k)) / (t9i(ng)-t9i(ng-1))
+            EndDo
           Case Default
-            dlngdt9(1:ny,izb) = log(g(ii,1:ny)/g(ii-1,1:ny)) / (t9i(ii)-t9i(ii-1))
+            Do k = 1, ny
+              dlngdt9(k,izb) = log(g(ii,k)/g(ii-1,k)) / (t9i(ii)-t9i(ii-1))
+            EndDo
           End Select
-          dlngdt9(0,izb) = 0.0
         EndIf
       EndIf
     EndDo

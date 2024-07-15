@@ -142,7 +142,7 @@ Contains
                                                 ! On output, = BDF_STATUS_FAIL    if zone fails to converge
 
     ! Local variables
-    Integer :: kts, izb, izone
+    Integer :: kts, k, izb, izone
 
     ! Initial setup and allocations
     If ( kstep == 1 ) Call bdf_reset
@@ -150,8 +150,9 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
-    ! Copy status flag to local copy
     Do izb = zb_lo, zb_hi
+
+      ! Copy status flag to local copy
       ierr_ts(izb) = ierr(izb)
 
       ! If the zone has previously converged or failed, do not iterate
@@ -160,13 +161,11 @@ Contains
       Else
         ierr_nr(izb) = BDF_STATUS_FAIL
       EndIf
-    EndDo
 
-    ! Make adjustments to account for any change in stepsize or order from previous step
-    If ( kstep /= 1 ) Call bdf_adjust(kstep)
-
-    Do izb = zb_lo, zb_hi
-      ydot0(:,izb) = ydot(:,izb)
+      ! Save initial derivatives so they can be reloaded later if necessary
+      Do k = 1, ny
+        ydot0(k,izb) = ydot(k,izb)
+      EndDo
       If ( iheat > 0 ) t9dot0(izb) = t9dot(izb)
 
       ! Reset maximum stepsize for next step
@@ -177,6 +176,10 @@ Contains
       nerr_ts(izb) = 0
       ncf_ts(izb) = 0
     EndDo
+
+    ! Make adjustments to account for any change in stepsize or order from previous step
+    If ( kstep /= 1 ) Call bdf_adjust(kstep)
+
     Do kts = 1, max_it_ts
 
       Do izb = zb_lo, zb_hi
@@ -204,7 +207,12 @@ Contains
       tdel_next(izb) = eta(izb) * tdel(izb)
 
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
-        yt(:,izb) = z(1:ny,0,izb)
+        ierr_ts(izb) = BDF_STATUS_SUCCESS
+        Do k = 1, ny
+          yt(k,izb) = z(k,0,izb)
+          yo(k,izb) = y(k,izb)
+          y(k,izb) = yt(k,izb)
+        EndDo
         If ( iheat > 0 ) t9t(izb) = z(neq,0,izb)
         nto(izb) = nt(izb)
         nt(izb) = ntt(izb)
@@ -216,33 +224,29 @@ Contains
         rho(izb) = rhot(izb)
         yeo(izb) = ye(izb)
         ye(izb) = yet(izb)
-        yo(:,izb) = y(:,izb)
-        y(:,izb) = yt(:,izb)
+      ElseIf ( ierr_nr(izb) == BDF_STATUS_FAIL .or. ierr_ts(izb) == BDF_STATUS_FAIL ) Then
+        ierr_ts(izb) = BDF_STATUS_FAIL
       EndIf
 
       ! Record iteration counters
       kmon(1,izb) = nit_ts(izb)
       ktot(1,izb) = ktot(1,izb) + nit_ts(izb)
       kmon(2,izb) = nit_nrslv(izb)
+
+      ! Copy local status flag to output
+      ierr(izb) = ierr_ts(izb)
     EndDo
 
     ! Log TS success/failure
     Do izb = zb_lo, zb_hi
       izone = izb + szbatch - zb_lo
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
-        ierr_ts(izb) = BDF_STATUS_SUCCESS
         If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3)") &
           'BDF TS Success',kstep,izone,nit_ts(izb),nit_nr(izb)
       ElseIf ( ierr_nr(izb) == BDF_STATUS_FAIL .or. ierr_ts(izb) == BDF_STATUS_FAIL ) Then
-        ierr_ts(izb) = BDF_STATUS_FAIL
         If ( idiag >= 0 ) Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
           'BDF TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),nit_nr(izb),nit_ts(izb)
       EndIf
-    EndDo
-
-    ! Copy local status flag to output
-    Do izb = zb_lo, zb_hi
-      ierr(izb) = ierr_ts(izb)
     EndDo
 
     stop_timer = xnet_wtime()
@@ -382,7 +386,7 @@ Contains
     Implicit None
 
     ! Local variables
-    Integer :: izb
+    Integer :: i, j, k, izb
 
     Do izb = zb_lo, zb_hi
       bdf_active(izb) = .false.
@@ -403,37 +407,60 @@ Contains
       q_age(izb) = 0
       nscon(izb) = 0
 
-      sddat(:,:,izb) = 0.0_dp
+      Do k = 1, 3
+        Do i = 1, 5
+          sddat(i,k,izb) = 0.0_dp
+        EndDo
+      EndDo
 
-      z(:,:,izb) = 0.0_dp
-      z(1:ny,0,izb) = yt(:,izb)
-      z(1:ny,1,izb) = ydot(:,izb) * tdel(izb)
+      Do j = 0, max_order
+        Do i = 1, neq
+          z(i,j,izb) = 0.0_dp
+          z0(i,j,izb) = 0.0_dp
+          zt0(i,j,izb) = 0.0_dp
+        EndDo
+      EndDo
+
+      Do i = 1, ny
+        z(i,0,izb) = yt(i,izb)
+        z(i,1,izb) = ydot(i,izb) * tdel(izb)
+      EndDo
       If ( iheat > 0 ) Then
         z(neq,0,izb) = t9t(izb)
         z(neq,1,izb) = t9dot(izb) * tdel(izb)
       EndIf
-      z0(:,:,izb) = 0.0_dp
-      zt0(:,:,izb) = 0.0_dp
 
-      hvec(:,izb) = tdel(izb)
-      lvec(:,izb) = 0.0_dp
+      Do i = 0, max_order
+        hvec(i,izb) = tdel(izb)
+        lvec(i,izb) = 0.0_dp
+      EndDo
       dt_scale(izb) = tdel(izb)
-      etaq(:,izb) = 0.0_dp
+
+      Do i = -1, 1
+        etaq(i,izb) = 0.0_dp
+      EndDo
       eta(izb) = 0.0_dp
       eta_next(izb) = eta_max
       gam(izb) = tdel(izb)
       gamhat(izb) = tdel(izb)
       gamratio(izb) = 1.0_dp
 
-      ewt(:,izb) = 0.0_dp
-      acor(:,izb) = 0.0_dp
-      acorp(:,izb) = 0.0_dp
+      Do i = 1, neq
+        ewt(i,izb) = 0.0_dp
+        acor(i,izb) = 0.0_dp
+        acorp(i,izb) = 0.0_dp
+      EndDo
       acnrm(izb) = 0.0_dp
       crate(izb) = 0.0_dp
-      tq(:,izb) = 0.0_dp
+
+      Do i = -1, 2
+        tq(i,izb) = 0.0_dp
+      EndDo
       tq2save(izb) = 0.0_dp
 
-      ydot0(:,izb) = ydot(:,izb)
+      Do i = 1, ny
+        ydot0(i,izb) = ydot(i,izb)
+      EndDo
       t9dot0(izb) = t9dot(izb)
     EndDo
 
@@ -489,15 +516,21 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Local variables
-    Integer :: i, j, izb, izone
+    Integer :: i, j, k, izb, izone
 
     Do izb = zb_lo, zb_hi
       If ( bdf_active(izb) ) Then
-        z0(:,:,izb) = z(:,:,izb)
-        zt0(:,:,izb) = z(:,:,izb)
+        Do j = 0, max_order
+          Do i = 1, neq
+            z0(i,j,izb) = z(i,j,izb)
+            zt0(i,j,izb) = z(i,j,izb)
+          EndDo
+        EndDo
         Do i = 0, q(izb)
           Do j = i+1, q(izb)
-            zt0(:,i,izb) = zt0(:,i,izb) + z(:,j,izb) * A_pascal(j,i)
+            Do k = 1, neq
+              zt0(k,i,izb) = zt0(k,i,izb) + z(k,j,izb) * A_pascal(j,i)
+            EndDo
           EndDo
         EndDo
       EndIf
@@ -560,7 +593,9 @@ Contains
         ! Compute lvec and tq
         lvec(0,izb) = 1.0_dp
         lvec(1,izb) = 1.0_dp
-        lvec(2:max_order,izb) = 0.0_dp
+        Do i = 2, max_order
+          lvec(i,izb) = 0.0_dp
+        EndDo
         xi_inv = 1.0_dp
         xistar_inv = 1.0_dp
         alpha0 = -1.0_dp
@@ -620,8 +655,12 @@ Contains
           gamhat(izb) = gam(izb)
           gamratio(izb) = 1.0_dp
         EndIf
+      EndIf
+    EndDo
 
-        If ( idiag >= 3 ) Then
+    If ( idiag >= 3 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( bdf_active(izb) ) Then
           izone = izb + szbatch - zb_lo
           Write(lun_diag,"(a,2i5,i3,7es12.4)") 'BDF Update',kstep,izone,q(izb),tdel(izb),tt(izb)
           Write(lun_diag,"(2x,a5,6es12.4)") ' H',(hvec(i,izb),i=0,max_order)
@@ -637,8 +676,8 @@ Contains
           EndDo
           Write(lun_diag,"(2x,a5,2(a5,es14.7))") 'EWT',(ewtname(i),ewt(iewt(i),izb),i=1,2)
         EndIf
-      EndIf
-    EndDo
+      EndDo
+    EndIf
 
     Return
   End Subroutine bdf_update
@@ -672,19 +711,20 @@ Contains
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
-    ! Load prediction into abundance vector
+    ! Load prediction into abundance vector and initialize masks
     Do izb = zb_lo, zb_hi
       If ( bdf_active(izb) ) Then
-        acor(:,izb) = 0.0_dp
-        yt(:,izb) = zt0(1:ny,0,izb)
-        If ( iheat > 0 ) t9t(izb) = zt0(neq,0,izb)
+        Do i = 1, ny
+          acor(i,izb) = 0.0_dp
+          yt(i,izb) = zt0(i,0,izb)
+        EndDo
+        If ( iheat > 0 ) Then
+          acor(neq,izb) = 0.0_dp
+          t9t(izb) = zt0(neq,0,izb)
+        EndIf
+        nit_nr(izb) = 0
+        nit_nrslv(izb) = 0
       EndIf
-    EndDo
-    If ( iheat == 0 ) Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi), &
-      rhot(zb_lo:zb_hi),mask_in = retry_ts(zb_lo:zb_hi))
-
-    ! Initialize masks
-    Do izb = zb_lo, zb_hi
 
       ! Determine which zones to rebuild the Newton matrix and factor
       refactor(izb) = ( bdf_active(izb) .and. &
@@ -693,16 +733,14 @@ Contains
       ! Determine which zones' Jacobians need to be rebuilt
       rebuild(izb) = ( refactor(izb) .and. j_age(izb) > max_j_age )
 
-      If ( bdf_active(izb) ) Then
-        nit_nr(izb) = 0
-        nit_nrslv(izb) = 0
-      EndIf
       iterate(izb) = bdf_active(izb)
       converged(izb) = .false.
       crate(izb) = 1.0_dp
       delp(izb) = 0.0_dp
       diag(izb) = 1.0_dp
     EndDo
+    If ( iheat == 0 ) Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi), &
+      rhot(zb_lo:zb_hi),mask_in = retry_ts(zb_lo:zb_hi))
 
     ! Do the NR iteration
     Do kit = 1, max_it_nrslv
@@ -731,6 +769,7 @@ Contains
       Call jacobian_build(mask_in = rebuild)
       Call jacobian_scale(diag,-gam(zb_lo:zb_hi),mask_in = refactor)
       Call jacobian_decomp(kstep,mask_in = refactor)
+
       If ( idiag >= 4 ) Then
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
@@ -740,7 +779,10 @@ Contains
             'BDF Rebuild',kstep,izone,nit_nr(izb),gam(izb),abs(gamratio(izb)-1.0_dp),j_age(izb)
         EndDo
       EndIf
+
       Do izb = zb_lo, zb_hi
+
+        ! Reset Jacobian age
         If ( refactor(izb) ) Then
           gamhat(izb) = gam(izb)
           gamratio(izb) = 1.0_dp
@@ -752,16 +794,17 @@ Contains
           j_age(izb) = 0
           rebuild(izb) = .false.
         EndIf
-      EndDo
 
-      ! Calculate RHS
-      Do izb = zb_lo, zb_hi
+        ! Calculate RHS
         If ( iterate(izb) ) Then
           cstar = 2.0_dp / ( 1.0_dp + gamratio(izb) )
-          yrhs(:,izb) =  cstar * ( gam(izb)*ydot(:,izb) - zt0(1:ny,1,izb)/lvec(1,izb) - acor(1:ny,izb) )
+          Do k = 1, ny
+            yrhs(k,izb) =  cstar * ( gam(izb)*ydot(k,izb) - zt0(k,1,izb)/lvec(1,izb) - acor(k,izb) )
+          EndDo
           If ( iheat > 0 ) t9rhs(izb) = cstar * ( gam(izb)*t9dot(izb) - zt0(neq,1,izb)/lvec(1,izb) - acor(neq,izb) )
         EndIf
       EndDo
+
       If ( idiag >= 4 ) Then
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
@@ -784,16 +827,18 @@ Contains
         If ( iterate(izb) ) Then
 
           ! Prevent abundance from becoming too small
-          yt(:,izb) = zt0(1:ny,0,izb) + acor(1:ny,izb) + dy(:,izb)
-          Where ( yt(1:ny,izb) < ymin )
-            yt(1:ny,izb) = 0.0_dp
-            dy(1:ny,izb) = -zt0(1:ny,0,izb) - acor(1:ny,izb)
-          ElseWhere ( yt(1:ny,izb) * aa(1:ny) > 1.0_dp )
-            yt(1:ny,izb) = 1.0_dp / aa(1:ny)
-            dy(1:ny,izb) = 1.0_dp / aa(1:ny) - zt0(1:ny,0,izb) - acor(1:ny,izb)
-          EndWhere
-          acor(1:ny,izb) = acor(1:ny,izb) + dy(:,izb)
-          dvec(1:ny) = dy(:,izb)
+          Do k = 1, ny
+            yt(k,izb) = zt0(k,0,izb) + acor(k,izb) + dy(k,izb)
+            If ( yt(k,izb) < ymin ) Then
+              yt(k,izb) = 0.0_dp
+              dy(k,izb) = -zt0(k,0,izb) - acor(k,izb)
+            ElseIf ( yt(k,izb) * aa(k) > 1.0_dp ) Then
+              yt(k,izb) = 1.0_dp / aa(k)
+              dy(k,izb) = 1.0_dp / aa(k) - zt0(k,0,izb) - acor(k,izb)
+            EndIf
+            acor(k,izb) = acor(k,izb) + dy(k,izb)
+            dvec(k) = dy(k,izb)
+          EndDo
           If ( iheat > 0 ) Then
             dvec(neq) = dt9(izb)
             acor(neq,izb) = acor(neq,izb) + dt9(izb)
@@ -804,6 +849,7 @@ Contains
           dcon(izb) = del(izb) * min(1.0_dp,crate(izb)) * tq(0,izb)
         EndIf
       EndDo
+
       If ( idiag >= 3 ) Then
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
@@ -847,12 +893,17 @@ Contains
 
             ! Reset the iteration and try again with a new Jacobian
             If ( j_age(izb) > 0 ) Then
-              yt(:,izb) = zt0(1:ny,0,izb)
-              If ( iheat > 0 ) t9t(izb) = zt0(neq,0,izb)
+              Do k = 1, ny
+                yt(k,izb) = zt0(k,0,izb)
+                acor(k,izb) = 0.0_dp
+              EndDo
+              If ( iheat > 0 ) Then
+                t9t(izb) = zt0(neq,0,izb)
+                acor(neq,izb) = 0.0_dp
+              EndIf
               refactor(izb) = .true.
               rebuild(izb) = ( abs(gamratio(izb) - 1.0_dp) < dgmaxj )
               nit_nr(izb) = 0
-              acor(:,izb) = 0.0_dp
             Else
               iterate(izb) = .false.
               nit_nr(izb) = max_it_nr + 1
@@ -927,19 +978,16 @@ Contains
           If ( nit_ts(izb) >= max_it_ts ) Then
             ierr_nr(izb) = BDF_STATUS_SKIP
             ierr_ts(izb) = BDF_STATUS_FAIL
-            Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Too many TS failures)'
 
           ! Solver failed to converge with minimum timestep, give up
           ElseIf ( tdel(izb) <= spacing(t(izb)) ) Then
             ierr_nr(izb) = BDF_STATUS_SKIP
             ierr_ts(izb) = BDF_STATUS_FAIL
-            Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Timestep too small)'
 
           ! Solver failed to converge too many times, give up
           ElseIf ( ncf_ts(izb) == max_ncf_ts ) Then
             ierr_nr(izb) = BDF_STATUS_SKIP
             ierr_ts(izb) = BDF_STATUS_FAIL
-            Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Too many NR failures)'
 
           ! Try again with smaller timestep
           Else
@@ -978,20 +1026,15 @@ Contains
             ! Prevent stepsize from growing after this step
             eta_next(izb) = 1.0_dp
 
-            If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3,es12.4)") &
-              'BDF TS Error',kstep,izone,nit_ts(izb),nerr_ts(izb),error
-
             ! Solver failed error test too many times, give up
             If ( nerr_ts(izb) == max_nerr_ts ) Then
               ierr_nr(izb) = BDF_STATUS_SKIP
               ierr_ts(izb) = BDF_STATUS_FAIL
-              Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Too many failed error tests)'
 
             ! Solver failed error test with minimum timestep, give up
             ElseIf ( tdel(izb) <= spacing(t(izb)) ) Then
               ierr_nr(izb) = BDF_STATUS_SKIP
               ierr_ts(izb) = BDF_STATUS_FAIL
-              Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Timestep too small)'
 
             ! Solver failed error test after multiple attempts, reduce timestep, reduce order, and retry
             ElseIf ( nerr_ts(izb) > nerr_ts_qreduce ) Then
@@ -1039,23 +1082,40 @@ Contains
             EndIf
           EndIf
         EndIf
-      EndIf
-    EndDo
 
-    ! Record iteration counters
-    Do izb = zb_lo, zb_hi
-      If ( bdf_active(izb) ) Then
+        ! Record iteration counters
         ktot(2,izb) = ktot(2,izb) + nit_nrslv(izb)
         nit_ts(izb) = nit_ts(izb) + 1
       EndIf
     EndDo
 
     ! Log the failed integration attempts
-    If ( idiag >= 2 ) Then
+    If ( idiag >= 1 ) Then
       Do izb = zb_lo, zb_hi
-        If ( retry_ts(izb) ) Then
+        If ( bdf_active(izb) ) Then
           izone = izb + szbatch - zb_lo
-          Write(lun_diag,"(a,i5,3i3,3es12.4,i3)") &
+          If ( nit_nr(izb) > max_it_nr ) Then
+            If ( nit_ts(izb) >= max_it_ts ) Then
+              Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Too many TS failures)'
+            ElseIf ( tdel(izb) <= spacing(t(izb)) ) Then
+              Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Timestep too small)'
+            ElseIf ( ncf_ts(izb) == max_ncf_ts ) Then
+              Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Too many NR failures)'
+            EndIf
+          Else ! nit_nr(izb) <= max_it_nr
+            error = tq(0,izb) * acnrm(izb)
+            If ( error > 1.0_dp ) Then
+              If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3,es12.4)") &
+                'BDF TS Error',kstep,izone,nit_ts(izb)-1,nerr_ts(izb),error
+              If ( nerr_ts(izb) == max_nerr_ts ) Then
+                Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Too many failed error tests)'
+              ElseIf ( tdel(izb) <= spacing(t(izb)) ) Then
+                Write(lun_stdout,"(a,2i5,1x,a)") 'BDF TS Fail',kstep,izone,'(Timestep too small)'
+              EndIf
+            EndIf
+          EndIf
+
+          If ( idiag >= 2 .and. retry_ts(izb) ) Write(lun_diag,"(a,i5,3i3,3es12.4,i3)") &
             'BDF TS Reduce',izone,nit_ts(izb),ncf_ts(izb),nerr_ts(izb),t(izb),tdel(izb),eta(izb),q(izb)
         EndIf
       EndDo
@@ -1090,20 +1150,21 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Local variables
-    Integer :: i, j, izb, izone
+    Integer :: i, j, k, izb, izone
 
     Do izb = zb_lo, zb_hi
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
 
         ! Apply corrections to Nordsieck vector
-        z(1:ny,0,izb) = yt(:,izb)
+        Do k = 1, ny
+          z(k,0,izb) = yt(k,izb)
+        EndDo
         If ( iheat > 0 ) z(neq,0,izb) = t9t(izb)
         Do j = 1, q(izb)
-          z(:,j,izb) = zt0(:,j,izb) + acor(:,izb) * lvec(j,izb)
+          Do i = 1, neq
+            z(i,j,izb) = zt0(i,j,izb) + acor(i,izb) * lvec(j,izb)
+          EndDo
         EndDo
-        !Call dgemm('N','T',neq,q(izb)+1,1,1.0_dp,acor(:,izb),neq,lvec(:,izb),max_order+1,zt0(:,:,izb),neq)
-        !Call dger(neq,q(izb)+1,1.0_dp,acor(:,izb),1,lvec(:,izb),1,zt0(:,:,izb),neq)
-        !z(:,:,izb) = zt0(:,:,izb)
 
         ! Shift timestep history
         Do j = max_order, 1, -1
@@ -1153,38 +1214,38 @@ Contains
     Real(dp), Parameter :: biasq = 6.0_dp
     Real(dp), Parameter :: biasqp1 = 10.0_dp
     Real(dp), Parameter :: addon = 1.0e-6_dp
-    Real(dp) :: c, error, acorhat(neq)
+    Real(dp) :: c, error(-1:1,zb_lo:zb_hi), acorhat(neq)
     Real(dp) :: alpha0, alpha1, prod, xi, xiold, hsum, a1
     Integer :: i, j, izb, izone
 
     Do izb = zb_lo, zb_hi
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
         izone = izb + szbatch - zb_lo
+        Do i = -1, 1
+          error(i,izb) = 0.0_dp
+        EndDo
 
         ! Only allow change in order of there were no problems in the solve
         If ( eta_next(izb) > 1.0_dp ) Then
 
           ! Compute eta for each potential change in q
           etaq(:,izb) = 1.0_dp
-          error = tq(0,izb) * acnrm(izb)
-          etaq(0,izb) = 1.0_dp / ( (biasq * error) ** (1.0_dp/(q(izb)+1)) + addon )
-          If ( idiag >= 3 ) Write(lun_diag,"(a,2es23.15)") 'BDF Eta(0)',error,etaq(0,izb)
+          error(0,izb) = tq(0,izb) * acnrm(izb)
+          etaq(0,izb) = 1.0_dp / ( (biasq * error(0,izb)) ** (1.0_dp/(q(izb)+1)) + addon )
           If ( q_age(izb) > q(izb) ) Then
 
             ! eta for q-1
             If ( q(izb) > 1 ) Then
-              error = tq(-1,izb) * normw( z(:,q(izb),izb), ewt(:,izb) )
-              etaq(-1,izb) = 1.0_dp / ( (biasqm1 * error) ** (1.0_dp/q(izb)) + addon )
-              If ( idiag >= 3 ) Write(lun_diag,"(a,2es23.15)") 'BDF Eta(-1)',error,etaq(-1,izb)
+              error(-1,izb) = tq(-1,izb) * normw( z(:,q(izb),izb), ewt(:,izb) )
+              etaq(-1,izb) = 1.0_dp / ( (biasqm1 * error(-1,izb)) ** (1.0_dp/q(izb)) + addon )
             EndIf
 
             ! eta for q+1
             If ( q(izb) < max_order ) Then
               c = (tq(2,izb) / tq2save(izb)) * (hvec(1,izb) / hvec(2,izb)) ** (q(izb)+1)
               acorhat(:) = acor(:,izb) - c * acorp(:,izb)
-              error = tq(1,izb) * normw( acorhat(:), ewt(:,izb) )
-              etaq(1,izb) = 1.0_dp / ( (biasqp1 * error) ** (1.0_dp/(q(izb)+2)) + addon )
-              If ( idiag >= 3 ) Write(lun_diag,"(a,2es23.15)") 'BDF Eta(+1)',error,etaq(+1,izb)
+              error(1,izb) = tq(1,izb) * normw( acorhat(:), ewt(:,izb) )
+              etaq(1,izb) = 1.0_dp / ( (biasqp1 * error(1,izb)) ** (1.0_dp/(q(izb)+2)) + addon )
             EndIf
 
             ! Wait a bit before considering another order change
@@ -1215,9 +1276,6 @@ Contains
 
           ! Limit stepsize to maximum
           eta(izb) = min( eta(izb), eta_max )
-
-          If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3,sp,i3,ss,4es12.4)") &
-            'BDF Eta',kstep,izone,q_age(izb),q(izb),deltaq(izb),eta(izb),(etaq(i,izb),i=-1,1)
         Else
 
           ! Defer order change if stepsize is stuck
@@ -1229,6 +1287,24 @@ Contains
         tq2save(izb) = tq(2,izb)
       EndIf
     EndDo
+
+    If ( idiag >= 2 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
+          If ( eta_next(izb) > 1.0_dp ) Then
+            izone = izb + szbatch - zb_lo
+            If ( idiag >= 3 ) Then
+              Do i = -1, 1
+                If ( abs(error(i,izb)) > 0.0_dp ) Write(lun_diag,"(a,sp,i2,s,a,2es23.15)") &
+                  'BDF Eta(',i,')',error(i,izb),etaq(i,izb)
+              EndDo
+            EndIf
+            If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3,sp,i3,s,4es12.4)") &
+              'BDF Eta',kstep,izone,q_age(izb),q(izb),deltaq(izb),eta(izb),(etaq(i,izb),i=-1,1)
+          EndIf
+        EndIf
+      EndDo
+    EndIf
 
     Return
   End Subroutine bdf_eta
@@ -1284,7 +1360,7 @@ Contains
       Do izb = zb_lo, zb_hi
         If ( ldflag(izb) > 3 ) Then
           izone = izb + szbatch - zb_lo
-          Write(lun_diag,"(a,2i5,i3,es12.4,sp,i3)") &
+          Write(lun_diag,"(a,2i5,i3,es12.4,sp,i3,s)") &
             'BDF Stab',kstep,izone,q(izb),eta(izb),ldflag(izb)
         EndIf
       EndDo
@@ -1324,11 +1400,19 @@ Contains
     kflag = 0
     loop0: Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        ssdat(:,:) = sddat(:,:,izb)
+        Do k = 1, 3
+          Do i = 1, 5
+            ssdat(i,k) = sddat(i,k,izb)
+          EndDo
+        EndDo
         rr = 0.0_dp
         Do k = 1, 3
-          smink = minval(ssdat(:,k))
-          smaxk = maxval(ssdat(:,k))
+          smink = +huge(0.0_dp)
+          smaxk = -huge(0.0_dp)     
+          Do i = 1, 5
+            smink = min( smink, ssdat(i,k) )
+            smaxk = max( smaxk, ssdat(i,k) )
+          EndDo
           If ( smink < small*smaxk ) Then
             kflag(izb) = -1
             Exit
@@ -1350,17 +1434,30 @@ Contains
           qc(3,k) = 0.0_dp
           qc(2,k) = ssdat(2,k)*ssdat(5,k) - ssdat(3,k)*ssdat(4,k)
           qc(1,k) = ssdat(4,k)*ssdat(4,k) - ssdat(3,k)*ssdat(5,k)
-          qco(:,k) = qc(:,k)
+          Do i = 1, 5
+            qco(i,k) = qc(i,k)
+          EndDo
         EndDo
-        vmin = minval(vrat(:))
-        vmax = maxval(vrat(:))
+        vmin = +huge(0.0_dp)
+        vmax = -huge(0.0_dp)     
+        Do i = 1, 4
+          vmin = min( vmin, vrat(i) )
+          vmax = max( vmax, vrat(i) )
+        EndDo
         If ( vmin < vrrtol*vrrtol ) Then
           If ( vmax > vrrt2*vrrt2 ) Then
             kflag(izb) = -2
             Cycle loop0
           Else
-            rr = sum(rav(:)) / 3.0_dp
-            drrmax = maxval( abs(rav(:) - rr) )
+            rr = 0.0_dp
+            Do i = 1, 3
+              rr = rr + rav(i)
+            EndDo
+            rr = rr / 3.0_dp
+            drrmax = -huge(0.0_dp)
+            Do i = 1, 3
+              drrmax = max( drrmax, abs(rav(i) - rr) )
+            EndDo
             If ( drrmax > vrrt2 ) Then
               kflag(izb) = -3
               Cycle loop0
@@ -1373,15 +1470,20 @@ Contains
             kflag(izb) = -4
             Cycle loop0
           EndIf
-          qco(2:5,2) = qco(2:5,2) - (qco(1,2)/qco(1,1))*qco(2:5,1)
-          qco(1,2) = 0.0_dp
-          qco(2:5,3) = qco(2:5,3) - (qco(1,3)/qco(1,1))*qco(2:5,1)
-          qco(1,3) = 0.0_dp
+          Do k = 2, 3
+            qco(1,k) = 0.0_dp
+            Do i = 2, 5
+              qco(i,k) = qco(i,k) - (qco(1,k)/qco(1,1))*qco(i,1)
+              qco(i,k) = qco(i,k) - (qco(1,k)/qco(1,1))*qco(i,1)
+            EndDo
+          EndDo
           If ( abs(qco(2,2)) < small*ssmax(2) ) Then
             kflag(izb) = -4
             Cycle loop0
           EndIf
-          qco(3:5,3) = qco(3:5,3) - (qco(2,3)/qco(2,2))*qco(3:5,2)
+          Do i = 3, 5
+            qco(i,3) = qco(i,3) - (qco(2,3)/qco(2,2))*qco(i,2)
+          EndDo
           If ( abs(qco(4,3)) < small*ssmax(3) ) Then
             kflag(izb) = -4
             Cycle loop0
@@ -1391,31 +1493,44 @@ Contains
             kflag(izb) = -5
             Cycle loop0
           EndIf
-          qkr(:) = qc(5,:) + rr*(qc(4,:) + rr*rr*(qc(2,:) + rr*qc(1,:)))
-          sqmax = maxval( abs(qkr(:))/ssmax(:) )
+          sqmax = -huge(0.0_dp)
+          Do k = 1, 3
+            qkr(k) = qc(5,k) + rr*(qc(4,k) + rr*rr*(qc(2,k) + rr*qc(1,k)))
+            sqmax = max( sqmax, abs(qkr(k))/ssmax(k) )
+          EndDo
           If ( sqmax < sqtol ) Then
             kflag(izb) = 2
           Else
             Do it = 1, 3
-              qp(:) = qc(4,:) + rr*rr*(3.0_dp*qc(2,:) + 4.0_dp*rr*qc(1,:))
-              Where ( abs(qp(:)) > small*ssmax(:) )
-                rrc(:) = rr - qkr(:) / qp(:)
-              ElseWhere
-                rrc(:) = rr
-              EndWhere
+              sqmin = +huge(0.0_dp)
+              kmin = 3
               Do k = 1, 3
+                qp(k) = qc(4,k) + rr*rr*(3.0_dp*qc(2,k) + 4.0_dp*rr*qc(1,k))
+                If ( abs(qp(k)) > small*ssmax(k) ) Then
+                  rrc(k) = rr - qkr(k) / qp(k)
+                Else
+                  rrc(k) = rr
+                EndIf
                 s = rrc(k)
-                qjk(:,k) = qc(5,:) + s*(qc(4,:) + s*s*(qc(2,:) + s*qc(1,:)))
-                sqmx(k) = maxval( abs(qjk(:,k))/ssmax(:) )
+                sqmax = -huge(0.0_dp)
+                Do j = 1, 3
+                  qjk(j,k) = qc(5,j) + s*(qc(4,j) + s*s*(qc(2,j) + s*qc(1,j)))
+                  sqmax = max( sqmax, abs(qjk(j,k))/ssmax(j) )
+                EndDo
+                sqmx(k) = sqmax
+                If ( sqmx(k) < sqmin ) Then
+                  sqmin = sqmx(k)
+                  kmin = k
+                EndIf
               EndDo
-              kmin = minloc(sqmx(:), dim=1)
-              sqmin = sqmx(kmin)
               rr = rrc(kmin)
               If ( sqmin < sqtol ) Then
                 kflag(izb) = 3
                 Exit
               Else
-                qkr(:) = qjk(:,kmin)
+                Do j = 1, 3
+                  qkr(j) = qjk(j,kmin)
+                EndDo
               EndIf
             EndDo
             If ( sqmin > sqtol ) Then
@@ -1491,12 +1606,21 @@ Contains
     Real(dp) :: alpha0, alpha1, prod, xi, xiold, hsum, a1
     Integer :: i, j, izb, izone
 
-    Do izb = zb_lo, zb_hi
+    If ( idiag >= 2 ) Then
+      Do izb = zb_lo, zb_hi
+        izone = izb + szbatch - zb_lo
+        If ( deltaq(izb) /= 0 ) Write(lun_diag,"(a,2i5,i3,sp,i3,s)") &
+          'BDF Order Change',kstep,izone,q(izb)+deltaq(izb),deltaq(izb)
+      EndDo
+    EndIf
 
+    Do izb = zb_lo, zb_hi
       If ( deltaq(izb) == -1 ) Then
 
         ! Decrease order
-        lvec(:,izb) = 0.0_dp
+        Do i = 0, max_order
+          lvec(i,izb) = 0.0_dp
+        EndDo
         lvec(2,izb) = 1.0_dp
         hsum = 0.0_dp
         Do j = 1, q(izb)-2
@@ -1507,19 +1631,24 @@ Contains
           EndDo
         EndDo
         Do j = 2, q(izb)-1
-          z(:,j,izb) = z(:,j,izb) - z(:,q(izb),izb) * lvec(j,izb)
+          Do i = 1, neq
+            z(i,j,izb) = z(i,j,izb) - z(i,q(izb),izb) * lvec(j,izb)
+          EndDo
         EndDo
-        !Call dgemm('N','T',neq,q(izb)-2,1,-1.0_dp,z(:,q(izb),izb),neq,lvec(2,izb),max_order+1,z(1,2,izb),neq)
-        !Call dger(neq,q(izb)-2,-1.0_dp,z(:,q(izb),izb),1,lvec(2,izb),1,z(1,2,izb),neq)
-        z(:,q(izb),izb) = 0.0_dp
+        Do i = 1, neq
+          z(i,q(izb),izb) = 0.0_dp
+        EndDo
         q(izb) = q(izb) - 1
         q_age(izb) = 0
 
       ElseIf ( deltaq(izb) == +1 ) Then
 
         ! Increase order
-        lvec(:,izb) = 0.0_dp
+        Do i = 0, max_order
+          lvec(i,izb) = 0.0_dp
+        EndDo
         lvec(2,izb) = 1.0_dp
+        hsum = 0.0_dp
         alpha0 = -1.0_dp
         alpha1 = 1.0_dp
         prod = 1.0_dp
@@ -1537,24 +1666,17 @@ Contains
           xiold = xi
         EndDo
         a1 = -(alpha0 + alpha1) / prod
-        z(:,q(izb)+1,izb) = a1 * acor(:,izb)
         Do j = 2, q(izb)
-          z(:,j,izb) = z(:,j,izb) + a1 * acor(:,izb) * lvec(j,izb)
+          Do i = 1, neq
+            z(i,j,izb) = z(i,j,izb) + a1 * acor(i,izb) * lvec(j,izb)
+          EndDo
         EndDo
-        !Call dgemm('N','T',neq,q(izb),1,a1,acor(:,izb),neq,lvec(2,izb),max_order+1,z(1,2,izb),neq)
-        !Call dger(neq,q(izb),a1,acor(:,izb),1,lvec(2,izb),1,z(1,2,izb),neq)
+        Do i = 1, neq
+          z(i,q(izb)+1,izb) = a1 * acor(i,izb)
+        EndDo
         q(izb) = q(izb) + 1
         q_age(izb) = 0
       EndIf
-    EndDo
-    If ( idiag >= 2 ) Then
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
-        If ( deltaq(izb) /= 0 ) Write(lun_diag,"(a,2i5,i3,sp,i3)") &
-          'BDF Order Change',kstep,izone,q(izb),deltaq(izb)
-      EndDo
-    EndIf
-    Do izb = zb_lo, zb_hi
       deltaq(izb) = 0
     EndDo
 
@@ -1581,7 +1703,9 @@ Contains
         tt(izb) = t(izb) + tdel(izb)
         ! Scale Nordsieck vector to account for change in stepsize
         Do j = 1, q(izb)
-          z(:,j,izb) = z(:,j,izb) * eta(izb)**j
+          Do i = 1, neq
+            z(i,j,izb) = z(i,j,izb) * eta(izb)**j
+          EndDo
         EndDo
         dt_scale(izb) = tdel(izb)
         nscon(izb) = 0
@@ -1598,14 +1722,18 @@ Contains
     Implicit None
 
     ! Input variables
-    Logical, Intent(in) :: mask(:)
+    Logical, Intent(in) :: mask(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, j, izb
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        z(:,:,izb) = z0(:,:,izb)
+        Do j = 0, max_order
+          Do i = 1, neq
+            z(i,j,izb) = z0(i,j,izb)
+          EndDo
+        EndDo
       EndIf
     EndDo
 
@@ -1627,7 +1755,9 @@ Contains
     Ainv_pascal = 0
 
     ! Set the first column
-    A_pascal(0:max_order,0) = 1
+    Do i = 0, max_order
+      A_pascal(i,0) = 1
+    EndDo
 
     ! Build the matrix
     Do i = 1, max_order
@@ -1662,15 +1792,19 @@ Contains
 
     n = size(y)
     If ( iconvc == 0 .or. iconvc == 1 ) Then
-      Where ( y(:) < ymin )
-        wt(:) = 0.0_dp
-      ElseWhere ( y(:) < atol(:) )
-        wt(:) = 1.0_dp / (rtol(:) * atol(:))
-      ElseWhere
-        wt(:) = 1.0_dp / (rtol(:) * abs(y(:)))
-      EndWhere
+      Do i = 1, n
+        If ( y(i) < ymin ) Then
+          wt(i) = 0.0_dp
+        ElseIf ( y(i) < atol(i) ) Then
+          wt(i) = 1.0_dp / (rtol(i) * atol(i))
+        Else
+          wt(i) = 1.0_dp / (rtol(i) * abs(y(i)))
+        EndIf
+      EndDo
     Else
-      wt(:) = 1.0_dp / ( rtol(:) * max(abs(y(:)),ymin) + atol(:) )
+      Do i = 1, n
+        wt(i) = 1.0_dp / ( rtol(i) * max(abs(y(i)),ymin) + atol(i) )
+      EndDo
     EndIf
 
     Return
@@ -1689,27 +1823,34 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: x(1:), wt(1:)
+    Real(dp), Intent(in) :: x(:), wt(:)
 
     ! Function variable
     Real(dp) :: xnrm
 
     ! Local variables
-    Real(dp) :: xw(size(x))
-    Integer :: n, incx
+    Integer :: i, n, incx
 
     n = size(x)
-    xw(:) = x(:) * wt(:)
+    xnrm = 0.0_dp
     If ( iconvc == 0 ) Then
-      xnrm = maxval( abs(xw(:)) )
+      Do i = 1, n
+        xnrm = max( xnrm, abs( x(i) * wt(i) ) )
+      EndDo
     ElseIf ( iconvc == 1 ) Then
-      xnrm = sum( abs(xw(:)) )
+      Do i = 1, n
+        xnrm = xnrm + abs( x(i) * wt(i) )
+      EndDo
     ElseIf ( iconvc == 2 ) Then
-      xnrm = sqrt( sum(xw(:)**2) )
+      Do i = 1, n
+        xnrm = xnrm + ( x(i) * wt(i) )**2
+      EndDo
+      xnrm = sqrt( xnrm )
     ElseIf ( iconvc == 3 ) Then
-      xnrm = sqrt( sum(xw(:)**2) / real(n,dp) )
-    Else
-      xnrm = 0.0_dp
+      Do i = 1, n
+        xnrm = xnrm + ( x(i) * wt(i) )**2
+      EndDo
+      xnrm = sqrt( xnrm / real(n,dp) )
     EndIf
 
     Return

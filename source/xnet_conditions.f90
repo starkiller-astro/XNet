@@ -132,35 +132,8 @@ Contains
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-
-        ! For constant conditions (nh = 1), set temperature and density
-        If ( nh(izb) == 1 ) Then
-          t9f(izb) = t9h(1,izb)
-          rhof(izb) = rhoh(1,izb)
-          nf(izb) = 1
-
-        ! Otherwise, calculate T9 and rho by interpolation
-        Else
-          Do n = 1, nh(izb)
-            If ( tf(izb) <= th(n,izb) ) Exit
-          EndDo
-          nf(izb) = n
-          If ( n > 1 .and. n <= nh(izb) ) Then
-            rdt = 1.0 / (th(n,izb)-th(n-1,izb))
-            dt = tf(izb) - th(n-1,izb)
-            dt9 = t9h(n,izb) - t9h(n-1,izb)
-            drho = rhoh(n,izb) - rhoh(n-1,izb)
-            t9f(izb) = dt*rdt*dt9 + t9h(n-1,izb)
-            rhof(izb) = dt*rdt*drho + rhoh(n-1,izb)
-          ElseIf ( n == 1 ) Then
-            t9f(izb) = t9h(1,izb)
-            rhof(izb) = rhoh(1,izb)
-          Else
-            t9f(izb) = t9h(nh(izb),izb)
-            rhof(izb) = rhoh(nh(izb),izb)
-            Write(lun_stdout,*) 'Time beyond thermodynamic range',tf(izb),' >',th(nh(izb),izb)
-          EndIf
-        EndIf
+        Call t9rhofind_scalar(kstep,tf(izb),nf(izb),t9f(izb),rhof(izb), &
+          & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
       EndIf
     EndDo
 

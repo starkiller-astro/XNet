@@ -20,10 +20,13 @@ Module xnet_ffn
   Real(dp), Allocatable :: ffn_ec(:,:), ffn_beta(:,:) ! dim(nffn,ngrid)
   Real(dp), Allocatable :: ffnsum(:,:), ffnenu(:,:)   ! dim(nffn,ngrid)
   Real(dp), Allocatable :: ffn_qval(:)
+  Real(dp), Allocatable :: phasei(:,:), dphaseidt9(:,:) ! dim(nffn,ngrid)
   Integer, Allocatable :: has_logft(:)
 
   Real(dp), Allocatable :: rffn(:,:)              ! FFN reaction rates
   Real(dp), Allocatable :: dlnrffndt9(:,:)        ! log FFN reaction rates
+
+  Real(dp), Parameter :: lrfmin = -30.0, rfmin = 1.0e-30
 
 Contains
 
@@ -80,7 +83,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine allocates and loads the data structures for FFN reaction rates.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_diag
+    Use xnet_controls, Only: lun_diag, nzevolve
     Implicit None
 
     ! Input variables
@@ -96,11 +99,14 @@ Contains
     Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
     Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
     Allocate (ffn_qval(nffn))
+    Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
     ffnsum = 0.0
     ffnenu = 0.0
     ffn_ec = 0.0
     ffn_beta = 0.0
     ffn_qval = 0.0
+    phasei = 0.0
+    dphaseidt9 = 0.0
 
     Open(newunit=lun_ffn, file=trim(data_dir)//"/netweak", status='old')
     Do i = 1, nffn
@@ -119,9 +125,11 @@ Contains
     EndDo
     Close(lun_ffn)
 
-    Where (ffn_ec < -30d0)
-      ffn_ec = 99.d0
-    End Where
+    Do i = 1, nffn
+      Do j = 1, ngrid
+        If ( ffn_ec(i,j) < lrfmin ) ffn_ec(i,j) = 99.0
+      EndDo
+    EndDo
 
     Return
   End Subroutine read_ffn_data_logft
@@ -131,7 +139,7 @@ Contains
     ! This routine calculates the reaction rates for FFN weak rates
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: ln_2, ln_10, bok, m_e
-    Use xnet_controls, Only: iheat, nzevolve, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive
     Use xnet_conditions, Only: etae
     Use xnet_types, Only: dp
     Use xnet_controls, Only: lun_diag, idiag
@@ -140,7 +148,7 @@ Contains
 
     ! Input variables
     Integer, Intent(in)  :: nffn              ! Number of FFN rates
-    Real(dp), Intent(in) :: t9(nzevolve)      ! Temperature [GK]
+    Real(dp), Intent(in) :: t9(zb_lo:zb_hi)   ! Temperature [GK]
     Real(dp), Intent(in) :: ene(zb_lo:zb_hi)  ! Electron Density [g cm^{-3}]
 
     ! Output variables
@@ -151,11 +159,10 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp), Parameter :: lrfmin = -30.0, rfmin=1d-30
     Real(dp) :: r1, r2, dr1, dr2, dr1_ec, dr2_ec
-    Real(dp) :: rf_beta,rf_ec, phasei, cheme, dphase_dt
-    Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt,drec_dt
-    Integer :: i,izb, k, le1, lt1, i1, i2, i3, i4
+    Real(dp) :: rf_beta, rf_ec, cheme
+    Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt, drec_dt
+    Integer :: i, izb, k, le1, lt1, i1, i2, i3, i4
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -164,6 +171,20 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+
+    ! Pre-calculate phase space integrals and derivatives
+    Do izb = zb_lo, zb_hi
+      Do k = 1, nffn
+        If ( mask(izb) .and. has_logft(k) > 0 ) Then
+          cheme = etae(izb)*bok*t9(izb) + m_e
+          If ( has_logft(k) == 1 ) Then
+            Call effphase(t9(izb),+cheme,ffn_qval(k),phasei(k,izb),dphaseidt9(k,izb))
+          ElseIf ( has_logft(k) == 2 ) Then
+            Call effphase(t9(izb),-cheme,ffn_qval(k),phasei(k,izb),dphaseidt9(k,izb))
+          EndIf
+        EndIf
+      EndDo
+    EndDo
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -188,83 +209,76 @@ Contains
         i3 = nt9grid*le1 + lt1
         i4 = i3 + 1
 
-        cheme = etae(izb)*bok*t9(izb)+m_e
         Do k = 1, nffn
+          If ( has_logft(k) > 0 ) Then
 
-          If (has_logft(k) > 0) then
+            dr1_ec = ffn_ec(k,i2) - ffn_ec(k,i1)
+            dr2_ec = ffn_ec(k,i4) - ffn_ec(k,i3)
+            r1 = ffn_ec(k,i1) + rdt9*dr1_ec
+            r2 = ffn_ec(k,i3) + rdt9*dr2_ec
+            rf_ec = r1 + rdene*(r2 - r1) ! logft
+            If ( phasei(k,izb) > rfmin .and. rf_ec > lrfmin ) then
+              rf_ec = ln_2 * phasei(k,izb) / 10.0**rf_ec ! turn into rate
+            Else
+              rf_ec = 0.0
+            EndIf
 
-             ! Calculate phase space integral and derivative
-             If ( has_logft(k) == 1 ) Then
-               Call effphase(t9(izb),cheme,ffn_qval(k),phasei,dphase_dt)
-             ElseIf ( has_logft(k) == 2 ) Then
-               Call effphase(t9(izb),-cheme,ffn_qval(k),phasei,dphase_dt)
-             Else
-               ! TODO: move this out of the loop
-               Write(*,*) "Problem in logft option. Should be 1 or 2, but is ",has_logft(k)
-               Stop
-             EndIf
+            dr1 = ffn_beta(k,i2) - ffn_beta(k,i1)
+            dr2 = ffn_beta(k,i4) - ffn_beta(k,i3)
+            r1 = ffn_beta(k,i1) + rdt9*dr1
+            r2 = ffn_beta(k,i3) + rdt9*dr2
+            rf_beta = r1 + rdene*(r2 - r1)
+            If ( rf_beta > lrfmin ) Then
+              rf_beta = 10.0**rf_beta
+            Else
+              rf_beta = 0.0
+            EndIf
 
-             dr1_ec = ffn_ec(k,i2) - ffn_ec(k,i1)
-             dr2_ec = ffn_ec(k,i4) - ffn_ec(k,i3)
-             r1 = ffn_ec(k,i1) + rdt9*dr1_ec
-             r2 = ffn_ec(k,i3) + rdt9*dr2_ec
-             rf_ec = r1 + rdene*(r2 - r1) ! logft
-             If ( phasei > rfmin .and. rf_ec > lrfmin ) then
-               rf_ec = ln_2 * phasei / 10.0**rf_ec ! turn into rate
-             Else
-               rf_ec = 0.0
-             EndIf
+            rf(k,izb) = rf_beta + rf_ec
 
-             dr1 = ffn_beta(k,i2) - ffn_beta(k,i1)
-             dr2 = ffn_beta(k,i4) - ffn_beta(k,i3)
-             r1 = ffn_beta(k,i1) + rdt9*dr1
-             r2 = ffn_beta(k,i3) + rdt9*dr2
-             rf_beta = r1 + rdene*(r2 - r1)
-             If ( rf_beta > lrfmin ) Then
-               rf_beta = 10.0**rf_beta
-             Else
-               rf_beta = 0.0
-             EndIf
-
-             rf(k,izb) = rf_beta + rf_ec
-
-             If ( rf_beta < rfmin .and. rf_ec < rfmin ) Then
-               rf(k,izb) = 0.0
-               dlnrfdt9(k,izb) = 0.0
-             Else
-               ! Temperature derivative
-               If (rf_ec < rfmin) Then
-                  dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
-               Else
-                  drbeta_dt = rf_beta*ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
-                  drec_dt = rf_ec * ( -ln_10 * ( rdene*dr2_ec + (1.0-rdene)*dr1_ec ) / dt9 &
-                    & + dphase_dt / phasei )
-                  dlnrfdt9(k,izb) = (drbeta_dt+drec_dt)/rf(k,izb)
-               EndIf
-
-               If ( idiag >= 5 ) Then
-                 Write(lun_diag,*) "FFN rate, deriv., phase space: ", &
-                   & k,rf(k,izb),dlnrfdt9(k,izb),phasei
-               EndIf
-
-             EndIf
+            If ( rf_beta < rfmin .and. rf_ec < rfmin ) Then
+              rf(k,izb) = 0.0
+              dlnrfdt9(k,izb) = 0.0
+            Else
+              If (rf_ec < rfmin) Then
+                dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+              Else
+                drbeta_dt = rf_beta*ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+                drec_dt = rf_ec * ( -ln_10 * ( rdene*dr2_ec + (1.0-rdene)*dr1_ec ) / dt9 &
+                  & + dphaseidt9(k,izb) / phasei(k,izb) )
+                dlnrfdt9(k,izb) = ( drbeta_dt + drec_dt ) / rf(k,izb)
+              EndIf
+            EndIf
           Else
-             dr1 = ffnsum(k,i2) - ffnsum(k,i1)
-             dr2 = ffnsum(k,i4) - ffnsum(k,i3)
-             r1 = ffnsum(k,i1) + rdt9*dr1
-             r2 = ffnsum(k,i3) + rdt9*dr2
-             rf(k,izb) = r1 + rdene*(r2 - r1)
-             If ( rf(k,izb) < lrfmin ) Then
-               rf(k,izb) = 0.0
-               dlnrfdt9(k,izb) = 0.0
-             Else
-               rf(k,izb) = 10.0**rf(k,izb)
-               dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
-             EndIf
+            dr1 = ffnsum(k,i2) - ffnsum(k,i1)
+            dr2 = ffnsum(k,i4) - ffnsum(k,i3)
+            r1 = ffnsum(k,i1) + rdt9*dr1
+            r2 = ffnsum(k,i3) + rdt9*dr2
+            rf(k,izb) = r1 + rdene*(r2 - r1)
+            If ( rf(k,izb) < lrfmin ) Then
+              rf(k,izb) = 0.0
+              dlnrfdt9(k,izb) = 0.0
+            Else
+              rf(k,izb) = 10.0**rf(k,izb)
+              dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
+            EndIf
           EndIf
         EndDo
       EndIf
     EndDo
+
+    If ( idiag >= 5 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          Do k = 1, nffn
+            If ( has_logft(k) > 0 ) Then
+              Write(lun_diag,"(a,i5,4es23.15)") "FFN rate, deriv., phase space: ", &
+                & k,rf(k,izb),dlnrfdt9(k,izb),phasei(k,izb),dphaseidt9(k,izb)
+            EndIf
+          EndDo
+        EndIf
+      EndDo
+    EndIf
 
     Return
   End Subroutine ffn_rate

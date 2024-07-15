@@ -205,7 +205,7 @@ Contains
     Allocate (zone_id(3,nzevolve))
     Allocate (lzactive(nzevolve))
     Allocate (iweak(nzevolve),lun_ev(nzevolve),lun_ts(nzevolve))
-    Allocate (kmon(2,nzevolve),ktot(5,nzevolve))
+    Allocate (kmon(5,nzevolve),ktot(5,nzevolve))
     !$omp parallel default(shared)
     zb_offset = (tid-1) * nzbatchmx
     zb_lo = zb_offset + 1

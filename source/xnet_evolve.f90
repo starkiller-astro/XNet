@@ -54,12 +54,6 @@ Contains
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
 
-    ! Initialize counters
-    kstep = 0
-    Do izb = zb_lo, zb_hi
-      kmon(:,izb) = 0
-      ktot(:,izb) = 0
-    EndDo
 
     ! Set reaction controls not read in from control
     idiag0 = idiag
@@ -76,10 +70,16 @@ Contains
       t9t(izb) = t9(izb)
       rhoo(izb) = rho(izb)
       rhot(izb) = rho(izb)
-      yet(izb) = ye(izb)
       yeo(izb) = ye(izb)
-      yo(:,izb) = y(:,izb)
-      yt(:,izb) = y(:,izb)
+      yet(izb) = ye(izb)
+      Do k = 1, ny
+        yo(k,izb) = y(k,izb)
+        yt(k,izb) = y(k,izb)
+      EndDo
+      Do k = 1, 5
+        kmon(k,izb) = 0
+        ktot(k,izb) = 0
+      EndDo
     EndDo
 
     en0 = 0.0
@@ -100,16 +100,20 @@ Contains
     ! Output initial abundances and conditions
     Call ts_output(0,delta_en,edot)
 
-    ! Start evolution
+    ! Initialize timestep loop flags
+    kstep = 0
+    mykstep = 0
+    lzsolve = lzactive(zb_lo:zb_hi)
+    lzoutput = lzsolve
     Do izb = zb_lo, zb_hi
-      If ( lzactive(izb) ) Then
+      If ( lzsolve(izb) ) Then
         its(izb) = 0
       Else
         its(izb) = -1
       EndIf
-      lzsolve(izb) = lzactive(izb)
-      mykstep(izb) = 0
     EndDo
+
+    ! Start evolution
     Do kstep = 1, kstmx
 
       ! Determine if this is an output step
@@ -129,47 +133,55 @@ Contains
         Call solve_be(kstep,its)
       End Select
 
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
-
-        ! If convergence is successful, output timestep results
-        If ( its(izb) == 0 ) Then
-          If ( idiag >= 1 ) Write(lun_diag,"(2(a,i5),5es14.7)") &
-            & 'KStep ',kstep,' Zone ',izone,t(izb),tdel(izb),t9(izb),rho(izb),ye(izb)
-          If ( idiag >= 3 ) Then
-            Write(lun_diag,"(a8)") 'delta Y'
-            Write(lun_diag,"(8x,a5,4es12.4)") &
-              & (nname(k),y(k,izb),yo(k,izb),(y(k,izb)-yo(k,izb)),(tdel(izb)*ydot(k,izb)),k=1,ny)
-            If ( iheat > 0 ) Write(lun_diag,"(8x,a5,4es12.4)") &
-              & 'T9',t9(izb),t9o(izb),t9(izb)-t9o(izb),tdel(izb)*t9dot(izb)
+      ! If convergence is successful, output timestep results
+      If ( idiag >= 1 ) Then
+        Do izb = zb_lo, zb_hi
+          izone = izb + szbatch - zb_lo
+          If ( its(izb) == 0 .and. idiag >= 1 ) Then
+            Write(lun_diag,"(2(a,i5),5es14.7)") &
+              & 'KStep ',kstep,' Zone ',izone,t(izb),tdel(izb),t9(izb),rho(izb),ye(izb)
+            If ( idiag >= 3 ) Then
+              Write(lun_diag,"(a8)") 'delta Y'
+              Write(lun_diag,"(8x,a5,4es12.4)") &
+                & (nname(k),y(k,izb),yo(k,izb),(y(k,izb)-yo(k,izb)),(tdel(izb)*ydot(k,izb)),k=1,ny)
+              If ( iheat > 0 ) Write(lun_diag,"(8x,a5,4es12.4)") &
+                & 'T9',t9(izb),t9o(izb),t9(izb)-t9o(izb),tdel(izb)*t9dot(izb)
+            EndIf
+          ElseIf ( its(izb) == 1 ) Then
+            Write(lun_diag,"(a,2(i5,a))") 'KStep ',kstep,' Zone ',izone,' Inter!!!'
           EndIf
+        EndDo
+      EndIf
+
+      Do izb = zb_lo, zb_hi
+        If ( its(izb) == 0 ) Then
+
           enold(izb) = enm(izb)
           Call benuc(yt(:,izb),enb(izb),enm(izb))
           delta_en(izb) = enm(izb) - en0(izb)
           edot(izb) = -(enm(izb)-enold(izb)) / tdel(izb)
 
-        ! If reduced timesteps fail to successfully integrate, warn and flag to remove from loop
-        ElseIf ( its(izb) == 1 ) Then
-          If ( idiag >= 0 ) Write(lun_diag,"(a,2(i5,a))") 'KStep ',kstep,' Zone ',izone,' Inter!!!'
-          its(izb) = 2
-        EndIf
-      EndDo
-
-      lzoutput = ( lzsolve .and. its <= 0 )
-      Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
-
-      Do izb = zb_lo, zb_hi
-        izone = izb + szbatch - zb_lo
-
           ! If this zone reaches the stop time, flag it to remove from loop
           If ( t(izb) >= tstop(izb) ) Then
             mykstep(izb) = kstep
             its(izb) = -1
+            lzsolve(izb) = .false.
           EndIf
+
+        ! If reduced timesteps fail to successfully integrate, flag it to remove from loop
+        ElseIf ( its(izb) == 1 ) Then
+          its(izb) = 2
+          lzsolve(izb) = .false.
+          lzoutput(izb) = .false.
+        ElseIf ( its(izb) < 0 ) Then
+          lzsolve(izb) = .false.
+          lzoutput(izb) = .false.
+        EndIf
       EndDo
 
+      Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
+
       ! Test if all zones have stopped
-      lzsolve = ( its == 0 )
       If ( .not. any( lzsolve ) ) Exit
     EndDo
 
