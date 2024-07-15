@@ -25,6 +25,8 @@ Module xnet_ffn
   Real(dp), Allocatable :: rffn(:,:)              ! FFN reaction rates
   Real(dp), Allocatable :: dlnrffndt9(:,:)        ! log FFN reaction rates
 
+  Real(dp), Parameter :: lrfmin = -30.0, rfmin = 1.0e-30
+
 Contains
 
   Subroutine read_ffn_data(nffn,data_dir)
@@ -119,9 +121,11 @@ Contains
     EndDo
     Close(lun_ffn)
 
-    Where (ffn_ec < -30d0)
-      ffn_ec = 99.d0
-    End Where
+    Do i = 1, nffn
+      Do j = 1, ngrid
+        If ( ffn_ec(i,j) < lrfmin ) ffn_ec(i,j) = 99.0
+      EndDo
+    EndDo
 
     Return
   End Subroutine read_ffn_data_logft
@@ -151,7 +155,6 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Real(dp), Parameter :: lrfmin = -30.0, rfmin=1d-30
     Real(dp) :: r1, r2, dr1, dr2, dr1_ec, dr2_ec
     Real(dp) :: rf_beta,rf_ec, phasei, cheme, dphase_dt
     Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt,drec_dt
@@ -198,10 +201,6 @@ Contains
                Call effphase(t9(izb),cheme,ffn_qval(k),phasei,dphase_dt)
              ElseIf ( has_logft(k) == 2 ) Then
                Call effphase(t9(izb),-cheme,ffn_qval(k),phasei,dphase_dt)
-             Else
-               ! TODO: move this out of the loop
-               Write(*,*) "Problem in logft option. Should be 1 or 2, but is ",has_logft(k)
-               Stop
              EndIf
 
              dr1_ec = ffn_ec(k,i2) - ffn_ec(k,i1)
