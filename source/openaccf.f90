@@ -8,12 +8,12 @@ module openaccf
   ! Interface to OpenACC routines
   !-------------------------------------------------------------------------------------------------
   use, intrinsic :: iso_c_binding
-  use openacc, only: acc_init, acc_set_device_num, acc_get_device_num, acc_on_device, &
-    acc_device_nvidia, acc_device_host, acc_async_sync
+  use openacc, only: acc_init, acc_set_device_num, acc_get_device_num, &
+    acc_device_nvidia, acc_device_host, acc_device_default, acc_async_sync, acc_async_noval
   implicit none
 
-  integer(c_int) :: acc_queue, acc_async_default
-  !$omp threadprivate(acc_queue,acc_async_default)
+  integer(c_int) :: acc_queue
+  !$omp threadprivate(acc_queue)
 
   !enum, bind(c) !:: acc_device_t
   !  enumerator :: acc_device_none = 0
@@ -64,17 +64,17 @@ module openaccf
       integer(c_size_t), value :: bytes
     end function acc_is_present
 
-    integer(c_int) function acc_set_cuda_stream(async,stream) &
+    subroutine acc_set_cuda_stream(async,stream) &
         bind(c,name="acc_set_cuda_stream" )
       use, intrinsic :: iso_c_binding
-      integer(c_int), value :: async
+      integer(c_long_long), value :: async
       type(c_ptr), value :: stream
-    end function acc_set_cuda_stream
+    end subroutine acc_set_cuda_stream
 
     type(c_ptr) function acc_get_cuda_stream(async) &
         bind(c,name="acc_get_cuda_stream")
       use, intrinsic :: iso_c_binding
-      integer(c_int), value :: async
+      integer(c_long_long), value :: async
     end function acc_get_cuda_stream
 
     type(c_ptr) function acc_get_current_cuda_device() &
@@ -98,6 +98,31 @@ module openaccf
       integer(c_int), value :: async
     end subroutine acc_set_default_async
 
+    integer(c_int) function acc_on_device_i(devicetype) &
+        bind(c,name="acc_on_device" )
+#if defined(XNET_OMP_OL)
+      !$OMP DECLARE TARGET
+#elif defined(XNET_OACC)
+      !$ACC ROUTINE SEQ
+#endif
+      use, intrinsic :: iso_c_binding
+      integer(c_int), value :: devicetype
+    end function acc_on_device_i
+
   end interface
+
+contains
+
+  logical function acc_on_device(devicetype)
+#if defined(XNET_OMP_OL)
+    !$OMP DECLARE TARGET
+#elif defined(XNET_OACC)
+    !$ACC ROUTINE SEQ
+#endif
+    use, intrinsic :: iso_c_binding
+    integer(kind(acc_device_host)) :: devicetype
+    acc_on_device = ( .not. acc_on_device_i(int(devicetype,c_int)) == 0 )
+    return
+  end function acc_on_device
 
 end module openaccf

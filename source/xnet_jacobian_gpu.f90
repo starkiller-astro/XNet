@@ -48,7 +48,6 @@ Contains
     Use cudaf
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: iheat, nzevolve, nzbatchmx, nthread
-    Use xnet_gpu, Only: gpu_init
     Implicit None
 
     ! Input variables
@@ -56,8 +55,6 @@ Contains
 
     ! Local variables
     Integer :: istat, izb, tid
-
-    Call gpu_init
 
     ! Calculate array sizes
     If ( iheat > 0 ) Then
@@ -364,7 +361,7 @@ Contains
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
-    Use xnet_gpu, Only: handle, stream
+    Use xnet_gpu, Only: stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
     Implicit None
@@ -423,8 +420,8 @@ Contains
     !istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs(zb_lo), 1, drhs(zb_lo), 1, stream)
 
     ! Solve the linear system
-    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
-    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
+    istat = cublasDgetrfBatched(cublas_handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
+    istat = cublasDgetrsBatched(cublas_handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
 
     ! Copy the solution back to the CPU
     !istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs(zb_lo), 1, hrhs(zb_lo), 1, stream)
@@ -470,7 +467,7 @@ Contains
     Use cudaf
     Use openaccf
     Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
-    Use xnet_gpu, Only: handle, stream
+    Use xnet_gpu, Only: stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
 
@@ -506,7 +503,7 @@ Contains
     istat = cublasSetMatrixAsync(msize, msize*nzbatch, sizeof_double, hjac(zb_lo), msize, djac(zb_lo), msize, stream)
 
     ! Calculate the LU decomposition
-    istat = cublasDgetrfBatched(handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
+    istat = cublasDgetrfBatched(cublas_handle, msize, djac_array, msize, dindx, dinfo, nzbatch)
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
@@ -535,7 +532,7 @@ Contains
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, &
       & tid
-    Use xnet_gpu, Only: handle, stream
+    Use xnet_gpu, Only: stream
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
     Implicit None
@@ -593,7 +590,7 @@ Contains
     !istat = cublasSetVectorAsync(msize*nzbatch, sizeof_double, hrhs(zb_lo), 1, drhs(zb_lo), 1, stream)
 
     ! Solve the LU-decomposed triangular system via back-substitution
-    istat = cublasDgetrsBatched(handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
+    istat = cublasDgetrsBatched(cublas_handle, 0, msize, 1, djac_array, msize, dindx, drhs_array, msize, hinfo, nzbatch)
 
     ! Copy the solution back to the CPU
     !istat = cublasGetVectorAsync(msize*nzbatch, sizeof_double, drhs(zb_lo), 1, hrhs(zb_lo), 1, stream)

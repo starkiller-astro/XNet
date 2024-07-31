@@ -30,6 +30,10 @@ MPI_MODE    ?= OFF
 OPENMP_MODE ?= OFF
 GPU_MODE    ?= OFF
 
+## Choose GPU Backend
+#GPU_BACKEND = HIP
+GPU_BACKEND ?= CUDA
+
 ## Choose EOS for screening; HELMHOLTZ (requires separate download) or BAHCALL
 EOS = STARKILLER
 #EOS = HELMHOLTZ
@@ -38,7 +42,6 @@ EOS = STARKILLER
 ## Choose matrix solver package 
 #MATRIX_SOLVER = PARDISO
 #MATRIX_SOLVER = MA48
-#MATRIX_SOLVER = gpu
 MATRIX_SOLVER ?= dense
 
 ## Define alternative CPU LAPACK/BLAS package (Default is LIBSCI for Cray machines, NETLIB otherwise)
@@ -54,6 +57,7 @@ MATRIX_SOLVER ?= dense
 ## Define alternative GPU LAPACK/BLAS package (Default is LIBSCIACC for Cray machines, MAGMA otherwise)
 #GPU_LAPACK_VER = MAGMA
 #GPU_LAPACK_VER = CUBLAS
+#GPU_LAPACK_VER = ROCM
 
 ## GPU_TARGET specifies for which GPUs you want to compile
 ##    Tesla   - NVIDIA compute capability 1.x cards
