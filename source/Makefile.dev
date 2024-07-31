@@ -38,7 +38,7 @@ CUDA_OBJ    = $(addsuffix .o,$(basename $(CUDA_SRC)))
 ## cuBLAS
 CUBLAS_INC    = $(CUDA_INC)
 CUBLAS_LIBDIR = $(CUDA_LIBDIR)
-ifeq ($(PE_ENV),NVIDIA)
+ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
 CUBLAS_LIBS   = -cudalib=cublas
 else
 CUBLAS_LIBS   = -lcublas $(CUDA_LIBS)

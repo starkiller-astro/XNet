@@ -132,7 +132,7 @@ else ifeq ($(PE_ENV),PGI)
         OPENMP    = -mp -Mnoopenmp
     endif
     ifeq ($(OPENACC_MODE),ON)
-        OPENACC   = -acc -ta=tesla:cc70,cuda10.1,ptxinfo -Minfo=accel
+        OPENACC   = -acc -ta=tesla:ptxinfo -Minfo=accel
     else
         OPENACC   = -acclibs
     endif
@@ -152,7 +152,7 @@ else ifeq ($(PE_ENV),PGI)
     OPT_LDFLAGS   = -pgc++libs
     DEBUG_LDFLAGS = -pgc++libs
 
-else ifeq ($(PE_ENV),NVIDIA)
+else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
 
     ifneq ($(FC),ftn)
         FC        = nvfortran
