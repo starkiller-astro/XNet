@@ -1,7 +1,7 @@
 #ifdef XNET_DEBUG
 #define XNET_DEBUG_LA
 #endif
-#if defined(LA_ONEMKL)
+#if defined(XNET_LA_ONEMKL)
 include "mkl_omp_offload.f90"
 #endif
 Module xnet_linalg
@@ -15,7 +15,7 @@ Module xnet_linalg
     stream_sync, &
     stream
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
   Use cublasf, Only: &
     cublas_handle, &
     cublasDnrm2_v2, &
@@ -45,7 +45,7 @@ Module xnet_linalg
     cusparse_handle, &
     cusparseDgthr, &
     CUSPARSE_INDEX_BASE_ONE
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
   Use hipf, Only: &
     hipCheck, &
     hipblasCheck, &
@@ -105,9 +105,9 @@ Module xnet_linalg
     hipsparse_handle, &
     hipsparseDgthr, &
     HIPSPARSE_INDEX_BASE_ONE
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
   Use onemkl_blas_omp_offload_lp64
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
   Use magmaf, Only: &
     magma_queue, &
     magma_dnrm2, &
@@ -174,13 +174,13 @@ Contains
   Integer Function itrans_from_char( ctrans )
     Character, Intent(in) :: ctrans
     itrans_from_char = 0
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
     If ( ctrans == 'T' ) Then
       itrans_from_char = CUBLAS_OP_T
     Else
       itrans_from_char = CUBLAS_OP_N
     End If
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
     If ( ctrans == 'T' ) Then
       !itrans_from_char = rocblas_operation_transpose
       itrans_from_char = HIPBLAS_OP_T
@@ -188,8 +188,8 @@ Contains
       !itrans_from_char = rocblas_operation_none
       itrans_from_char = HIPBLAS_OP_N
     End If
-#elif defined(LA_ONEMKL)
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_ONEMKL)
+#elif defined(XNET_LA_MAGMA)
     If ( ctrans == 'T' ) Then
       itrans_from_char = MagmaTrans
     Else
@@ -258,20 +258,20 @@ Contains
       db = dev_ptr( pb(1,1) )
       dc = dev_ptr( pc(1,1) )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cublasDgeam &
              ( cublas_handle, itransa, itransb, m, n, alpha, da, lda, beta, db, ldb, dc, ldc )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
       !Call rocblasCheck( rocblas_dgeam &
       !       ( rocblas_handle, itransa, itransb, m, n, alpha, da, lda, beta, db, ldb, dc, ldc ) )
       Call hipblasCheck( hipblasDgeam &
              ( hipblas_handle, itransa, itransb, m, n, alpha, da, lda, beta, db, ldb, dc, ldc ) )
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
       !!$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, c )
       !Call DGEAM &
       !       ( transa, transb, m, n, alpha, a, lda, beta, b, ldb, c, ldc )
       !!$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       If ( transb  == 'N' ) Then
         Call magmablas_dlacpy &
                ( MagmaFull, m, n, db, ldb, dc, ldc, magma_queue )
@@ -443,20 +443,20 @@ Contains
       db = dev_ptr( pb(1,1) )
       dc = dev_ptr( pc(1,1) )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cublasDgemm_v2 &
              ( cublas_handle, itransa, itransb, m, n, k, alpha, da, lda, db, ldb, beta, dc, ldc )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
       !Call rocblasCheck( rocblas_dgemm &
       !       ( rocblas_handle, itransa, itransb, m, n, k, alpha, da, lda, db, ldb, beta, dc, ldc ) )
       Call hipblasCheck( hipblasDgemm &
              ( hipblas_handle, itransa, itransb, m, n, k, alpha, da, lda, db, ldb, beta, dc, ldc ) )
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
       !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, c )
       Call DGEMM &
              ( transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc )
       !$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       Call magma_dgemm &
              ( itransa, itransb, m, n, k, alpha, da, lda, db, ldb, beta, dc, ldc, magma_queue )
 #endif
@@ -548,11 +548,11 @@ Contains
       db = dev_ptr( pb(1,1) )
       dc = dev_ptr( pc(1,1) )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cublasDgemmStridedBatched &
              ( cublas_handle, itransa, itransb, m, n, k, alpha, da, lda, stridea, &
                db, ldb, strideb, beta, dc, ldc, stridec, batchcount )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
       !stridea_64 = stridea
       !strideb_64 = strideb
       !stridec_64 = stridec
@@ -565,12 +565,12 @@ Contains
       Call hipblasCheck( hipblasDgemmStridedBatched &
              ( hipblas_handle, itransa, itransb, m, n, k, alpha, da, lda, stridea_l, &
                db, ldb, strideb_l, beta, dc, ldc, stridec_l, batchcount ) )
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
       !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, c )
       Call DGEMM_BATCH_STRIDED &
              ( transa, transb, m, n, k, alpha, a, lda, stridea, b, ldb, strideb, beta, c, ldc, stridec, batchcount )
       !$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       Call magmablas_dgemm_batched_strided &
              ( itransa, itransb, m, n, k, alpha, da, lda, stridea, &
                db, ldb, strideb, beta, dc, ldc, stridec, batchcount, magma_queue )
@@ -677,10 +677,10 @@ Contains
       !$ACC END HOST_DATA
 #endif
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cublasDgemv_v2 &
              ( cublas_handle, itrans, m, n, alpha, da, lda, dx, incx, beta, dy, incy )
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       Call magma_dgemv &
              ( itrans, m, n, alpha, da, lda, dx, incx, beta, dy, incy, magma_queue )
 #endif
@@ -743,17 +743,17 @@ Contains
       dy = dev_ptr( py(1) )
       dxy = dev_ptr( pxy(1) )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ! Currently unavailable
       !ierr = cublasDdot_v2( cublas_handle, n, dx, incx, xnorm )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
       ! Currently unavailable
       stridex_64 = stridex
       stridey_64 = stridey
       Call rocblasCheck( rocblas_ddot_strided_batched &
              ( rocblas_handle, n, dx, incx, stridex_64, dy, incy, stridey_64, batchcount, hxy ) )
-#elif defined(LA_ONEMKL)
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_ONEMKL)
+#elif defined(XNET_LA_MAGMA)
       ! Currently unavailable
       !xnorm = magma_ddot( n, dx, incx, magma_queue )
 #endif
@@ -836,10 +836,10 @@ Contains
       !$ACC END HOST_DATA
 #endif
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cublasDdgmm &
              ( cublas_handle, CUBLAS_SIDE_LEFT, m, n, da, lda, dx, incx, dc, ldc )
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       Call magmablas_dlacpy &
              ( MagmaGeneral, m, n, da, lda, dc, ldc, magma_queue )
       Call magmablas_dlascl2 &
@@ -917,9 +917,9 @@ Contains
       !$ACC END HOST_DATA
 #endif
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cublasDnrm2_v2( cublas_handle, n, dx, incx, xnorm )
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       xnorm = magma_dnrm2( n, dx, incx, magma_queue )
 #endif
 
@@ -1018,9 +1018,9 @@ Contains
       !$ACC END HOST_DATA
 #endif
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cublasDaxpy_v2( cublas_handle, n, alpha, dx, incx, dy, incy )
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       Call magma_daxpy( n, alpha, dx, incx, dy, incy, magma_queue )
 #endif
 
@@ -1076,18 +1076,18 @@ Contains
 
     itrans = itrans_from_char( trans )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
     ierr = cusolverDnDgeqrf_bufferSize &
            ( cusolver_handle, m, n, da, lda, lwork )
-#elif defined(LA_ROCM)
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ROCM)
+#elif defined(XNET_LA_ONEMKL)
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, work )
     Call DGELS &
            ( trans, m, n, nrhs, a, lda, b, ldb, work, lwork, info )
     !$OMP END TARGET VARIANT DISPATCH
     !$OMP TARGET UPDATE FROM( work(1) )
     lwork = INT( work(1) )
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
     Call magma_dgels_gpu &
            ( itrans, m, n, nrhs, da, lda, db, ldb, hwork, lwork, info )
     lwork = INT( work(1) )
@@ -1158,7 +1158,7 @@ Contains
       dwork = dev_ptr( pwork(1) )
       dinfo = dev_ptr( pinfo )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
       ierr = cusolverDnDgeqrf &
              ( cusolver_handle, m, n, da, lda, dtau, dwork, lwork, dinfo )
       ierr = cusolverDnDormqr &
@@ -1181,7 +1181,7 @@ Contains
                  n, nrhs, One, da, lda, db, ldb )
 
       End If
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
       Call rocsolverCheck( rocsolver_dgeqrf &
              ( rocsolver_handle, m, n, da, lda, dtau ) )
       Call rocsolverCheck( rocsolver_dormqr &
@@ -1213,12 +1213,12 @@ Contains
                  n, nrhs, One, da, lda, db, ldb ) )
 
       End If
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
       !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, work )
       Call DGELS &
              ( trans, m, n, nrhs, a, lda, b, ldb, work, lwork, info )
       !$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
       Call magma_dgels_gpu &
              ( itrans, m, n, nrhs, da, lda, db, ldb, hwork, lwork, info )
 #endif
@@ -1338,12 +1338,12 @@ Contains
 
     da = dev_ptr( pa(1,1) )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
     ierr = cusolverDnDgetrf_bufferSize &
            ( cusolver_handle, m, n, da, lda, lwork )
-#elif defined(LA_ROCM)
-#elif defined(LA_ONEMKL)
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_ROCM)
+#elif defined(XNET_LA_ONEMKL)
+#elif defined(XNET_LA_MAGMA)
 #else
 #endif
 
@@ -1460,18 +1460,18 @@ Contains
     dipiv = dev_ptr( pipiv(1) )
     dinfo = dev_ptr( pinfo )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
     ierr = cusolverDnDgetrf &
            ( cusolver_handle, m, n, da, lda, dwork, dipiv, dinfo )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
     Call hipblasCheck( hipblasDgetrf &
            ( hipblas_handle, n, da, lda, dipiv, dinfo ) )
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, ipiv, info )
     Call DGETRF &
            ( m, n, a, lda, ipiv, info )
     !$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
     Call magma_dgetrf_native &
            ( m, n, da, lda, ipiv, info )
 #endif
@@ -1591,18 +1591,18 @@ Contains
 
     itrans = itrans_from_char( trans )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
     ierr = cusolverDnDgetrs &
            ( cusolver_handle, itrans, n, nrhs, da, lda, dipiv, db, ldb, dinfo )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
     Call hipblasCheck( hipblasDgetrs &
            ( hipblas_handle, itrans, n, nrhs, da, lda, dipiv, db, ldb, hinfo ) )
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, ipiv )
     Call DGETRS &
            ( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
     !$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
     Call magma_dgetrs_gpu &
            ( itrans, n, nrhs, da, lda, ipiv, db, ldb, hinfo )
 #endif
@@ -1890,21 +1890,21 @@ Contains
     dipiv_array = dev_ptr( dipiv(1) )
     dinfo = dev_ptr( pinfo(1) )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
     ierr = cublasDgetrfBatched &
            ( cublas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
     !strideP_64 = n
     !Call rocsolverCheck( rocsolver_dgetrf_batched &
     !       ( rocsolver_handle, n, n, da_array, lda, dipiv(1), strideP_64, dinfo, batchcount ) )
     Call hipblasCheck( hipblasDgetrfBatched &
            ( hipblas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount ) )
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, ipiv )
     Call DGETRF_BATCH_STRIDED &
            ( n, n, a, lda, stridea, ipiv, strideipiv, batchcount, info )
     !$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
     Call magma_dgetrf_batched &
            ( n, n, da_array, lda, dipiv_array, dinfo, batchcount, magma_queue )
 #endif
@@ -1966,21 +1966,21 @@ Contains
 
     itrans = itrans_from_char( trans )
 
-#if defined(LA_CUBLAS)
+#if defined(XNET_LA_CUBLAS)
     ierr = cublasDgetrsBatched &
            ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount )
-#elif defined(LA_ROCM)
+#elif defined(XNET_LA_ROCM)
     !strideP_64 = n
     !Call rocsolverCheck( rocsolver_dgetrs_batched &
     !       ( rocsolver_handle, itrans, n, nrhs, da_array, lda, dipiv(1), strideP_64, db_array, ldb, batchcount ) )
     Call hipblasCheck( hipblasDgetrsBatched &
            ( hipblas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount ) )
-#elif defined(LA_ONEMKL)
+#elif defined(XNET_LA_ONEMKL)
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, ipiv )
     Call dgetrs_batch_strided &
            ( trans, n, nrhs, a, lda, stridea, ipiv, strideipiv, b, ldb, strideb, info )
     !$OMP END TARGET VARIANT DISPATCH
-#elif defined(LA_MAGMA)
+#elif defined(XNET_LA_MAGMA)
     Call magma_dgetrs_batched &
            ( itrans, n, nrhs, da_array, lda, dipiv_array, db_array, ldb, batchcount, magma_queue )
 #endif
