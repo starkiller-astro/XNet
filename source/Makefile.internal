@@ -132,9 +132,9 @@ else ifeq ($(PE_ENV),PGI)
         OPENMP    = -mp -Mnoopenmp
     endif
     ifeq ($(OPENACC_MODE),ON)
-        OPENACC   = -acc -ta=tesla:cc70,cuda10.1,ptxinfo -Minfo=accel
+        OPENACC   = -acc -ta=tesla:ptxinfo -Minfo=accel
     else
-        OPENACC   = -acclibs
+        OPENACC   =
     endif
 
     # Fortran-specific flags
@@ -152,7 +152,7 @@ else ifeq ($(PE_ENV),PGI)
     OPT_LDFLAGS   = -pgc++libs
     DEBUG_LDFLAGS = -pgc++libs
 
-else ifeq ($(PE_ENV),NVIDIA)
+else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
 
     ifneq ($(FC),ftn)
         FC        = nvfortran
@@ -160,7 +160,7 @@ else ifeq ($(PE_ENV),NVIDIA)
         CXX       = nvc++
         LDR       = nvfortran
 
-        ARCHOPT   =
+        ARCHOPT   = -tp=pwr9
     endif
     ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
         INLINE    =# -Mipa=fast,inline,safe
@@ -169,7 +169,7 @@ else ifeq ($(PE_ENV),NVIDIA)
     endif
 
     # generic flags
-    OPT_FLAGS     = -g -gopt -fast $(ARCHOPT) $(INLINE)
+    OPT_FLAGS     = -g -gopt -O1 -Kieee $(ARCHOPT) $(INLINE)
     DEBUG_FLAGS   = -g -gopt -O0 -traceback
 
     ifeq ($(OPENMP_MODE),ON)
@@ -180,7 +180,7 @@ else ifeq ($(PE_ENV),NVIDIA)
     ifeq ($(OPENACC_MODE),ON)
         OPENACC   = -acc -gpu=ptxinfo -Minfo=accel
     else
-        OPENACC   = -acclibs
+        OPENACC   =
     endif
 
     # Fortran-specific flags

@@ -32,6 +32,7 @@ Program net
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
   Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
+  Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_integrate_bdf, Only: bdf_init
   Use xnet_jacobian, Only: read_jacobian_data
   Use xnet_match, Only: mflx, nflx, read_match_data
@@ -77,6 +78,8 @@ Program net
   !$ nthread = omp_get_num_threads()
   !$omp end single
   !$omp end parallel
+
+  Call gpu_init()
 
   start_timer = xnet_wtime()
   timer_setup = timer_setup - start_timer
@@ -323,6 +326,8 @@ Program net
   ! Close diagnostic output file
   If ( idiag >= 0 ) Close(lun_diag)
   !$omp end parallel
+
+  Call gpu_finalize()
 
   ! Wait for all nodes to finish
   Call parallel_finalize()
