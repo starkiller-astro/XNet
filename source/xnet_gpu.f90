@@ -128,6 +128,7 @@ Module xnet_gpu
 
   Public :: gpu_init
   Public :: gpu_finalize
+  Public :: device_is_present
   Public :: get_device_num
   Public :: on_device
   Public :: stream_sync

@@ -13,17 +13,35 @@ Module xnet_jacobian
   !-------------------------------------------------------------------------------------------------
   ! The Jacobian matrix for the solver.
   !-------------------------------------------------------------------------------------------------
+  Use, Intrinsic :: iso_c_binding
   Use xnet_types, Only: dp
   Implicit None
-  Real(dp), Allocatable :: dydotdy(:,:,:) ! dYdot/dY part of jac
-  Real(dp), Allocatable :: jac(:,:,:)     ! the Jacobian matrix
-  Real(dp), Allocatable :: rhs(:,:)       ! the right-hand-side of linear system
-  Integer, Allocatable :: indx(:,:)       ! Pivots in the LU decomposition
-  Integer, Allocatable :: info(:)
-  Integer :: msize                        ! Size of linear system to be solved
+  Real(dp), Allocatable, Target :: dydotdy(:,:,:) ! dYdot/dY part of jac
+  Real(dp), Allocatable, Target :: jac(:,:,:)     ! the Jacobian matrix
+  Real(dp), Allocatable, Target :: rhs(:,:)       ! the Jacobian matrix
+  Integer, Allocatable, Target :: indx(:,:)       ! Pivots in the LU decomposition
+  Integer, Allocatable, Target :: info(:)
+
+  Type(C_PTR), Allocatable, Target :: hjac(:), hrhs(:), hindx(:)
+  Type(C_PTR), Allocatable, Target :: djac(:), drhs(:), dindx(:)
+
+  ! Array size parameters
+  Real(C_DOUBLE), Parameter :: ddummy = 0.0
+  Integer(C_INT), Parameter :: idummy = 0
+  Integer(C_INTPTR_T), Parameter :: cptr_dummy = 0
+  Integer(C_SIZE_T), Parameter :: sizeof_double = c_sizeof(ddummy)
+  Integer(C_SIZE_T), Parameter :: sizeof_int = c_sizeof(idummy)
+  Integer(C_SIZE_T), Parameter :: sizeof_cptr = c_sizeof(cptr_dummy)
+  Integer(C_SIZE_T) :: sizeof_jac, sizeof_rhs, sizeof_indx, sizeof_info, sizeof_batch
+
+  ! Parameters for GPU array dimensions
+  Integer :: msize ! Size of linear system to be solved
 
   Real(dp), Allocatable, Target :: diag0(:)
   Real(dp), Allocatable, Target :: mult1(:)
+
+  !$acc declare &
+  !$acc create(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
 
 Contains
 
@@ -33,10 +51,14 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: iheat, nzevolve
+    Use xnet_gpu, Only: dev_ptr
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: data_dir
+
+    ! Local variables
+    Integer :: izb
 
     ! Calculate array sizes
     If ( iheat > 0 ) Then
@@ -44,6 +66,11 @@ Contains
     Else
       msize = ny
     EndIf
+
+    Allocate (diag0(nzevolve))
+    Allocate (mult1(nzevolve))
+    diag0 = 0.0
+    mult1 = 1.0
 
     Allocate (dydotdy(msize,msize,nzevolve))
     Allocate (jac(msize,msize,nzevolve))
@@ -56,18 +83,37 @@ Contains
     indx = 0
     info = 0
 
-    Allocate (diag0(nzevolve))
-    Allocate (mult1(nzevolve))
-    diag0 = 0.0
-    mult1 = 1.0
+    Allocate (hjac(nzevolve))
+    Allocate (hrhs(nzevolve))
+    Allocate (hindx(nzevolve))
+    Do izb = 1, nzevolve
+      hjac(izb) = c_loc( jac(1,1,izb) )
+      hrhs(izb) = c_loc( rhs(1,izb) )
+      hindx(izb) = c_loc( indx(1,izb) )
+    EndDo
+
+    Allocate (djac(nzevolve))
+    Allocate (drhs(nzevolve))
+    Allocate (dindx(nzevolve))
+    Do izb = 1, nzevolve
+      djac(izb) = dev_ptr( jac(1,1,izb) )
+      drhs(izb) = dev_ptr( rhs(1,izb) )
+      dindx(izb) = dev_ptr( indx(1,izb) )
+    EndDo
+
+    !$acc update &
+    !$acc device(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
 
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
     Implicit None
-    Deallocate (dydotdy,jac,rhs,indx,info)
     Deallocate (diag0,mult1)
+    Deallocate (dydotdy,jac,rhs,indx,info)
+    Deallocate (hjac,hrhs,hindx)
+    Deallocate (djac,drhs,dindx)
+
     Return
   End Subroutine jacobian_finalize
 
@@ -288,7 +334,9 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
+    Use xnet_gpu, Only: stream, stream_sync
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
     Implicit None
@@ -306,7 +354,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, izb, izone
+    Integer :: i, izb, izone, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -319,13 +367,23 @@ Contains
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
+    !$acc enter data &
+    !$acc copyin(mask)
+
+    !$acc update device(jac(:,:,zb_lo:zb_hi))
+
+    !$acc parallel loop gang &
+    !$acc copyin(yrhs,t9rhs) &
+    !$acc present(mask,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+        !$acc loop vector
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       Else
+        !$acc loop vector
         Do i = 1, msize
           rhs(i,izb) = 0.0
         EndDo
@@ -333,14 +391,26 @@ Contains
     EndDo
 
     ! Solve the linear system
+#if defined(XNET_GPU)
+    call LinearSolveBatched_GPU &
+      & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
+      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
+    call stream_sync( stream )
+#else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        Call dgesv(msize,1,jac(1,1,izb),msize,indx(1,izb),rhs(1,izb),msize,info(izb))
+        call LinearSolve_CPU &
+          & ( 'N', msize, 1, jac(1,1,izb), msize, indx(1,izb), rhs(1,izb), msize, info(izb) )
       EndIf
     EndDo
+#endif
 
+    !$acc parallel loop gang &
+    !$acc copyout(dy,dt9) &
+    !$acc present(mask,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+        !$acc loop vector
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
@@ -359,6 +429,9 @@ Contains
       EndDo
     EndIf
 
+    !$acc exit data &
+    !$acc delete(mask)
+
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
 
@@ -369,7 +442,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_gpu, Only: stream, stream_sync
+    Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
 
@@ -380,7 +455,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, j, izb, izone
+    Integer :: i, j, izb, izone, istat
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -394,12 +469,22 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
+    !$acc update device(jac(:,:,zb_lo:zb_hi))
+
     ! Calculate the LU decomposition
+#if defined(XNET_GPU)
+    call LUDecompBatched_GPU &
+      & ( msize, msize, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
+      &   dindx(zb_lo), info(zb_lo), nzbatch )
+    call stream_sync( stream )
+#else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        Call dgetrf(msize,msize,jac(1,1,izb),msize,indx(1,izb),info(izb))
+        call LUDecomp_CPU &
+          & ( msize, msize, jac(1,1,izb), msize, indx(1,izb), info(izb) )
       EndIf
     EndDo
+#endif
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
@@ -423,7 +508,9 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
+    Use xnet_gpu, Only: stream, stream_sync
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
     Implicit None
@@ -455,13 +542,21 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
+    !$acc enter data &
+    !$acc copyin(mask)
+
+    !$acc parallel loop gang &
+    !$acc copyin(yrhs,t9rhs) &
+    !$acc present(mask,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+        !$acc loop vector
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       Else
+        !$acc loop vector
         Do i = 1, msize
           rhs(i,izb) = 0.0
         EndDo
@@ -469,14 +564,26 @@ Contains
     EndDo
 
     ! Solve the LU-decomposed triangular system via back-substitution
+#if defined(XNET_GPU)
+    call LUBksubBatched_GPU &
+      & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
+      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
+    call stream_sync( stream )
+#else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        Call dgetrs('N',msize,1,jac(1,1,izb),msize,indx(1,izb),rhs(1,izb),msize,info(izb))
+        call LUBksub_CPU &
+          & ( 'N', msize, 1, jac(1,1,izb), msize, indx(1,izb), rhs(1,izb), msize, info(izb) )
       EndIf
     EndDo
+#endif
 
+    !$acc parallel loop gang &
+    !$acc copyout(dy,dt9) &
+    !$acc present(mask,rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+        !$acc loop vector
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
@@ -494,6 +601,9 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !$acc exit data &
+    !$acc delete(mask)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer

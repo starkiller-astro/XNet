@@ -45,11 +45,11 @@ CUBLAS_DEF    = -DXNET_LA_CUBLAS
 CUBLAS_INC    = $(CUDA_INC)
 CUBLAS_LIBDIR = $(CUDA_LIBDIR)
 ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
-CUBLAS_LIBS   = -cudalib=cublas,cusolver
+CUBLAS_LIBS   = -cudalib=cublas,cusparse,cusolver
 else
-CUBLAS_LIBS   = -lcublas -lcusolver
+CUBLAS_LIBS   = -lcublas -lcusparse -lcusolver
 endif
-CUBLAS_SRC    = cublasf.f90 cusolverf.f90
+CUBLAS_SRC    = cublasf.f90 cusparsef.f90 cusolverf.f90
 CUBLAS_OBJ    = $(addsuffix .o,$(basename $(CUBLAS_SRC)))
 
 ## HIP/ROCm
@@ -64,7 +64,7 @@ ROCM_DEF    = -DXNET_LA_ROCM
 ROCM_INC    = -I$(ROCM_DIR)/include
 ROCM_LIBDIR = -L$(ROCM_DIR)/lib
 ROCM_LIBS   = -lrocsparse -lrocsolver -lrocblas -lhipblas -lhipsparse -lamdhip6
-ROCM_SRC    = hipblasf.f90 rocblasf.f90 rocsolverf.f90
+ROCM_SRC    = hipblasf.f90 hipsparsef.f90 rocblasf.f90 rocsparsef.f90 rocsolverf.f90
 ROCM_OBJ    = $(addsuffix .o,$(basename $(ROCM_SRC)))
 
 ## MAGMA
@@ -82,7 +82,7 @@ PAPI_INC    = -I$(PAPI_DIR)/include
 PAPI_LIBDIR = -L$(PAPI_DIR)/lib
 PAPI_LIBS   = -lpapi
 
-GPU_DEF    = $($(GPU_BACKEND)_DEF)
+GPU_DEF    = -DXNET_GPU $($(GPU_BACKEND)_DEF)
 GPU_INC    = $($(GPU_BACKEND)_INC)
 GPU_LIBDIR = $($(GPU_BACKEND)_LIBDIR)
 GPU_LIBS   = $($(GPU_BACKEND)_LIBS)
@@ -159,11 +159,6 @@ endif
 
 ## Flags for compiling with GPU
 ifeq ($(GPU_MODE),ON)
-    ifeq ($(CUDA_MODE),ON)
-        GPU_DEF += $(CUDA_DEF)
-    else ifeq ($(HIP_MODE),ON)
-        GPU_DEF += $(HIP_DEF)
-    endif
     ifeq ($(OPENACC_MODE),ON)
         GPU_DEF += -DXNET_OACC
         GPU_OBJ += openaccf.o
@@ -186,9 +181,9 @@ endif
 # Additional Makefile targets/rules/dependencies
 #-------------------------------------------------------------------------------
 
-xnet_gpu: $(BASE) xnet_jacobian_gpu.o $(CUBLAS_OBJ) $(LAPACK_OBJ) $(DRIVER)
+xnet_gpu: $(BASE) xnet_jacobian_dense.o $(CUBLAS_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	$(LDR) $(LDFLAGS) -o xnet_gpu$(MPI_SFX) \
-	    $(BASE) xnet_jacobian_gpu.o $(notdir $(CUBLAS_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
+	    $(BASE) xnet_jacobian_dense.o $(notdir $(CUBLAS_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(CUBLAS_LIBDIR) $(CUBLAS_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 $(GPU_LAPACK_OBJ_F90): %.o: %.f90

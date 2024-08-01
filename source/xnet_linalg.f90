@@ -8,6 +8,7 @@ Module xnet_linalg
 
   Use, Intrinsic :: iso_c_binding
   Use xnet_types, Only: dp
+  Use xnet_constants, Only: pi
   Use xnet_gpu, Only: &
     mydevice, &
     device_is_present, &
@@ -158,13 +159,14 @@ Module xnet_linalg
   Public :: LUDecomp
   Public :: LUDecomp_CPU
   Public :: LUDecomp_GPU
+  !Public :: LUDecompBatched
   Public :: LUDecompBatched_CPU
   Public :: LUDecompBatched_GPU
 
   Public :: LUBksub
   Public :: LUBksub_CPU
   Public :: LUBksub_GPU
-  Public :: LUBksubBatched
+  !Public :: LUBksubBatched
   Public :: LUBksubBatched_CPU
   Public :: LUBksubBatched_GPU
 
@@ -1178,7 +1180,7 @@ Contains
         ierr = cublasDtrsm_v2 &
                ( cublas_handle, &
                  CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, &
-                 n, nrhs, One, da, lda, db, ldb )
+                 n, nrhs, 1.0_dp, da, lda, db, ldb )
 
       End If
 #elif defined(XNET_LA_ROCM)
@@ -1206,11 +1208,11 @@ Contains
         !       ( rocblas_handle, &
         !         rocblas_side_left, rocblas_fill_upper, &
         !         rocblas_operation_none, rocblas_diagonal_non_unit, &
-        !         n, nrhs, One, da, lda, db, ldb ) )
+        !         n, nrhs, 1.0_dp, da, lda, db, ldb ) )
         Call hipblasCheck( hipblasDtrsm &
                ( hipblas_handle, &
                  HIPBLAS_SIDE_LEFT, HIPBLAS_FILL_MODE_UPPER, HIPBLAS_OP_N, HIPBLAS_DIAG_NON_UNIT, &
-                 n, nrhs, One, da, lda, db, ldb ) )
+                 n, nrhs, 1.0_dp, da, lda, db, ldb ) )
 
       End If
 #elif defined(XNET_LA_ONEMKL)
@@ -1268,7 +1270,7 @@ Contains
 
     P1 = A(1,2)**2 + A(1,3)**2 + A(2,3)**2
 
-    If ( P1 == Zero ) Then
+    If ( P1 == 0.0_DP ) Then
 
       Lambda(1) = A(1,1)
       Lambda(2) = A(2,2)
@@ -1296,16 +1298,16 @@ Contains
              + B13 * B21 * B32  &
              - B13 * B22 * B31
       R = DETB * 0.5_DP
-      If ( R <= - One ) Then
-        PHI = Pi
-      Else If ( R >= One ) Then
-        PHI = Zero
+      If ( R <= - 1.0_DP ) Then
+        PHI = pi
+      Else If ( R >= 1.0_DP ) Then
+        PHI = 0.0_DP
       Else
         PHI = ACOS( R ) / 3.0_DP
       End If
 
       Lambda(1) = Q + 2.0_DP * P * COS( PHI )
-      Lambda(3) = Q + 2.0_DP * P * COS( PHI + ( 2.0_DP * Pi / 3.0_DP ) )
+      Lambda(3) = Q + 2.0_DP * P * COS( PHI + ( 2.0_DP * pi / 3.0_DP ) )
       Lambda(2) = 3.0_DP * Q - Lambda(1) - Lambda(3)
 
     End If
@@ -1324,6 +1326,7 @@ Contains
     Real(dp), Dimension(:,:), Pointer :: pa
     Real(dp), Dimension(:)  , Pointer :: pwork
     Type(C_PTR)                       :: ha, hwork
+    Type(C_PTR)                       :: da
 
     lwork = -1
 
@@ -1573,7 +1576,8 @@ Contains
     Integer                           :: ierr
     Integer(C_INT)                    :: itrans
     Real(dp), Dimension(:,:), Pointer :: pa, pb
-    Integer,  Dimension(:)  , Pointer :: pipiv, pinfo
+    Integer,  Dimension(:)  , Pointer :: pipiv
+    Integer,                  Pointer :: pinfo
     Type(C_PTR)                       :: hinfo
     Type(C_PTR)                       :: da, db, dipiv, dinfo
 
@@ -1610,14 +1614,15 @@ Contains
   End Subroutine LUBksub_GPU
 
 
-  Subroutine LinearSolve( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
+  Subroutine LinearSolve( trans, n, nrhs, a, lda, ipiv, b, ldb, info, work, lwork )
 
     Character                          :: trans
-    Integer                            :: n, nrhs, lda, ldb
+    Integer                            :: n, nrhs, lda, ldb, lwork
     Real(dp), Dimension(lda,*), Target :: a
     Real(dp), Dimension(ldb,*), Target :: b
     Integer,  Dimension(*),     Target :: ipiv
     Integer,                    Target :: info
+    Real(dp), Dimension(*)    , Target :: work
 
     Integer(C_SIZE_T)                 :: sizeof_a, sizeof_b, sizeof_ipiv, sizeof_info
     Real(dp), Dimension(:,:), Pointer :: pa, pb
@@ -1649,7 +1654,7 @@ Contains
 
     If ( data_on_device ) Then
 
-      Call LinearSolve_GPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
+      Call LinearSolve_GPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, work, lwork )
 #if defined(XNET_OMP_OL)
       Call stream_sync( stream )
 #endif
@@ -1694,17 +1699,18 @@ Contains
   End Subroutine LinearSolve_CPU
 
 
-  Subroutine LinearSolve_GPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
+  Subroutine LinearSolve_GPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, work, lwork )
 
     Character                          :: trans
-    Integer                            :: n, nrhs, lda, ldb
+    Integer                            :: n, nrhs, lda, ldb, lwork
     Real(dp), Dimension(lda,*), Target :: a
     Real(dp), Dimension(ldb,*), Target :: b
     Integer,  Dimension(*),     Target :: ipiv
     Integer,                    Target :: info
+    Real(dp), Dimension(*)    , Target :: work
 
     Call LUDecomp_GPU &
-      & ( n, n, a, lda, ipiv, info )
+      & ( n, n, a, lda, work, lwork, ipiv, info )
     Call LUBksub_GPU &
       & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info )
 
@@ -1720,11 +1726,14 @@ Contains
     Integer,  Dimension(*),     Target :: ipiv
     Integer,  Dimension(*),     Target :: info
 
-    Integer(C_SIZE_T)                 :: sizeof_a, sizeof_b, sizeof_ipiv, sizeof_info
-    Real(dp), Dimension(:,:), Pointer :: pa, pb
-    Integer,  Dimension(:),   Pointer :: pipiv, pinfo
-    Type(C_PTR)                       :: ha, hb, hipiv, hinfo
-    Logical                           :: data_on_device
+    Integer                                    :: i
+    Integer(C_SIZE_T)                          :: sizeof_a, sizeof_b, sizeof_ipiv, sizeof_info
+    Real(dp), Dimension(:,:), Pointer          :: pa, pb
+    Integer,  Dimension(:),   Pointer          :: pipiv, pinfo
+    Type(C_PTR)                                :: ha, hb, hipiv, hinfo
+    Type(C_PTR), Dimension(batchcount), Target :: da, db, dipiv
+    Integer                                    :: osa, osb
+    Logical                                    :: data_on_device
 
     data_on_device = .false.
     sizeof_a    = n * n * batchcount * c_sizeof(0.0_DP)
@@ -1749,9 +1758,38 @@ Contains
 
     If ( data_on_device ) Then
 
-      Call LinearSolveBatched_GPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+#if defined(XNET_OMP_OL)
+      !$OMP TARGET ENTER DATA &
+      !$OMP MAP( alloc: da, db, dipiv )
+#elif defined(XNET_OACC)
+      !$ACC ENTER DATA &
+      !$ACC CREATE( da, db, dipiv )
+#endif
+      Do i = 1, batchcount
+        osa = (i-1) * n + 1
+        osb = (i-1) * nrhs + 1
+        da(i) = dev_ptr( pa(1,osa) )
+        db(i) = dev_ptr( pb(1,osb) )
+        dipiv(i) = dev_ptr( pipiv(osa) )
+      End Do
+#if defined(XNET_OMP_OL)
+      !$OMP TARGET UPDATE TO( da, db, dipiv )
+#elif defined(XNET_OACC)
+      !$ACC UPDATE DEVICE( da, db, dipiv )
+#endif
+
+      Call LinearSolveBatched_GPU &
+        &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
 #if defined(XNET_OMP_OL)
       Call stream_sync( stream )
+#endif
+
+#if defined(XNET_OMP_OL)
+      !$OMP TARGET EXIT DATA &
+      !$OMP MAP( release: da, db, dipiv )
+#elif defined(XNET_OACC)
+      !$ACC EXIT DATA &
+      !$ACC DELETE( da, db, dipiv )
 #endif
 
     Else
@@ -1794,7 +1832,7 @@ Contains
   End Subroutine LinearSolveBatched_CPU
 
 
-  Subroutine LinearSolveBatched_GPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+  Subroutine LinearSolveBatched_GPU( trans, n, nrhs, a, da, lda, ipiv, dipiv, b, db, ldb, info, batchcount )
 
     Character                          :: trans
     Integer                            :: n, nrhs, lda, ldb, batchcount
@@ -1802,49 +1840,12 @@ Contains
     Real(dp), Dimension(ldb,*), Target :: b
     Integer,  Dimension(*),     Target :: ipiv
     Integer,  Dimension(*),     Target :: info
-
-    Integer                                    :: i
-    Real(dp), Dimension(:,:), Pointer          :: pa, pb
-    Integer,  Dimension(:),   Pointer          :: pipiv, pinfo
-    Type(C_PTR), Dimension(batchcount), Target :: da, db, dipiv
-    Integer                                    :: osa, osb
-
-    pa => a(:,1:n*batchcount)
-    pb => b(:,1:nrhs*batchcount)
-    pipiv => ipiv(1:n*batchcount)
-
-#if defined(XNET_OMP_OL)
-    !$OMP TARGET ENTER DATA &
-    !$OMP MAP( alloc: da, db, dipiv )
-#elif defined(XNET_OACC)
-    !$ACC ENTER DATA &
-    !$ACC CREATE( da, db, dipiv )
-#endif
-    Do i = 1, batchcount
-      osa = (i-1) * n + 1
-      osb = (i-1) * nrhs + 1
-      da(i) = dev_ptr( pa(1,osa) )
-      db(i) = dev_ptr( pb(1,osb) )
-      dipiv(i) = dev_ptr( pipiv(osa) )
-    End Do
-#if defined(XNET_OMP_OL)
-    !$OMP TARGET UPDATE TO( da, db, dipiv )
-#elif defined(XNET_OACC)
-    !$ACC UPDATE DEVICE( da, db, dipiv )
-#endif
+    Type(C_PTR), Dimension(*),  Target :: da, dipiv, db
 
     Call LUDecompBatched_GPU &
-      & ( n, n, a, da, lda, ipiv, dipiv, info, batchcount )
+      & ( n, n, a, da(1), lda, ipiv, dipiv(1), info, batchcount )
     Call LUBksubBatched_GPU &
-      & ( trans, n, nrhs, a, da, lda, ipiv, dipiv, b, db, ldb, info, batchcount )
-
-#if defined(XNET_OMP_OL)
-    !$OMP TARGET EXIT DATA &
-    !$OMP MAP( release: da, db, dipiv )
-#elif defined(XNET_OACC)
-    !$ACC EXIT DATA &
-    !$ACC DELETE( da, db, dipiv )
-#endif
+      & ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
 
   End Subroutine LinearSolveBatched_GPU
 

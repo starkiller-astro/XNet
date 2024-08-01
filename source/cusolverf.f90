@@ -106,6 +106,48 @@ module cusolverf
       type(c_ptr), value :: devInfo
     end function cusolverDnDormqr
 
+    integer(c_int) function &
+        & cusolverDnDgetrf_bufferSize(handle, m, n, A, lda, Lwork) &
+        & bind(c, name="cusolverDnDgetrf_bufferSize")
+      use, intrinsic :: iso_c_binding
+      type(c_ptr), value :: handle
+      integer(c_int), value :: m
+      integer(c_int), value :: n
+      type(c_ptr), value :: A
+      integer(c_int), value :: lda
+      integer(c_int), target :: Lwork
+    end function cusolverDnDgetrf_bufferSize
+
+    integer(c_int) function &
+        & cusolverDnDgetrf(handle, m, n, A, lda, Workspace, devIpiv, devInfo ) &
+        & bind(c, name="cusolverDnDgetrf")
+      use, intrinsic :: iso_c_binding
+      type(c_ptr), value :: handle
+      integer(c_int), value :: m
+      integer(c_int), value :: n
+      type(c_ptr), value :: A
+      integer(c_int), value :: lda
+      type(c_ptr), value :: Workspace
+      type(c_ptr), value :: devIpiv
+      type(c_ptr), value :: devInfo
+    end function cusolverDnDgetrf
+
+    integer(c_int) function &
+        & cusolverDnDgetrs(handle, trans, n, nrhs, A, lda, devIpiv, B, ldb, devInfo ) &
+        & bind(c, name="cusolverDnDgetrs")
+      use, intrinsic :: iso_c_binding
+      type(c_ptr), value :: handle
+      integer(c_int), value :: trans
+      integer(c_int), value :: n
+      integer(c_int), value :: nrhs
+      type(c_ptr), value :: A
+      integer(c_int), value :: lda
+      type(c_ptr), value :: devIpiv
+      type(c_ptr), value :: B
+      integer(c_int), value :: ldb
+      type(c_ptr), value :: devInfo
+    end function cusolverDnDgetrs
+
   end interface
 
 end module cusolverf
