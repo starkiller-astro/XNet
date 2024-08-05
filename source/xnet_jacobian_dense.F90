@@ -369,11 +369,14 @@ Contains
     timer_solve = timer_solve - start_timer
 
     !__dir_enter_data &
+    !__dir_async &
     !__dir_copyin(mask)
 
-    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi))
+    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi)) &
+    !__dir_async
 
     !__dir_loop_outer(1) &
+    !__dir_async &
     !__dir_present(mask,rhs) &
     !__dir_copyin(yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
@@ -396,7 +399,6 @@ Contains
     call LinearSolveBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
       &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
-    call stream_sync( stream )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -407,6 +409,7 @@ Contains
 #endif
 
     !__dir_loop_outer(1) &
+    !__dir_async &
     !__dir_present(mask,rhs) &
     !__dir_copyout(dy,dt9)
     Do izb = zb_lo, zb_hi
@@ -431,7 +434,9 @@ Contains
     EndIf
 
     !__dir_exit_data &
+    !__dir_async &
     !__dir_delete(mask)
+    call stream_sync( stream )
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -470,14 +475,14 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
-    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi))
+    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi)) &
+    !__dir_async
 
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
     call LUDecompBatched_GPU &
       & ( msize, msize, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
       &   dindx(zb_lo), info(zb_lo), nzbatch )
-    call stream_sync( stream )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -544,9 +549,11 @@ Contains
     timer_bksub = timer_bksub - start_timer
 
     !__dir_enter_data &
+    !__dir_async &
     !__dir_copyin(mask)
 
     !__dir_loop_outer(1) &
+    !__dir_async &
     !__dir_present(mask,rhs) &
     !__dir_copyin(yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
@@ -569,7 +576,6 @@ Contains
     call LUBksubBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
       &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
-    call stream_sync( stream )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -580,6 +586,7 @@ Contains
 #endif
 
     !__dir_loop_outer(1) &
+    !__dir_async &
     !__dir_present(mask,rhs) &
     !__dir_copyout(dy,dt9)
     Do izb = zb_lo, zb_hi
@@ -604,7 +611,10 @@ Contains
     EndIf
 
     !__dir_exit_data &
+    !__dir_async &
     !__dir_delete(mask)
+
+    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
