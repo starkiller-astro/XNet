@@ -169,7 +169,7 @@ else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
     endif
 
     # generic flags
-    OPT_FLAGS     = -g -gopt -O1 -Kieee $(ARCHOPT) $(INLINE)
+    OPT_FLAGS     = -g -gopt -O2 $(ARCHOPT) $(INLINE)
     DEBUG_FLAGS   = -g -gopt -O0 -traceback
 
     ifeq ($(OPENMP_MODE),ON)
