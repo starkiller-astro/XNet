@@ -9,6 +9,8 @@
 ! fastest. However for larger matrices, sparse solvers are faster.
 !*******************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_jacobian
   !-------------------------------------------------------------------------------------------------
   ! The Jacobian matrix for the solver.
@@ -40,8 +42,8 @@ Module xnet_jacobian
   Real(dp), Allocatable, Target :: diag0(:)
   Real(dp), Allocatable, Target :: mult1(:)
 
-  !$acc declare &
-  !$acc create(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
+  !__dir_declare &
+  !__dir_mod_create(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
 
 Contains
 
@@ -101,8 +103,7 @@ Contains
       dindx(izb) = dev_ptr( indx(1,izb) )
     EndDo
 
-    !$acc update &
-    !$acc device(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
+    !__dir_update_gpu(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
 
     Return
   End Subroutine read_jacobian_data
@@ -367,23 +368,23 @@ Contains
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
-    !$acc enter data &
-    !$acc copyin(mask)
+    !__dir_enter_data &
+    !__dir_copyin(mask)
 
-    !$acc update device(jac(:,:,zb_lo:zb_hi))
+    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi))
 
-    !$acc parallel loop gang &
-    !$acc copyin(yrhs,t9rhs) &
-    !$acc present(mask,rhs)
+    !__dir_loop_outer(1) &
+    !__dir_present(mask,rhs) &
+    !__dir_copyin(yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !$acc loop vector
+        !__dir_loop_inner(1)
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       Else
-        !$acc loop vector
+        !__dir_loop_inner(1)
         Do i = 1, msize
           rhs(i,izb) = 0.0
         EndDo
@@ -405,12 +406,12 @@ Contains
     EndDo
 #endif
 
-    !$acc parallel loop gang &
-    !$acc copyout(dy,dt9) &
-    !$acc present(mask,rhs)
+    !__dir_loop_outer(1) &
+    !__dir_present(mask,rhs) &
+    !__dir_copyout(dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !$acc loop vector
+        !__dir_loop_inner(1)
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
@@ -429,8 +430,8 @@ Contains
       EndDo
     EndIf
 
-    !$acc exit data &
-    !$acc delete(mask)
+    !__dir_exit_data &
+    !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -469,7 +470,7 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
-    !$acc update device(jac(:,:,zb_lo:zb_hi))
+    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi))
 
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
@@ -542,21 +543,21 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    !$acc enter data &
-    !$acc copyin(mask)
+    !__dir_enter_data &
+    !__dir_copyin(mask)
 
-    !$acc parallel loop gang &
-    !$acc copyin(yrhs,t9rhs) &
-    !$acc present(mask,rhs)
+    !__dir_loop_outer(1) &
+    !__dir_present(mask,rhs) &
+    !__dir_copyin(yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !$acc loop vector
+        !__dir_loop_inner(1)
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       Else
-        !$acc loop vector
+        !__dir_loop_inner(1)
         Do i = 1, msize
           rhs(i,izb) = 0.0
         EndDo
@@ -578,12 +579,12 @@ Contains
     EndDo
 #endif
 
-    !$acc parallel loop gang &
-    !$acc copyout(dy,dt9) &
-    !$acc present(mask,rhs)
+    !__dir_loop_outer(1) &
+    !__dir_present(mask,rhs) &
+    !__dir_copyout(dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !$acc loop vector
+        !__dir_loop_inner(1)
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
@@ -602,8 +603,8 @@ Contains
       EndDo
     EndIf
 
-    !$acc exit data &
-    !$acc delete(mask)
+    !__dir_exit_data &
+    !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
