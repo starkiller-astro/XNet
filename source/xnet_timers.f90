@@ -90,4 +90,32 @@ Contains
     Return
   End Subroutine reset_timers
 
+  Subroutine write_timers_summary(lun_out)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine write a summary of internal timers to the diagnostic output
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input variables
+    Integer, Intent(in) :: lun_out ! The logical unit for diagnostic output
+
+    ! Local variables
+    Integer, Parameter :: ntimer_write = 14
+    Character(10), Parameter :: timer_desc(ntimer_write) = [ Character(10) :: &
+      & 'Total','TimeStep','NewtRaph','Solver','Decomp', &
+      & 'BkSub','Jacobian','Deriv','CrossSect','Screening', &
+      & 'PreScreen','EOS','Setup','Output' ]
+    Real(dp) :: timer_write(ntimer_write)
+    Integer :: i
+
+    timer_write = &
+      & [ timer_xnet,timer_tstep,timer_nraph,timer_solve,timer_decmp, &
+      &   timer_bksub,timer_jacob,timer_deriv,timer_csect,timer_scrn, &
+      &   timer_prescrn,timer_eos,timer_setup,timer_output ]
+
+    Write(lun_out,"(a)") 'Timers Summary: '
+    Write(lun_out,"(8x,a10,es10.3)") (timer_desc(i),timer_write(i),i=1,ntimer_write)
+
+  End Subroutine write_timers_summary
+
 End Module xnet_timers

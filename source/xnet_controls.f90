@@ -397,7 +397,7 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer       :: i, izone
+    Integer :: i, izone
 
     ! Write controls to diagnostic output (or to stdout if idiag = -1)
     If ( idiag >= 0 .or. ( idiag >= -1 .and. parallel_IOProcessor() ) ) Then
