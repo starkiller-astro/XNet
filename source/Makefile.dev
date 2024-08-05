@@ -38,7 +38,7 @@ CUDA_INC    = -I$(CUDA_DIR)/include
 CUDA_LIBDIR = -L$(CUDA_DIR)/lib64
 CUDA_LIBS   = -lcudart -lcuda
 endif
-CUDA_SRC    = cudaf.f90
+CUDA_SRC    = cudaf.F90
 CUDA_OBJ    = $(addsuffix .o,$(basename $(CUDA_SRC)))
 
 CUBLAS_DEF    = -DXNET_LA_CUBLAS
@@ -49,7 +49,7 @@ CUBLAS_LIBS   = -cudalib=cublas,cusparse,cusolver
 else
 CUBLAS_LIBS   = -lcublas -lcusparse -lcusolver
 endif
-CUBLAS_SRC    = cublasf.f90 cusparsef.f90 cusolverf.f90
+CUBLAS_SRC    = cublasf.F90 cusparsef.F90 cusolverf.F90
 CUBLAS_OBJ    = $(addsuffix .o,$(basename $(CUBLAS_SRC)))
 
 ## HIP/ROCm
@@ -57,14 +57,14 @@ HIP_DEF    = -DXNET_HIP
 HIP_INC    = -I$(HIPFORT_DIR)/include/hipfort/amdgcn
 HIP_LIBDIR = -L$(HIPFORT_DIR)/lib
 HIP_LIBS   = -lhipfort-amdgcn
-HIP_SRC    = hipf.f90
+HIP_SRC    = hipf.F90
 HIP_OBJ    = $(addsuffix .o,$(basename $(HIP_SRC)))
 
 ROCM_DEF    = -DXNET_LA_ROCM
 ROCM_INC    = -I$(ROCM_DIR)/include
 ROCM_LIBDIR = -L$(ROCM_DIR)/lib
 ROCM_LIBS   = -lrocsparse -lrocsolver -lrocblas -lhipblas -lhipsparse -lamdhip6
-ROCM_SRC    = hipblasf.f90 hipsparsef.f90 rocblasf.f90 rocsparsef.f90 rocsolverf.f90
+ROCM_SRC    = hipblasf.F90 hipsparsef.F90 rocblasf.F90 rocsparsef.F90 rocsolverf.F90
 ROCM_OBJ    = $(addsuffix .o,$(basename $(ROCM_SRC)))
 
 ## MAGMA
@@ -73,7 +73,7 @@ MAGMA_DEF    = -DXNET_LA_MAGMA
 MAGMA_INC    = -I$(MAGMA_DIR)/include $(CUBLAS_INC)
 MAGMA_LIBDIR = -L$(MAGMA_DIR)/lib $(CUBLAS_LIBDIR)
 MAGMA_LIBS   = -lmagma $(CUBLAS_LIBS)
-MAGMA_SRC    = magmaf.f90 $(CUBLAS_SRC)
+MAGMA_SRC    = magmaf.F90 $(CUBLAS_SRC)
 MAGMA_OBJ    = $(addsuffix .o,$(basename $(MAGMA_SRC)))
 
 ## Performance Application Programming Interface (PAPI)
@@ -154,8 +154,10 @@ ifeq ($(GPU_MODE),ON)
     GPU_LAPACK_SRC    = $($(GPU_LAPACK_VER)_SRC)
     GPU_LAPACK_OBJ    = $(addsuffix .o,$(basename $(GPU_LAPACK_SRC)))
 
-    GPU_LAPACK_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.f90 %.F90,$(GPU_LAPACK_SRC))))
-    GPU_LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.f %.F,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_f90 = $(addsuffix .o,$(basename $(filter %.f90,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.F90,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_f   = $(addsuffix .o,$(basename $(filter %.f,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.F,$(GPU_LAPACK_SRC))))
     GPU_LAPACK_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(GPU_LAPACK_SRC))))
     GPU_LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(GPU_LAPACK_SRC))))
     GPU_LAPACK_OBJ_CU  = $(addsuffix .o,$(basename $(filter %.cu,$(GPU_LAPACK_SRC))))
@@ -187,9 +189,13 @@ xnet_gpu: $(BASE) xnet_jacobian_dense.o $(CUBLAS_OBJ) $(LAPACK_OBJ) $(DRIVER)
 	    $(BASE) xnet_jacobian_dense.o $(notdir $(CUBLAS_OBJ) $(LAPACK_OBJ)) $(DRIVER) \
 	    $(CUBLAS_LIBDIR) $(CUBLAS_LIBS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
-$(GPU_LAPACK_OBJ_F90): %.o: %.f90
+$(GPU_LAPACK_OBJ_f90): %.o: %.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
-$(GPU_LAPACK_OBJ_F): %.o: %.f
+$(GPU_LAPACK_OBJ_F90): %.o: %.F90
+	$(FC) $(FFLAGS) $(F90FLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
+$(GPU_LAPACK_OBJ_f): %.o: %.f
+	$(FC) $(FFLAGS) $(F77FLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
+$(GPU_LAPACK_OBJ_F): %.o: %.F
 	$(FC) $(FFLAGS) $(F77FLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
 $(GPU_LAPACK_OBJ_C): %.o: %.c
 	$(CC) $(CFLAGS) $(GPU_LAPACK_INC) -c $< -o $(notdir $@)
