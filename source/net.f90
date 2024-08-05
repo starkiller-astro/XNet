@@ -28,7 +28,7 @@ Program net
     & itsout, iweak0, nnucout, nnucout_string, output_nuc, szone, nzone, zone_id, changemx, tolm, tolc, &
     & yacc, ymin, tdel_maxmult, kstmx, kitmx, ev_file_base, bin_file_base, thermo_file, inab_file, &
     & lun_diag, lun_ev, lun_stdout, lun_ts, tid, nthread, nzevolve, nzbatchmx, nzbatch, szbatch, &
-    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, iaux
+    & zb_offset, zb_lo, zb_hi, lzactive, myid, nproc, read_controls, write_controls, iaux
   Use xnet_eos, Only: eos_initialize
   Use xnet_evolve, Only: full_net
   Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
@@ -105,13 +105,16 @@ Program net
     Open(newunit=lun_diag, file=diag_file, action='write')
     Write(lun_diag,"(a5,2i5)") 'MyId',myid,nproc
     !$ Write(lun_diag,"(a,i4,a,i4)") 'Thread ',tid,' of ',nthread
+  Else
+    lun_diag = lun_stdout
   EndIf
+  Call write_controls(lun_diag,data_dir)
   !$omp end parallel
 
   ! Read and distribute nuclear and reaction data
   Call read_nuclear_data(data_dir,data_desc)
   Call read_reaction_data(data_dir)
-  If ( idiag >= 0 ) Write(lun_diag,"(a)") (descript(i),i=1,3),data_desc
+  If ( idiag >= 0 ) Write(lun_diag,"(a)") data_desc
 
   ! Read and distribute jacobian matrix data
   Call read_jacobian_data(data_dir)

@@ -50,7 +50,7 @@ Module model_input_ascii
           Call xnet_terminate('Failed to open input file: '//trim(thermo_file(izone)))
         EndIf
 
-        Read(lun_th,*) thermo_desc(izb)
+        Read(lun_th,"(a)") thermo_desc(izb)
         Read(lun_th,*) tstart(izb)
         Read(lun_th,*) tstop(izb)
         Read(lun_th,*) tdelstart(izb)
@@ -97,7 +97,8 @@ Module model_input_ascii
         tdelstart(izb) = min(0.0,tdelstart(izb))
 
         ! Log thermo description
-        If ( idiag >= 0 ) Write(lun_diag,"(a)") thermo_desc(izb)
+        If ( idiag >= 0 ) Write(lun_diag,"(a5,i5,2a)") &
+          & 'Zone ',izone,' Profile: ',thermo_desc(izb)
 
         ! Convert to appropriate units (CGS, except temperature (GK) and neutrino flux)
         !t9h(:,izb) = t9h(:,izb) * 1.0e-9
@@ -113,7 +114,7 @@ Module model_input_ascii
     ! This routine loads the initial abundances at the start time by reading the initial abundance
     ! file or by generating an NSE composition.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, nname
+    Use nuclear_data, Only: ny
     Use xnet_conditions, Only: nstart, tstart, t9start, rhostart, yestart, nh, th, yeh
     Use xnet_abundances, Only: y_moment, ystart, xext, aext, zext
     Use xnet_controls, Only: lun_diag, idiag, t9nse, nzone, nzevolve, szbatch, zb_lo, zb_hi, &
@@ -199,12 +200,10 @@ Module model_input_ascii
           ! Log abundance file and description
           If ( idiag >= 0 ) Then
             Write(lun_diag,"(a)") inab_file(izone)
-            Write(lun_diag,"(a)") abund_desc(izb)
+            Write(lun_diag,"(a5,i5,2a)") &
+              & 'Zone ',izone,' Initial abundances: ',abund_desc(izb)
           EndIf
         EndIf
-
-        If ( idiag >= 0 ) Write(lun_diag,"(a,i6,a,f6.3,a,es10.3,a,f5.4)") &
-          & 'Start',nstart(izb),' T9=',t9start(izb),' Rho=',rhostart(izb),' Ye=',yestart(izb)
 
         ! For high temperatures, use NSE to get initial abundance
         If ( t9start(izb) > t9nse ) Then
@@ -215,9 +214,6 @@ Module model_input_ascii
         Else
           ystart(:,izb) = yin(:)
         EndIf
-
-        ! Log initial abundance
-        If ( idiag >= 0 ) Write(lun_diag,"(5(a6,1es10.3))") (nname(i), ystart(i,izb), i=1,ny)
       EndIf
     EndDo
 
