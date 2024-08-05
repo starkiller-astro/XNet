@@ -314,12 +314,12 @@ Contains
     Call parallel_bcast(bin_file_base)
     Call parallel_bcast(nnucout)
     Allocate(output_nuc(nnucout),inucout(nnucout))
-!    Write(nnucout_string,"(i4)") nnucout
+    Write(nnucout_string,"(i4)") nnucout
     nnucout_string = adjustl(nnucout_string)
     If ( parallel_IOProcessor() ) Then
 !     Read(lun_control,"("//nnucout_string//"a5)") output_nuc
       Read(lun_control,"(14a5)") output_nuc
-      Write(lun_stdout,*) 'nnucout',nnucout
+!     Write(lun_stdout,*) 'nnucout',nnucout
     EndIf
     Call parallel_bcast(output_nuc)
 
