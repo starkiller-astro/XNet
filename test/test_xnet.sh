@@ -71,8 +71,8 @@ xnet_mpi=$xnetp_mpi
 
 function test_diff {
   # Remove timers from files for diff
-  sed -e '/^Timers:/,+1d' $1 >| diff1.txt
-  sed -e '/^Timers:/,+1d' $2 >| diff2.txt
+  sed -e '/^Timers Summary:/,+14d' $1 >| diff1.txt
+  sed -e '/^Timers Summary:/,+14d' $2 >| diff2.txt
   if ! diff -q diff1.txt diff2.txt >/dev/null 2>&1; then
     echo "Warning: $1 differs from $2"
     echo "File diff_$3 contains diff output"
