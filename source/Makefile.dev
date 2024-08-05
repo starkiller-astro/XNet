@@ -82,26 +82,6 @@ PAPI_INC    = -I$(PAPI_DIR)/include
 PAPI_LIBDIR = -L$(PAPI_DIR)/lib
 PAPI_LIBS   = -lpapi
 
-GPU_DEF    = -DXNET_GPU $($(GPU_BACKEND)_DEF)
-GPU_INC    = $($(GPU_BACKEND)_INC)
-GPU_LIBDIR = $($(GPU_BACKEND)_LIBDIR)
-GPU_LIBS   = $($(GPU_BACKEND)_LIBS)
-GPU_SRC    = $($(GPU_BACKEND)_SRC)
-GPU_OBJ    = $(addsuffix .o,$(basename $(GPU_SRC)))
-
-GPU_LAPACK_DEF    = $($(GPU_LAPACK_VER)_DEF)
-GPU_LAPACK_INC    = $($(GPU_LAPACK_VER)_INC)
-GPU_LAPACK_LIBDIR = $($(GPU_LAPACK_VER)_LIBDIR)
-GPU_LAPACK_LIBS   = $($(GPU_LAPACK_VER)_LIBS)
-GPU_LAPACK_SRC    = $($(GPU_LAPACK_VER)_SRC)
-GPU_LAPACK_OBJ    = $(addsuffix .o,$(basename $(GPU_LAPACK_SRC)))
-
-GPU_LAPACK_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.f90 %.F90,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.f %.F,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(GPU_LAPACK_SRC))))
-GPU_LAPACK_OBJ_CU  = $(addsuffix .o,$(basename $(filter %.cu,$(GPU_LAPACK_SRC))))
-
 #-------------------------------------------------------------------------------
 # Additional compiler definitions and flags
 #-------------------------------------------------------------------------------
@@ -159,6 +139,27 @@ endif
 
 ## Flags for compiling with GPU
 ifeq ($(GPU_MODE),ON)
+
+    GPU_DEF    = -DXNET_GPU $($(GPU_BACKEND)_DEF)
+    GPU_INC    = $($(GPU_BACKEND)_INC)
+    GPU_LIBDIR = $($(GPU_BACKEND)_LIBDIR)
+    GPU_LIBS   = $($(GPU_BACKEND)_LIBS)
+    GPU_SRC    = $($(GPU_BACKEND)_SRC)
+    GPU_OBJ    = $(addsuffix .o,$(basename $(GPU_SRC)))
+
+    GPU_LAPACK_DEF    = $($(GPU_LAPACK_VER)_DEF)
+    GPU_LAPACK_INC    = $($(GPU_LAPACK_VER)_INC)
+    GPU_LAPACK_LIBDIR = $($(GPU_LAPACK_VER)_LIBDIR)
+    GPU_LAPACK_LIBS   = $($(GPU_LAPACK_VER)_LIBS)
+    GPU_LAPACK_SRC    = $($(GPU_LAPACK_VER)_SRC)
+    GPU_LAPACK_OBJ    = $(addsuffix .o,$(basename $(GPU_LAPACK_SRC)))
+
+    GPU_LAPACK_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.f90 %.F90,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.f %.F,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(GPU_LAPACK_SRC))))
+    GPU_LAPACK_OBJ_CU  = $(addsuffix .o,$(basename $(filter %.cu,$(GPU_LAPACK_SRC))))
+
     ifeq ($(OPENACC_MODE),ON)
         GPU_DEF += -DXNET_OACC
         GPU_OBJ += openaccf.o
