@@ -3,6 +3,8 @@
 ! This file contains modules and subroutines to control the GPU execution of XNet.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_gpu
   Use, Intrinsic :: iso_c_binding
   Use xnet_controls, Only: lun_stdout, myid, tid
@@ -285,11 +287,10 @@ Contains
 
 
   Logical Function on_device()
+    !__dir_routine_seq
 #if defined(XNET_OMP_OL)
-    !$OMP DECLARE TARGET
     on_device = ( .not. omp_is_initial_device() )
 #elif defined(XNET_OACC)
-    !$ACC ROUTINE SEQ
     on_device = ( .not. acc_on_device( acc_device_host ) )
 #else
     on_device = .false.
@@ -311,57 +312,27 @@ Contains
 
 
   Type(C_PTR) Function dev_ptr_int( a )
-#if defined(XNET_OMP_OL)
     Integer, Target, Intent(in) :: a
-    !$OMP TARGET DATA USE_DEVICE_PTR( a )
-#elif defined(XNET_OACC)
-    Integer, Target, Intent(in) :: a
-    !$ACC HOST_DATA USE_DEVICE( a )
-#else
-    Integer, Target, Intent(in) :: a
-#endif
+    !__dir_host_data &
+    !__dir_dev_ptr(a)
     dev_ptr_int = C_LOC( a )
-#if defined(XNET_OMP_OL)
-    !$OMP END TARGET DATA
-#elif defined(XNET_OACC)
-    !$ACC END HOST_DATA
-#endif
+    !__dir_end_host_data
   End Function dev_ptr_int
 
   Type(C_PTR) Function dev_ptr_dp( a )
-#if defined(XNET_OMP_OL)
     Real(dp), Target, Intent(in) :: a
-    !$OMP TARGET DATA USE_DEVICE_PTR( a )
-#elif defined(XNET_OACC)
-    Real(dp), Target, Intent(in) :: a
-    !$ACC HOST_DATA USE_DEVICE( a )
-#else
-    Real(dp), Target, Intent(in) :: a
-#endif
+    !__dir_host_data &
+    !__dir_dev_ptr(a)
     dev_ptr_dp = C_LOC( a )
-#if defined(XNET_OMP_OL)
-    !$OMP END TARGET DATA
-#elif defined(XNET_OACC)
-    !$ACC END HOST_DATA
-#endif
+    !__dir_end_host_data
   End Function dev_ptr_dp
 
   Type(C_PTR) Function dev_ptr_cptr( a )
-#if defined(XNET_OMP_OL)
     Type(C_PTR), Target, Intent(in) :: a
-    !$OMP TARGET DATA USE_DEVICE_PTR( a )
-#elif defined(XNET_OACC)
-    Type(C_PTR), Target, Intent(in) :: a
-    !$ACC HOST_DATA USE_DEVICE( a )
-#else
-    Type(C_PTR), Target, Intent(in) :: a
-#endif
+    !__dir_host_data &
+    !__dir_dev_ptr(a)
     dev_ptr_cptr = C_LOC( a )
-#if defined(XNET_OMP_OL)
-    !$OMP END TARGET DATA
-#elif defined(XNET_OACC)
-    !$ACC END HOST_DATA
-#endif
+    !__dir_end_host_data
   End Function dev_ptr_cptr
 
 End Module xnet_gpu

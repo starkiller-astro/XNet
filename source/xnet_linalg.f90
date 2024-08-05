@@ -4,6 +4,9 @@
 #if defined(XNET_LA_ONEMKL)
 include "mkl_omp_offload.f90"
 #endif
+
+#include "xnet_macros.fh"
+
 Module xnet_linalg
 
   Use, Intrinsic :: iso_c_binding
@@ -665,19 +668,9 @@ Contains
 
       itrans = itrans_from_char( trans )
 
-#if defined(XNET_OMP_OL)
-      !$OMP TARGET DATA USE_DEVICE_PTR( pa, px, py )
-#elif defined(XNET_OACC)
-      !$ACC HOST_DATA USE_DEVICE( pa, px, py )
-#endif
-      da = C_LOC( pa )
-      dx = C_LOC( px )
-      dy = C_LOC( py )
-#if defined(XNET_OMP_OL)
-      !$OMP END TARGET DATA
-#elif defined(XNET_OACC)
-      !$ACC END HOST_DATA
-#endif
+      da = dev_ptr( pa(1,1) )
+      dx = dev_ptr( px(1) )
+      dy = dev_ptr( py(1) )
 
 #if defined(XNET_LA_CUBLAS)
       ierr = cublasDgemv_v2 &
@@ -824,19 +817,9 @@ Contains
 
     If ( data_on_device ) Then
 
-#if defined(XNET_OMP_OL)
-      !$OMP TARGET DATA USE_DEVICE_PTR( pa, pc, px )
-#elif defined(XNET_OACC)
-      !$ACC HOST_DATA USE_DEVICE( pa, pc, px )
-#endif
-      da = C_LOC( pa )
-      dc = C_LOC( pc )
-      dx = C_LOC( px )
-#if defined(XNET_OMP_OL)
-      !$OMP END TARGET DATA
-#elif defined(XNET_OACC)
-      !$ACC END HOST_DATA
-#endif
+      da = dev_ptr( pa(1,1) )
+      dc = dev_ptr( pc(1,1) )
+      dx = dev_ptr( px(1) )
 
 #if defined(XNET_LA_CUBLAS)
       ierr = cublasDdgmm &
@@ -907,17 +890,7 @@ Contains
 
     If ( data_on_device ) Then
 
-#if defined(XNET_OMP_OL)
-      !$OMP TARGET DATA USE_DEVICE_PTR( px )
-#elif defined(XNET_OACC)
-      !$ACC HOST_DATA USE_DEVICE( px )
-#endif
-      dx = C_LOC( px )
-#if defined(XNET_OMP_OL)
-      !$OMP END TARGET DATA
-#elif defined(XNET_OACC)
-      !$ACC END HOST_DATA
-#endif
+      dx = dev_ptr( px(1) )
 
 #if defined(XNET_LA_CUBLAS)
       ierr = cublasDnrm2_v2( cublas_handle, n, dx, incx, xnorm )
@@ -941,11 +914,7 @@ Contains
 
 
   Subroutine VectorNorm2_Kernel( n, x, incx, xnorm )
-#if defined(XNET_OMP_OL)
-    !$OMP DECLARE Target
-#elif defined(XNET_OACC)
-    !$ACC ROUTINE SEQ
-#endif
+    !__dir_routine_seq
 
     Integer                         :: n, incx
     Real(dp), Dimension(*), Target  :: x
@@ -1007,18 +976,8 @@ Contains
 
     If ( data_on_device ) Then
 
-#if defined(XNET_OMP_OL)
-      !$OMP TARGET DATA USE_DEVICE_PTR( px, py )
-#elif defined(XNET_OACC)
-      !$ACC HOST_DATA USE_DEVICE( px, py )
-#endif
-      dx = C_LOC( px )
-      dy = C_LOC( py )
-#if defined(XNET_OMP_OL)
-      !$OMP END TARGET DATA
-#elif defined(XNET_OACC)
-      !$ACC END HOST_DATA
-#endif
+      dx = dev_ptr( px(1) )
+      dy = dev_ptr( py(1) )
 
 #if defined(XNET_LA_CUBLAS)
       ierr = cublasDaxpy_v2( cublas_handle, n, alpha, dx, incx, dy, incy )
@@ -1255,11 +1214,7 @@ Contains
 
 
   Subroutine EigenvaluesSymmetric3( A, Lambda )
-#if defined(XNET_OMP_OL)
-    !$OMP DECLARE TARGET
-#elif defined(XNET_OACC)
-    !$ACC ROUTINE SEQ
-#endif
+    !__dir_routine_seq
 
     Real(dp), Intent(in)  :: A(3,3)
     Real(dp), Intent(out) :: Lambda(3)
@@ -1758,13 +1713,8 @@ Contains
 
     If ( data_on_device ) Then
 
-#if defined(XNET_OMP_OL)
-      !$OMP TARGET ENTER DATA &
-      !$OMP MAP( alloc: da, db, dipiv )
-#elif defined(XNET_OACC)
-      !$ACC ENTER DATA &
-      !$ACC CREATE( da, db, dipiv )
-#endif
+      !__dir_enter_data &
+      !__dir_create(da,db,dipiv)
       Do i = 1, batchcount
         osa = (i-1) * n + 1
         osb = (i-1) * nrhs + 1
@@ -1772,11 +1722,7 @@ Contains
         db(i) = dev_ptr( pb(1,osb) )
         dipiv(i) = dev_ptr( pipiv(osa) )
       End Do
-#if defined(XNET_OMP_OL)
-      !$OMP TARGET UPDATE TO( da, db, dipiv )
-#elif defined(XNET_OACC)
-      !$ACC UPDATE DEVICE( da, db, dipiv )
-#endif
+      !__dir_update_gpu(da,db,dipiv)
 
       Call LinearSolveBatched_GPU &
         &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
@@ -1784,13 +1730,8 @@ Contains
       Call stream_sync( stream )
 #endif
 
-#if defined(XNET_OMP_OL)
-      !$OMP TARGET EXIT DATA &
-      !$OMP MAP( release: da, db, dipiv )
-#elif defined(XNET_OACC)
-      !$ACC EXIT DATA &
-      !$ACC DELETE( da, db, dipiv )
-#endif
+      !__dir_exit_data &
+      !__dir_delete(da,db,dipiv)
 
     Else
 

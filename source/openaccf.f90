@@ -100,11 +100,7 @@ module openaccf
 
     integer(c_int) function acc_on_device_i(devicetype) &
         bind(c,name="acc_on_device" )
-#if defined(XNET_OMP_OL)
-      !$OMP DECLARE TARGET
-#elif defined(XNET_OACC)
       !$ACC ROUTINE SEQ
-#endif
       use, intrinsic :: iso_c_binding
       integer(c_int), value :: devicetype
     end function acc_on_device_i
@@ -114,11 +110,7 @@ module openaccf
 contains
 
   logical function acc_on_device(devicetype)
-#if defined(XNET_OMP_OL)
-    !$OMP DECLARE TARGET
-#elif defined(XNET_OACC)
     !$ACC ROUTINE SEQ
-#endif
     use, intrinsic :: iso_c_binding
     integer(kind(acc_device_host)) :: devicetype
     acc_on_device = ( .not. acc_on_device_i(int(devicetype,c_int)) == 0 )
