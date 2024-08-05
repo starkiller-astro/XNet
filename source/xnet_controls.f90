@@ -93,6 +93,11 @@ Module xnet_controls
   Character(LEN=1) :: sweep ! Current hydro sweep: x, y, z
   !$omp threadprivate(sweep)
 
+  Interface write_controls_line
+    Module Procedure write_controls_line_i
+    Module Procedure write_controls_line_r
+  End Interface write_controls_line
+
 Contains
 
   Subroutine find_controls_block(lun_control,block_string,ifcb)
@@ -314,7 +319,7 @@ Contains
     If ( parallel_IOProcessor() ) Then
 !     Read(lun_control,"("//nnucout_string//"a5)") output_nuc
       Read(lun_control,"(14a5)") output_nuc
-      Write(lun_stdout,*) 'nnucout',nnucout
+!     Write(lun_stdout,*) 'nnucout',nnucout
     EndIf
     Call parallel_bcast(output_nuc)
 
@@ -379,5 +384,126 @@ Contains
 
     Return
   End Subroutine read_controls
+
+  Subroutine write_controls(lun_out,data_dir)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine logs the runtime parameters to the diagnostic output
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_parallel, Only: parallel_IOProcessor
+    Implicit None
+
+    ! Input variables
+    Integer, Intent(in) :: lun_out ! The logical unit for diagnostic output
+    Character(*), Intent(in) :: data_dir
+
+    ! Local variables
+    Integer :: i, izone
+
+    ! Write controls to diagnostic output (or to stdout if idiag = -1)
+    If ( idiag >= 0 .or. ( idiag >= -1 .and. parallel_IOProcessor() ) ) Then
+
+      Write(lun_out,"(a)") '## Problem Description'
+      Write(lun_out,"(a)") (descript(i), i=1,3)
+
+      Write(lun_out,"(a)") '## Job Controls'
+      Call write_controls_line(lun_out,szone       ,'Initial Zone')
+      Call write_controls_line(lun_out,nzone       ,'# of Zones')
+      Call write_controls_line(lun_out,iweak0      ,'Include Weak Reactions (yes=1,no=0,only=-1)')
+      Call write_controls_line(lun_out,iscrn       ,'Include Screening (yes=1)')
+      Call write_controls_line(lun_out,iprocess    ,'Process Nuclear Data at Run Time (yes=1,no=0)')
+
+      Write(lun_out,"(a)") '## Neutrinos'
+      Call write_controls_line(lun_out,ineutrino   ,'Include Neutrino Reactions (yes=1, no=0)')
+
+      Write(lun_out,"(a)") '## NSE Initial Conditions'
+      Call write_controls_line(lun_out,t9nse       ,'Temperature in GK to use NSE initial conditions instead of file')
+
+      Write(lun_out,"(a)") '## Integration Controls'
+      Call write_controls_line(lun_out,isolv       ,'Choice of integration Scheme (1=Backward Euler, 2= Bader-Deufelhard)')
+      Call write_controls_line(lun_out,kstmx       ,'Max. number of timesteps before quit')
+      Call write_controls_line(lun_out,kitmx       ,'Max. iterations per step')
+      Call write_controls_line(lun_out,ijac        ,'Rebuild the jacobian every ijac iterations after the first')
+      Call write_controls_line(lun_out,iconvc      ,'Convergence Condition (Mass Cons.=0, (dY/Y small)=1)')
+      Call write_controls_line(lun_out,changemx    ,'Max. Abundance Change per timestep')
+      Call write_controls_line(lun_out,yacc        ,'Smallest Abundance used in timestep calculation')
+      Call write_controls_line(lun_out,tolm        ,'Mass Conservation Limit')
+      Call write_controls_line(lun_out,tolc        ,'Convergence Criterion')
+      Call write_controls_line(lun_out,ymin        ,'Lower Abundance limit, smaller abundances = 0')
+      Call write_controls_line(lun_out,tdel_maxmult,'Max. Factor to change dt in a timestep')
+
+      Write(lun_out,"(a)") '## Self-heating Controls'
+      Call write_controls_line(lun_out,iheat      ,'Include self-heating (yes=1,no=0)')
+      Call write_controls_line(lun_out,changemxt  ,'Max. Temperature Change per timestep')
+      Call write_controls_line(lun_out,tolt9      ,'Temperature Convergence Criterion')
+
+      Write(lun_out,"(a)") '## Zone Batching Controls'
+      Call write_controls_line(lun_out,nzbatchmx  ,'Blocking size for zone loop')
+
+      Write(lun_out,*)
+
+      Write(lun_out,"(a)") '## Output Controls'
+      Call write_controls_line(lun_out,idiag        ,'Diagnostic Output Level')
+      Call write_controls_line(lun_out,itsout       ,'Per Timestep Output Level')
+      Write(lun_out,"(a)") '# ASCII output filename root, network will append zone number'
+      Write(lun_out,"(a)") trim(adjustl(ev_file_base))
+      Write(lun_out,"(a)") '# Binary output filename root, network will append zone number'
+      Write(lun_out,"(a)") trim(adjustl(bin_file_base))
+      Write(lun_out,"(a)") '# Species to output in ASCII output (format 14a5): 14'
+      Write(lun_out,"(14a5)") output_nuc
+
+      Write(lun_out,"(a)") '## Input Controls'
+      Write(lun_out,"(a)") '# Nuclear Data Directory'
+      Write(lun_out,"(a)") trim(adjustl(data_dir))
+      Write(lun_out,"(a)") '# Initial Abundance and Thermodynamic Trajectory Files'
+      Do izone = 1, nzone
+        Write(lun_out,"(a)") thermo_file(izone)
+        Write(lun_out,"(a)") inab_file(izone)
+      EndDo
+
+    EndIf
+
+  End Subroutine write_controls
+
+  Subroutine write_controls_line_i(lun_out,inum,desc)
+    !-----------------------------------------------------------------------------------------------
+    ! This concatenates and writes a left-aligned integer and description to diagnostic output
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input variables
+    Integer, Intent(in)      :: lun_out ! The logical unit for diagnostic output
+    Integer, Intent(in)      :: inum    ! The control parameter
+    Character(*), Intent(in) :: desc    ! Description of the parameter
+
+    ! Local variables
+    Character(9) :: str_num
+    Character(len=len_trim(adjustl(desc))+10) :: line
+
+    Write(str_num,"(i9)") inum
+    Write(line,"(a9,1x,a)") adjustl(str_num), trim(adjustl(desc))
+    Write(lun_out,"(a)") adjustl(line)
+
+  End Subroutine write_controls_line_i
+
+  Subroutine write_controls_line_r(lun_out,rnum,desc)
+    !-----------------------------------------------------------------------------------------------
+    ! This concatenates and writes a left-aligned real and description to diagnostic output
+    !-----------------------------------------------------------------------------------------------
+    Implicit None
+
+    ! Input variables
+    Integer, Intent(in)      :: lun_out ! The logical unit for diagnostic output
+    Real(dp), Intent(in)     :: rnum    ! The control parameter
+    Character(*), Intent(in) :: desc    ! Description of the parameter
+
+    ! Local variables
+    Character(9) :: str_num
+    Character(len=len_trim(adjustl(desc))+10) :: line
+
+    Write(str_num,"(ES9.2)") rnum
+    Write(line,"(a9,1x,a)") adjustl(str_num), trim(adjustl(desc))
+    Write(lun_out,"(a)") adjustl(line)
+
+  End Subroutine write_controls_line_r
 
 End Module xnet_controls

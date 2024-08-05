@@ -20,10 +20,10 @@ Contains
     ! timestep determined by the integration scheme and the changing thermodynamic conditions.
     ! Integration is performed by a choice of methods controlled by the isolv flag.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, nname, benuc
-    Use xnet_abundances, Only: yo, y, yt, ydot, xext, aext, zext
+    Use nuclear_data, Only: ny, nname, aa, benuc
+    Use xnet_abundances, Only: yo, y, yt, ystart, ydot, xext, aext, zext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
-      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, t9start, rhostart, yestart
+      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
       & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id
     Use xnet_integrate, Only: timestep
@@ -53,7 +53,6 @@ Contains
 
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
-
 
     ! Set reaction controls not read in from control
     idiag0 = idiag
@@ -97,9 +96,6 @@ Contains
       EndIf
     EndDo
 
-    ! Output initial abundances and conditions
-    Call ts_output(0,delta_en,edot)
-
     ! Initialize timestep loop flags
     kstep = 0
     mykstep = 0
@@ -112,6 +108,19 @@ Contains
         its(izb) = -1
       EndIf
     EndDo
+
+    ! Output initial abundances and conditions
+    Call ts_output(0,delta_en,edot)
+    If ( idiag >= 0 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( lzactive(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a,2i6,4es14.7)") &
+            & 'Start',izone,kstep,tstart(izb),t9start(izb),rhostart(izb),yestart(izb)
+          Write(lun_diag,"(4(a5,es14.7,1x))") (nname(k),aa(k)*ystart(k,izb),k=1,ny)
+        EndIf
+      EndDo
+    EndIf
 
     ! Start evolution
     Do kstep = 1, kstmx

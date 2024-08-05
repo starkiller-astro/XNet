@@ -105,11 +105,12 @@ Contains
     !-------------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname, aa
     Use xnet_abundances, Only: y
-    Use xnet_conditions, Only: tt, tstop
+    Use xnet_conditions, Only: t, t9, rho, ye, tstop
     Use xnet_controls, Only: changemx, iconvc, isolv, kitmx, kstmx, ktot, lun_diag, tolc, tolm, yacc, &
       & szbatch, zb_lo, zb_hi, lzactive, idiag
     Use xnet_flux, Only: flx_int
     Use xnet_match, Only: iwflx, mflx, nflx
+    Use xnet_parallel, Only: parallel_IOProcessor
     Use xnet_timers
     Implicit None
 
@@ -131,51 +132,52 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
 
-    If ( idiag >= 0 ) Then
+    start_timer = xnet_wtime()
+    timer_output = timer_output - start_timer
 
-      start_timer = xnet_wtime()
-      timer_output = timer_output - start_timer
-
+    ! Write integrated fluxes to diagnotic output
+    If ( idiag >= 1 ) Then
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          iflx_mx = maxloc(abs(flx_int(:,izb)),dim=1)
+          Write(lun_diag,"(2x,a8,i5,es11.3,9a5)") 'Flux Max',&
+            & iflx_mx,flx_int(iflx_mx,izb),(nname(nflx(i,iflx_mx)),i=1,4),' <-> ',(nname(nflx(i,iflx_mx)),i=5,8)
+          Write(lun_diag,"(i5,9a5,i5,es11.3)") &
+            & (k,(nname(nflx(i,k)),i=1,4),' <-> ',(nname(nflx(i,k)),i=5,8),iwflx(k),flx_int(k,izb),k=1,mflx)
+        EndIf
+      EndDo
+    EndIf
 
-          ! Write final abundances to diagnostic output (in ASCII)
-          Write(lun_diag,"(a3,3i6,2es14.7)") 'End',izone,kstep,kstmx,tt(izb),tstop(izb)
+    ! Write final abundances to diagnostic output (in ASCII)
+    If ( idiag >= 0 ) Then
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          Write(lun_diag,"(a,2i6,5es14.7)") &
+            & 'End',izone,kstep,tstop(izb),t(izb),t9(izb),rho(izb),ye(izb)
           Write(lun_diag,"(4(a5,es14.7,1x))") (nname(i),aa(i)*y(i,izb),i=1,ny)
-          Write(lun_diag,"(a3,3i6,4es10.3)") 'CNT',isolv,iconvc,kitmx,yacc,tolm,tolc,changemx
+        EndIf
+      EndDo
+    EndIf
 
-          ! Write integrated fluxes to diagnotic output
-          If ( idiag >= 1 ) Then
-            iflx_mx = maxloc(abs(flx_int(:,izb)),dim=1)
-            Write(lun_diag,"(2x,a8,i5,es11.3,9a5)") 'Flux Max',&
-              & iflx_mx,flx_int(iflx_mx,izb),(nname(nflx(i,iflx_mx)),i=1,4),' <-> ',(nname(nflx(i,iflx_mx)),i=5,8)
-            Write(lun_diag,"(i5,9a5,i5,es11.3)") &
-              & (k,(nname(nflx(i,k)),i=1,4),' <-> ',(nname(nflx(i,k)),i=5,8),iwflx(k),flx_int(k,izb),k=1,mflx)
-          EndIf
+    stop_timer = xnet_wtime()
+    timer_output = timer_output + stop_timer
 
-          Write(lun_diag,"(a10,a5,5a10)") 'Counters: ','Zone','TS','NR','Jacobian','Deriv','CrossSect'
+    ! Write performance counters and timers to diagnostic output (or to stdout if idiag = -1)
+    If ( idiag >= 0 .or. ( idiag >= -1 .and. parallel_IOProcessor() ) ) Then
+      Write(lun_diag,"(a10,a5,5a10)") 'Counters: ','Zone','TS','NR','Jacobian','Deriv','CrossSect'
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
           Write(lun_diag,"(10x,i5,5i10)") izone,(ktot(i,izb),i=1,5)
         EndIf
       EndDo
-
-      stop_timer = xnet_wtime()
-      timer_output = timer_output + stop_timer
-
-      ! Write timers
-      If ( idiag >= 0 ) Then
-        Write(lun_diag,"(a8,14a10)") &
-          & 'Timers: ','Total','TS','NR','Solver','Decomp','BkSub','Jacobian','Deriv', &
-          & 'CrossSect','Screening','PreScreen','EOS','Setup','Output'
-        Write(lun_diag,"(8x,14es10.3)") &
-          & timer_xnet,timer_tstep,timer_nraph,timer_solve,timer_decmp,timer_bksub,timer_jacob,timer_deriv, &
-          & timer_csect,timer_scrn,timer_prescrn,timer_eos,timer_setup,timer_output
-      EndIf
-
-      ! Use the following line to restart the timers
-      If ( itimer_reset > 0 ) Call reset_timers
-
+      Call write_timers_summary(lun_diag)
     EndIf
+
+    ! Use the following line to restart the timers
+    If ( itimer_reset > 0 ) Call reset_timers
 
     Return
   End Subroutine final_output
