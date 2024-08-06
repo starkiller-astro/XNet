@@ -2,6 +2,7 @@
 #define __dir_loop(N)           $acc parallel loop gang vector collapse(N)
 #define __dir_loop_outer(N)     $acc parallel loop gang collapse(N)
 #define __dir_loop_inner(N)     $acc loop vector collapse(N)
+#define __dir_loop_serial(N)    $acc loop seq collapse(N)
 #define __dir_private(...)      $acc private(__VA_ARGS__)
 #define __dir_reduction(OP,...) $acc reduction( OP:__VA_ARGS__)
 #define __dir_present(...)      $acc present(__VA_ARGS__)
@@ -31,6 +32,7 @@
 #define __dir_loop(N)           $omp target teams distribute parallel do simd collapse(N)
 #define __dir_loop_outer(N)     $omp target teams distribute collapse(N)
 #define __dir_loop_inner(N)     $omp parallel do simd collapse(N)
+#define __dir_loop_serial(N)    $omp nothing
 #define __dir_private(...)      $omp private(__VA_ARGS__)
 #define __dir_reduction(OP,...) $omp reduction(OP:__VA_ARGS__)
 #define __dir_present(...)      $omp & !present
