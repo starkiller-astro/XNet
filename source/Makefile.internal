@@ -459,7 +459,7 @@ SOLVER_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(SOLVER_SRC))))
 SOLVER_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(SOLVER_SRC))))
 
 ## Define compiler flags
-FLAGS     = $($(CMODE)_FLAGS)
+FLAGS     = $($(CMODE)_FLAGS) $(EXTRA_FLAGS)
 FFLAGS   += $(FLAGS) $($(CMODE)_FFLAGS) $(OPENMP)
 CFLAGS   += $(FLAGS) $($(CMODE)_CFLAGS) $(OPENMP)
 CXXFLAGS += $(FLAGS) $($(CMODE)_CXXFLAGS) $(OPENMP)
