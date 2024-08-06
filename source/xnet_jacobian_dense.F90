@@ -254,6 +254,7 @@ Contains
     ! Build the Jacobian
     !__dir_loop_outer(2) &
     !__dir_async &
+    !__dir_private(s1,s2,s3,s4) &
     !__dir_present(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
     !__dir_present(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
     !__dir_present(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
