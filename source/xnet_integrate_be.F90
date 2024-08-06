@@ -331,7 +331,7 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
-        !__dir_update_cpu(yrhs,t9rhs) &
+        !__dir_update_cpu(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt) &
         !__dir_wait
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
