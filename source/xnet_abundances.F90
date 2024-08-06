@@ -3,6 +3,8 @@
 ! This file contains modules and subroutines associated with matter composition.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_abundances
   !-------------------------------------------------------------------------------------------------
   ! This module contains the abundances of the nuclear species, at the previous time (yo), current
@@ -26,6 +28,9 @@ Module xnet_abundances
   End Interface y_moment
 
   Private :: y_moment_internal
+
+  !__dir_declare &
+  !__dir_mod_create(xext,aext,zext)
 
 Contains
 

@@ -440,8 +440,7 @@ Contains
 
     !__dir_loop_outer(1) &
     !__dir_async &
-    !__dir_present(mask,rhs) &
-    !__dir_copyin(yrhs,t9rhs)
+    !__dir_present(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -473,8 +472,7 @@ Contains
 
     !__dir_loop_outer(1) &
     !__dir_async &
-    !__dir_present(mask,rhs) &
-    !__dir_copyout(dy,dt9)
+    !__dir_present(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -501,8 +499,6 @@ Contains
     !__dir_exit_data &
     !__dir_async &
     !__dir_delete(mask)
-
-    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -619,8 +615,7 @@ Contains
 
     !__dir_loop_outer(1) &
     !__dir_async &
-    !__dir_present(mask,rhs) &
-    !__dir_copyin(yrhs,t9rhs)
+    !__dir_present(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -653,8 +648,7 @@ Contains
 
     !__dir_loop_outer(1) &
     !__dir_async &
-    !__dir_present(mask,rhs) &
-    !__dir_copyout(dy,dt9)
+    !__dir_present(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -681,8 +675,6 @@ Contains
     !__dir_exit_data &
     !__dir_async &
     !__dir_delete(mask)
-
-    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer

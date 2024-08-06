@@ -11,6 +11,8 @@
 ! services from within the hydro.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Program net
   !-------------------------------------------------------------------------------------------------
   ! This is the driver for running XNet
@@ -296,6 +298,9 @@ Program net
         EndIf
       EndDo
     EndIf
+
+    !__dir_update_gpu(xext,aext,zext) &
+    !__dir_async
 
     stop_timer = xnet_wtime()
     timer_setup = timer_setup + stop_timer

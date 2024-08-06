@@ -6,6 +6,8 @@
 ! reaction network.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_integrate_be
   Implicit None
 
@@ -192,6 +194,7 @@ Contains
     ! If successful, inr = 1
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, nname
+    Use reaction_data, Only: b1, b2, b3, b4, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: y, ydot, yt, xext
     Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
@@ -224,7 +227,20 @@ Contains
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
-    ! Calculate initial total mass fraction
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(cv,b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_copyin(y,yt,ydot,t9,t9t,t9dot,tdel,inr)
+
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
+    !__dir_create(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
+    !__dir_private(s1)
     Do izb = zb_lo, zb_hi
       If ( inr(izb) == 0 ) Then
 
@@ -233,6 +249,8 @@ Contains
 
         ! Calculate initial total mass fraction
         s1 = 0.0
+        !__dir_loop_inner(1) &
+        !__dir_reduction(+,s1)
         Do k = 1, ny
           s1 = s1 + aa(k)*y(k,izb)
         EndDo
@@ -253,6 +271,8 @@ Contains
         toln(izb) = tolm
       EndIf
     EndDo
+    !__dir_update_cpu(iterate) &
+    !__dir_wait
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
     Do kit = 1, kitmx
@@ -270,28 +290,40 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
+      !__dir_update_gpu(rebuild,eval_rates) &
+      !__dir_async
 
       ! Calculate the reaction rates and abundance time derivatives
       Call cross_sect(mask_in = eval_rates)
+      !__dir_update_gpu(cv,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+      !__dir_async
       Call yderiv(mask_in = iterate)
+      !__dir_update_gpu(b1,b2,b3,b4,ydot,t9dot) &
+      !__dir_async
       Call jacobian_build(diag_in = rdt,mult_in = mult,mask_in = rebuild)
       Call jacobian_decomp(kstep,mask_in = rebuild)
 
       ! Calculate equation to zero
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           If ( kit > 1 ) Then
+            !__dir_loop_inner(1)
             Do k = 1, ny
               yrhs(k,izb) = (y(k,izb)-yt(k,izb))*rdt(izb) + ydot(k,izb)
             EndDo
             If ( iheat > 0 ) t9rhs(izb) = (t9(izb)-t9t(izb))*rdt(izb) + t9dot(izb)
           Else
+            !__dir_loop_inner(1)
             Do k = 1, ny
               yrhs(k,izb) = ydot(k,izb)
             EndDo
             If ( iheat > 0 ) t9rhs(izb) = t9dot(izb)
           EndIf
         Else
+          !__dir_loop_inner(1)
           Do k = 1, ny
             yrhs(k,izb) = 0.0
           EndDo
@@ -299,6 +331,8 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
+        !__dir_update_cpu(yrhs,t9rhs) &
+        !__dir_wait
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
             izone = izb + szbatch - zb_lo
@@ -325,11 +359,19 @@ Contains
       ! Considering the uncertainties of the reaction rates, it is doubtful that the
       ! increased precision of testc is truly increased accuracy.
       !-----------------------------------------------------------------------------------------
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
+      !__dir_present(aa,inr,testm,testc,testc2,testn,toln) &
+      !__dir_private(s1,s2,s3)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           s1 = 0.0
           s2 = 0.0
           s3 = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_private(ytmp) &
+          !__dir_reduction(+,s1,s2,s3)
           Do k = 1, ny
             ytmp = yt(k,izb) + dy(k,izb)
             If ( ytmp < ymin ) Then
@@ -378,12 +420,20 @@ Contains
           EndIf
         EndIf
       EndDo
+      !__dir_update_cpu(iterate,t9t,yt) &
+      !__dir_wait
 
       If ( idiag >= 3 ) Then
+        !__dir_update_cpu(inr) &
+        !__dir_wait
         Do izb = zb_lo, zb_hi
           If ( inr(izb) >= 0 ) Then
             izone = izb + szbatch - zb_lo
+            !__dir_update_cpu(testm(izb),testc(izb),testc2(izb)) &
+            !__dir_wait
             If ( idiag >= 4 ) Then
+              !__dir_update_cpu(yt(:,izb),dy(:,izb),reldy(:,izb),t9t(izb),dt9(izb),relt9(izb)) &
+              !__dir_wait
               irdymx = maxloc(reldy(:,izb),dim=1)
               idymx = maxloc(dy(:,izb),dim=1)
               Write(lun_diag,"(a3,2i5,i3,2(a5,2es23.15))") &
@@ -405,6 +455,8 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
+      !__dir_update_cpu(inr,xtot,testn,toln) &
+      !__dir_wait
       Do izb = zb_lo, zb_hi
         If ( inr(izb) >= 0 ) Then
           izone = izb + szbatch - zb_lo
@@ -417,6 +469,17 @@ Contains
       EndDo
     EndIf
 
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_delete(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
+    !__dir_delete(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_delete(y,ydot,t9,t9dot,tdel,cv,b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_copyout(yt,t9t,inr)
+
+    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_nraph = timer_nraph + stop_timer
