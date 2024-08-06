@@ -394,6 +394,13 @@ Contains
 
     Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(aa,zz,nn,be,mex,mm,ia,iz,in) &
+    !__dir_copyin(zz2,zz53,zzi,zseq,zseq53,zseqi) &
+    !__dir_copyin(it9i,t9i,g,angm) &
+    !!__dir_create(gg,dlngdt9)
+
     Return
   End Subroutine read_nuclear_data
 
@@ -804,6 +811,17 @@ Contains
     Allocate (rffn(max(1,nffn),nzevolve))
     Allocate (dlnrffndt9(max(1,nffn),nzevolve))
     Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
+
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
+    !__dir_copyin(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
+    !__dir_copyin(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
+    !__dir_copyin(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
+    !__dir_copyin(iffn,ffnsum,ffnenu,innu,sigmanu) &
+    !!__dir_create(csect1,csect2,csect3,csect4,b1,b2,b3,b4) &
+    !!__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !!__dir_create(rffn,dlnrffndt9,rnnu)
 
     Return
   End Subroutine read_reaction_data
