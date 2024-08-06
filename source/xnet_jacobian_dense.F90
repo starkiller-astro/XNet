@@ -573,6 +573,7 @@ Contains
 
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
+    ! TODO: pack djac pointers into djacp array with only non-converged points
     call LUBksubBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
       &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
