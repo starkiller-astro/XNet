@@ -298,8 +298,6 @@ Contains
       !__dir_update_gpu(cv,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
       !__dir_async
       Call yderiv(mask_in = iterate)
-      !__dir_update_gpu(b1,b2,b3,b4,ydot,t9dot) &
-      !__dir_async
       Call jacobian_build(diag_in = rdt,mult_in = mult,mask_in = rebuild)
       Call jacobian_decomp(kstep,mask_in = rebuild)
 
@@ -476,8 +474,8 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_delete(y,ydot,t9,t9dot,tdel,cv,b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyout(yt,t9t,inr)
+    !__dir_delete(y,t9,tdel,cv,b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_copyout(yt,ydot,t9t,t9dot,inr)
 
     !__dir_wait
 

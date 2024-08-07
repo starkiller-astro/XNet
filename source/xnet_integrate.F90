@@ -3,6 +3,8 @@
 ! This file contains subroutines shared by the various integrators.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_integrate
   Implicit None
 
@@ -64,6 +66,7 @@ Contains
     EndDo
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
+    !__dir_wait
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -350,12 +353,22 @@ Contains
     start_timer = xnet_wtime()
     timer_deriv = timer_deriv - start_timer
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(b1,b2,b3,b4,ydot,t9dot) &
+    !__dir_copyin(mask,yt,cv,csect1,csect2,csect3,csect4)
+
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
+    !__dir_loop_outer(2) &
+    !__dir_async &
+    !__dir_present(mask,la,le,ydot,yt,b1,b2,b3,b4,mu1,mu2,mu3,mu4) &
+    !__dir_present(a1,a2,a3,a4,csect1,csect2,csect3,csect4) &
+    !__dir_present(n11,n21,n22,n31,n32,n33,n41,n42,n43,n44) &
+    !__dir_private(la1,la2,la3,la4,le1,le2,le3,le4,s1,s2,s3,s4)
     Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-
-        Do i0 = 1, ny
+      Do i0 = 1, ny
+        If ( mask(izb) ) Then
           la1 = la(1,i0)
           la2 = la(2,i0)
           la3 = la(3,i0)
@@ -367,6 +380,9 @@ Contains
 
           ! Sum over the reactions with 1 reactant
           s1 = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_private(s11) &
+          !__dir_reduction(+,s1)
           Do i1 = la1, le1
             b1(i1,izb) = a1(i1)*csect1(mu1(i1),izb)
             s11 = b1(i1,izb)*yt(n11(i1),izb)
@@ -375,6 +391,9 @@ Contains
 
           ! Sum over the reactions with 2 reactants
           s2 = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_private(s22) &
+          !__dir_reduction(+,s2)
           Do i1 = la2, le2
             b2(i1,izb) = a2(i1)*csect2(mu2(i1),izb)
             s22 = b2(i1,izb)*yt(n21(i1),izb)*yt(n22(i1),izb)
@@ -383,6 +402,9 @@ Contains
 
           ! Sum over the reactions with 3 reactants
           s3 = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_private(s33) &
+          !__dir_reduction(+,s3)
           Do i1 = la3, le3
             b3(i1,izb) = a3(i1)*csect3(mu3(i1),izb)
             s33 = b3(i1,izb)*yt(n31(i1),izb)*yt(n32(i1),izb)*yt(n33(i1),izb)
@@ -391,6 +413,9 @@ Contains
 
           ! Sum over the reactions with 4 reactants
           s4 = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_private(s44) &
+          !__dir_reduction(+,s4)
           Do i1 = la4, le4
             b4(i1,izb) = a4(i1)*csect4(mu4(i1),izb)
             s44 = b4(i1,izb)*yt(n41(i1),izb)*yt(n42(i1),izb)*yt(n43(i1),izb)*yt(n44(i1),izb)
@@ -399,12 +424,16 @@ Contains
 
           ! Sum the 4 components of Ydot
           ydot(i0,izb) = s1 + s2 + s3 + s4
-        EndDo
-      EndIf
+        EndIf
+      EndDo
     EndDo
 
     If ( iheat > 0 ) Then
 
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(mask,ydot,t9dot,cv,mex) &
+      !__dir_private(sdot)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           sdot = 0.0
@@ -427,6 +456,8 @@ Contains
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          !__dir_update_cpu(yt(:,izb),t9t(izb),ydot(:,izb),t9dot(izb),b1(:,izb),b2(:,izb),b3(:,izb),b4(:,izb)) &
+          !__dir_wait
           Write(lun_diag,"(a,i5)") 'YDERIV',izone
           Do i0 = 1, ny
             la1 = la(1,i0)
@@ -482,6 +513,10 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_copyout(b1,b2,b3,b4,ydot,t9dot) &
+    !__dir_delete(mask,yt,cv,csect1,csect2,csect3,csect4)
 
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer
