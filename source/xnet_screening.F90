@@ -3,6 +3,8 @@
 ! This file contains the routines needed to calculate screening corrections for reaction rates.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_screening
   !-------------------------------------------------------------------------------------------------
   ! This module contains data and routines used to calculate the screening corrections that appear
@@ -116,6 +118,10 @@ Contains
       lambda0 = 0.0
       gammae = 0.0
       dztildedt9 = 0.0
+      !__dir_enter_data &
+      !__dir_async &
+      !__dir_copyin(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
+      !__dir_copyin(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i)
     EndIf
 
     Allocate (h1(nr1,nzevolve))
@@ -198,21 +204,39 @@ Contains
     start_timer = xnet_wtime()
     timer_scrn = timer_scrn - start_timer
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_copyin(mask,t9t,ztilde,zinter,lambda0,gammae,dztildedt9)
+
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,nreac,t9t,h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_present(zseq,zseq53,zseqi,ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !__dir_present(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
+    !__dir_present(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
+    !__dir_private(fhs,dfhsdt9,hw0,hi0,dlnhw0dt9,dlnhi0dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Calculate screening energies as a function of Z, for prescriptions that follow this approach
-        fhs(0) = 0.0
-        dfhsdt9(0) = 0.0
+        !__dir_loop_inner(1) &
+        !__dir_private(gammaz,gammaz5,lgammaz)
         Do j = 1, izmax+2
-          gammaz = gammae(izb) * zseq53(j)
-          gammaz5 = gammaz**cds(5)
-          lgammaz = log(gammaz)
-          fhs(j) = cds(1)*gammaz + cds(2)/cds(5)*gammaz5 + cds(3)*lgammaz + cds(4)
-          dfhsdt9(j) = -(cds(1)*gammaz + cds(2)*gammaz5 + cds(3))/t9t(izb)
+          If ( j > 0 ) Then
+            gammaz = gammae(izb) * zseq53(j)
+            gammaz5 = gammaz**cds(5)
+            lgammaz = log(gammaz)
+            fhs(j) = cds(1)*gammaz + cds(2)/cds(5)*gammaz5 + cds(3)*lgammaz + cds(4)
+            dfhsdt9(j) = -(cds(1)*gammaz + cds(2)*gammaz5 + cds(3))/t9t(izb)
+          Else
+            fhs(j) = 0.0
+            dfhsdt9(j) = 0.0
+          EndIf
         EndDo
 
         ! No screening term for 1-reactant reactions
+        !__dir_loop_inner(1)
         Do mu = 1, nreac(1)
           h1(mu,izb) = 0.0
           dh1dt9(mu,izb) = 0.0
@@ -224,6 +248,8 @@ Contains
         dlnhi0dt9 = - thbim2*dztildedt9(izb)/ztilde(izb) - 1.5*bi/t9t(izb)
 
         ! 2-reactant screening
+        !__dir_loop_inner(1) &
+        !__dir_private(lambda,h,hw,hi,hs,dhdt9,dhwdt9,dhidt9,dhsdt9)
         Do mu = 1, nreac(2)
           If ( zeta2w(mu) > 0.0 ) Then
 
@@ -247,6 +273,8 @@ Contains
         EndDo
 
         ! 3-reactant screening
+        !__dir_loop_inner(1) &
+        !__dir_private(lambda,h,hw,hi,hs,dhdt9,dhwdt9,dhidt9,dhsdt9)
         Do mu = 1, nreac(3)
           If ( zeta3w(mu) > 0.0 ) Then
 
@@ -270,6 +298,8 @@ Contains
         EndDo
 
         ! 4-reactant screening
+        !__dir_loop_inner(1) &
+        !__dir_private(lambda,h,hw,hi,hs,dhdt9,dhwdt9,dhidt9,dhsdt9)
         Do mu = 1, nreac(4)
           If ( zeta4w(mu) > 0.0 ) Then
 
@@ -298,6 +328,8 @@ Contains
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
+          !__dir_update_cpu(h1(:,izb),h2(:,izb),h3(:,izb),h4(:,izb),dh1dt9(:,izb),dh2dt9(:,izb),dh3dt9(:,izb),dh4dt9(:,izb),ztilde(izb),zinter(izb),lambda0(izb),gammae(izb),dztildedt9(izb)) &
+          !__dir_wait
           Write(lun_diag,"(a,i5)") 'SCREEN',izone
           hw0 = ztilde(izb) * lambda0(izb)
           hi0 = kbi * zinter(izb) * lambda0(izb)**bi
@@ -375,6 +407,13 @@ Contains
       EndDo
     EndIf
 
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_delete(mask,t9t,ztilde,zinter,lambda0,gammae,dztildedt9)
+
+    !__dir_wait
+
     stop_timer = xnet_wtime()
     timer_scrn = timer_scrn + stop_timer
 
@@ -385,6 +424,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This function linearly blends screening prescriptions
     !-----------------------------------------------------------------------------------------------
+    !__dir_routine_seq
     Use xnet_types, Only: dp
     Implicit None
 
