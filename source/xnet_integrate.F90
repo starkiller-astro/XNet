@@ -356,7 +356,7 @@ Contains
     !__dir_enter_data &
     !__dir_async &
     !__dir_create(b1,b2,b3,b4,ydot,t9dot) &
-    !__dir_copyin(mask,yt,cv,csect1,csect2,csect3,csect4)
+    !__dir_copyin(mask,yt,t9t,cv,csect1,csect2,csect3,csect4)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
@@ -453,11 +453,12 @@ Contains
 
     ! Separate loop for diagnostics so compiler can properly vectorize
     If ( idiag >= 5 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(yt,t9t,ydot,t9dot,b1,b2,b3,b4)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
-          !__dir_update_cpu(yt(:,izb),t9t(izb),ydot(:,izb),t9dot(izb),b1(:,izb),b2(:,izb),b3(:,izb),b4(:,izb)) &
-          !__dir_wait
           Write(lun_diag,"(a,i5)") 'YDERIV',izone
           Do i0 = 1, ny
             la1 = la(1,i0)
@@ -516,7 +517,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_copyout(b1,b2,b3,b4,ydot,t9dot) &
-    !__dir_delete(mask,yt,cv,csect1,csect2,csect3,csect4)
+    !__dir_delete(mask,yt,t9t,cv,csect1,csect2,csect3,csect4)
 
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer

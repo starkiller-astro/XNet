@@ -271,8 +271,9 @@ Contains
         toln(izb) = tolm
       EndIf
     EndDo
-    !__dir_update_cpu(iterate) &
-    !__dir_wait
+    !__dir_update &
+    !__dir_wait &
+    !__dir_host(iterate)
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
     Do kit = 1, kitmx
@@ -290,13 +291,15 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
-      !__dir_update_gpu(rebuild,eval_rates) &
-      !__dir_async
+      !__dir_update &
+      !__dir_async &
+      !__dir_device(rebuild,eval_rates)
 
       ! Calculate the reaction rates and abundance time derivatives
       Call cross_sect(mask_in = eval_rates)
-      !__dir_update_gpu(cv,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-      !__dir_async
+      !__dir_update &
+      !__dir_async &
+      !__dir_device(cv,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
       Call yderiv(mask_in = iterate)
       Call jacobian_build(diag_in = rdt,mult_in = mult,mask_in = rebuild)
       Call jacobian_decomp(kstep,mask_in = rebuild)
@@ -329,8 +332,9 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
-        !__dir_update_cpu(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt) &
-        !__dir_wait
+        !__dir_update &
+        !__dir_wait &
+        !__dir_host(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
             izone = izb + szbatch - zb_lo
@@ -418,20 +422,18 @@ Contains
           EndIf
         EndIf
       EndDo
-      !__dir_update_cpu(iterate,t9t,yt) &
-      !__dir_wait
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(iterate,t9t,yt)
 
       If ( idiag >= 3 ) Then
-        !__dir_update_cpu(inr) &
-        !__dir_wait
+        !__dir_update &
+        !__dir_wait &
+        !__dir_host(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) >= 0 ) Then
             izone = izb + szbatch - zb_lo
-            !__dir_update_cpu(testm(izb),testc(izb),testc2(izb)) &
-            !__dir_wait
             If ( idiag >= 4 ) Then
-              !__dir_update_cpu(yt(:,izb),dy(:,izb),reldy(:,izb),t9t(izb),dt9(izb),relt9(izb)) &
-              !__dir_wait
               irdymx = maxloc(reldy(:,izb),dim=1)
               idymx = maxloc(dy(:,izb),dim=1)
               Write(lun_diag,"(a3,2i5,i3,2(a5,2es23.15))") &
@@ -453,8 +455,9 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !__dir_update_cpu(inr,xtot,testn,toln) &
-      !__dir_wait
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(inr,xtot,testn,toln)
       Do izb = zb_lo, zb_hi
         If ( inr(izb) >= 0 ) Then
           izone = izb + szbatch - zb_lo

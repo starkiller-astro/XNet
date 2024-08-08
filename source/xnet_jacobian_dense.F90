@@ -42,9 +42,6 @@ Module xnet_jacobian
   Real(dp), Allocatable, Target :: diag0(:)
   Real(dp), Allocatable, Target :: mult1(:)
 
-  !__dir_declare &
-  !__dir_mod_create(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
-
 Contains
 
   Subroutine read_jacobian_data(data_dir)
@@ -85,6 +82,10 @@ Contains
     indx = 0
     info = 0
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(dydotdy,jac,rhs,indx,info,diag0,mult1)
+
     Allocate (hjac(nzevolve))
     Allocate (hrhs(nzevolve))
     Allocate (hindx(nzevolve))
@@ -103,14 +104,19 @@ Contains
       dindx(izb) = dev_ptr( indx(1,izb) )
     EndDo
 
-    !__dir_update_gpu(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1) &
-    !__dir_async
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(djac,drhs,dindx)
 
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
     Implicit None
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_delete(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
 
     Deallocate (diag0,mult1)
     Deallocate (dydotdy,jac,rhs,indx,info)
@@ -182,11 +188,12 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(diag,mult,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
-          !__dir_update_cpu(diag(izb),mult(izb),jac(:,:,izb)) &
-          !__dir_wait
           Write(lun_diag,"(a9,i5,2es24.16)") 'JAC_SCALE',izone,diag(izb),mult(izb)
           Do i = 1, ny
             Write(lun_diag,"(3a)") 'J(',nname(i),',Y)'
@@ -363,11 +370,12 @@ Contains
     Call jacobian_scale(diag_in,mult_in,mask_in = mask)
 
     If ( idiag >= 5 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(dydotdy)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
-          !__dir_update_cpu(dydotdy(:,:,izb)) &
-          !__dir_wait
           Write(lun_diag,"(a9,i5)") 'JAC_BUILD',izone
           Do i = 1, ny
             Write(lun_diag,"(3a)") 'dYDOT(',nname(i),')/dY'
@@ -484,11 +492,12 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
-          !__dir_update_cpu(dy(:,izb),dt9(izb)) &
-          !__dir_wait
           Write(lun_diag,"(a,i5)") 'JAC_SOLVE',izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)
@@ -552,11 +561,12 @@ Contains
 #endif
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
-          !__dir_update_cpu(jac(:,:,izb)) &
-          !__dir_wait
           Write(lun_diag,"(a3,i5,i4)") 'LUD',izone,info(izb)
           Write(lun_diag,"(14es9.1)") ((jac(i,j,izb),j=1,msize),i=1,msize)
         EndIf
@@ -660,11 +670,12 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
-          !__dir_update_cpu(dy(:,izb),dt9(izb)) &
-          !__dir_wait
           Write(lun_diag,"(a,i5)") 'BKSUB', izone
           Write(lun_diag,"(14es10.3)") (dy(i,izb),i=1,ny)
           If ( iheat > 0 ) Write(lun_diag,"(es10.3)") dt9(izb)

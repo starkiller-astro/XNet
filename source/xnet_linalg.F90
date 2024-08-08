@@ -1713,8 +1713,6 @@ Contains
 
     If ( data_on_device ) Then
 
-      !__dir_enter_data &
-      !__dir_create(da,db,dipiv)
       Do i = 1, batchcount
         osa = (i-1) * n + 1
         osb = (i-1) * nrhs + 1
@@ -1722,7 +1720,9 @@ Contains
         db(i) = dev_ptr( pb(1,osb) )
         dipiv(i) = dev_ptr( pipiv(osa) )
       End Do
-      !__dir_update_gpu(da,db,dipiv)
+      !__dir_enter_data &
+      !__dir_async &
+      !__dir_copyin(da,db,dipiv)
 
       Call LinearSolveBatched_GPU &
         &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
@@ -1731,6 +1731,7 @@ Contains
 #endif
 
       !__dir_exit_data &
+      !__dir_async &
       !__dir_delete(da,db,dipiv)
 
     Else

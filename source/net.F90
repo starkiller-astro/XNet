@@ -189,6 +189,10 @@ Program net
   ! Allocate zone description arrays
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
 
+  !__dir_enter_data &
+  !__dir_async &
+  !__dir_copyin(xext,aext,zext)
+
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
 
@@ -299,8 +303,9 @@ Program net
       EndDo
     EndIf
 
-    !__dir_update_gpu(xext,aext,zext) &
-    !__dir_async
+    !__dir_update &
+    !__dir_async &
+    !__dir_device(xext,aext,zext)
 
     stop_timer = xnet_wtime()
     timer_setup = timer_setup + stop_timer
@@ -334,6 +339,10 @@ Program net
   ! Close diagnostic output file
   If ( idiag >= 0 ) Close(lun_diag)
   !$omp end parallel
+
+  !__dir_exit_data &
+  !__dir_async &
+  !__dir_delete(xext,aext,zext)
 
   Call gpu_finalize()
 

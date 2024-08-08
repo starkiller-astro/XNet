@@ -29,9 +29,6 @@ Module xnet_abundances
 
   Private :: y_moment_internal
 
-  !__dir_declare &
-  !__dir_mod_create(xext,aext,zext)
-
 Contains
 
   Subroutine y_moment_internal(y,ye,ytot,abar,zbar,z2bar,zibar,xext,yext,zext)

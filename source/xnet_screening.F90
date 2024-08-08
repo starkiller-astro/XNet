@@ -325,11 +325,13 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+      !__dir_host(ztilde,zinter,lambda0,gammae,dztildedt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
-          !__dir_update_cpu(h1(:,izb),h2(:,izb),h3(:,izb),h4(:,izb),dh1dt9(:,izb),dh2dt9(:,izb),dh3dt9(:,izb),dh4dt9(:,izb),ztilde(izb),zinter(izb),lambda0(izb),gammae(izb),dztildedt9(izb)) &
-          !__dir_wait
           Write(lun_diag,"(a,i5)") 'SCREEN',izone
           hw0 = ztilde(izb) * lambda0(izb)
           hi0 = kbi * zinter(izb) * lambda0(izb)**bi
