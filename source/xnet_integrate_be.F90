@@ -300,10 +300,6 @@ Contains
 
       ! Calculate the reaction rates and abundance time derivatives
       Call cross_sect(mask_in = eval_rates)
-      !__dir_update &
-      !__dir_async &
-      !__dir_device(csect1,csect2,csect3,csect4) &
-      !__dir_device(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
       Call yderiv(mask_in = iterate)
       Call jacobian_build(diag_in = rdt,mult_in = mult,mask_in = rebuild)
       Call jacobian_decomp(kstep,mask_in = rebuild)
@@ -428,7 +424,7 @@ Contains
       EndDo
       !__dir_update &
       !__dir_wait &
-      !__dir_host(iterate,t9t,yt)
+      !__dir_host(iterate)
 
       If ( idiag >= 3 ) Then
         !__dir_update &
