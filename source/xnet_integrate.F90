@@ -262,18 +262,33 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(iweak) &
+    !__dir_copyin(mask,t9)
+
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,t9,iweak)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Turn off strong interactions if the temperature is less than t9min
         If ( t9(izb) < t9min .and. iweak0 /= 0 ) Then
-          iweak(izb) = -1
+          iweak(izb) = -abs(iweak0)
           Write(lun_stdout,*) 'Warning: Strong reactions ignored for T9 < T9min.'
         Else
           iweak(izb) = iweak0
         EndIf
       EndIf
     EndDo
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(iweak) &
+    !__dir_delete(mask,t9)
+
+    !__dir_wait
 
     Return
   End Subroutine update_iweak
