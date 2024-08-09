@@ -561,12 +561,12 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: nname, gg, dlngdt9, partf
     Use reaction_data
-    Use xnet_abundances, Only: yt
-    Use xnet_conditions, Only: tt, rhot, t9t, yet
+    Use xnet_conditions, Only: tt, rhot, t9t, yet, cv, etae, detaedt9
     Use xnet_constants, Only: third, two3rd, four3rd, five3rd
     Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, &
       & zb_lo, zb_hi, lzactive
     Use xnet_ffn, Only: ffn_rate, rffn, dlnrffndt9
+    Use xnet_linalg, Only: MatrixMatrixMultiply, MatrixVectorMultiply
     Use xnet_nnu, Only: nnu_rate, nnuspec, rnnu
     Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9, screening
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_csect
@@ -578,7 +578,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Logical, Parameter :: use_blas = .true.
+    Logical, Parameter :: use_blas = .false.
     Integer, Parameter :: dgemm_nzbatch = 200 ! Min number of zones to use dgemm, otherwise use dgemv
     Real(dp) :: t09(7,zb_lo:zb_hi), dt09(7,zb_lo:zb_hi)
     Real(dp) :: ene(zb_lo:zb_hi), ytot, abar, zbar, z2bar, zibar
@@ -605,6 +605,17 @@ Contains
     nr3 = nreac(3)
     nr4 = nreac(4)
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(yet,cv,etae,detaedt9) &
+    !__dir_create(csect1,csect2,csect3,csect4) &
+    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_create(iweak,rffn,dlnrffndt9,rnnu) &
+    !__dir_create(t09,dt09,ene) &
+    !__dir_copyin(gg,dlngdt9) &
+    !__dir_copyin(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_copyin(mask,tt,rhot,t9t)
+
     ! Update thermodynamic state
     Call update_eos(mask_in = mask)
 
@@ -626,6 +637,9 @@ Contains
     Call partf(t9t(zb_lo:zb_hi),mask_in = mask)
 
     ! Calculate necessary thermodynamic moments
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,ene,t09,dt09,t9t,rhot,yet)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ene(izb) = yet(izb)*rhot(izb)
@@ -659,36 +673,43 @@ Contains
     ! Calculate the REACLIB exponent polynomials and derivatives, adding screening terms
     If ( use_blas ) Then
       If ( nzmask >= dgemm_nzbatch ) Then
-        If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
-        If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
-        If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
-        If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
+        If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,t09,7,ascrn,h1(:,zb_lo:zb_hi),nr1)
+        If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,t09,7,ascrn,h2(:,zb_lo:zb_hi),nr2)
+        If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,t09,7,ascrn,h3(:,zb_lo:zb_hi),nr3)
+        If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,t09,7,ascrn,h4(:,zb_lo:zb_hi),nr4)
 
         If ( iheat > 0 ) Then
-          If ( nr1 > 0 ) Call dgemm('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
-          If ( nr2 > 0 ) Call dgemm('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
-          If ( nr3 > 0 ) Call dgemm('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
-          If ( nr4 > 0 ) Call dgemm('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
+          If ( nr1 > 0 ) Call MatrixMatrixMultiply('T','N',nr1,nzbatchmx,7,1.0,rc1,7,dt09,7,ascrn,dh1dt9(:,zb_lo:zb_hi),nr1)
+          If ( nr2 > 0 ) Call MatrixMatrixMultiply('T','N',nr2,nzbatchmx,7,1.0,rc2,7,dt09,7,ascrn,dh2dt9(:,zb_lo:zb_hi),nr2)
+          If ( nr3 > 0 ) Call MatrixMatrixMultiply('T','N',nr3,nzbatchmx,7,1.0,rc3,7,dt09,7,ascrn,dh3dt9(:,zb_lo:zb_hi),nr3)
+          If ( nr4 > 0 ) Call MatrixMatrixMultiply('T','N',nr4,nzbatchmx,7,1.0,rc4,7,dt09,7,ascrn,dh4dt9(:,zb_lo:zb_hi),nr4)
         EndIf
       Else
         Do izb = zb_lo, zb_hi
           If ( mask(izb) ) Then
-            If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
-            If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
-            If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
-            If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
+            If ( nr1 > 0 ) Call MatrixVectorMultiply('T',7,nr1,1.0,rc1,7,t09(:,izb),1,ascrn,h1(:,izb),1)
+            If ( nr2 > 0 ) Call MatrixVectorMultiply('T',7,nr2,1.0,rc2,7,t09(:,izb),1,ascrn,h2(:,izb),1)
+            If ( nr3 > 0 ) Call MatrixVectorMultiply('T',7,nr3,1.0,rc3,7,t09(:,izb),1,ascrn,h3(:,izb),1)
+            If ( nr4 > 0 ) Call MatrixVectorMultiply('T',7,nr4,1.0,rc4,7,t09(:,izb),1,ascrn,h4(:,izb),1)
             If ( iheat > 0 ) Then
-              If ( nr1 > 0 ) Call dgemv('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
-              If ( nr2 > 0 ) Call dgemv('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
-              If ( nr3 > 0 ) Call dgemv('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
-              If ( nr4 > 0 ) Call dgemv('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
+              If ( nr1 > 0 ) Call MatrixVectorMultiply('T',7,nr1,1.0,rc1,7,dt09(:,izb),1,ascrn,dh1dt9(:,izb),1)
+              If ( nr2 > 0 ) Call MatrixVectorMultiply('T',7,nr2,1.0,rc2,7,dt09(:,izb),1,ascrn,dh2dt9(:,izb),1)
+              If ( nr3 > 0 ) Call MatrixVectorMultiply('T',7,nr3,1.0,rc3,7,dt09(:,izb),1,ascrn,dh3dt9(:,izb),1)
+              If ( nr4 > 0 ) Call MatrixVectorMultiply('T',7,nr4,1.0,rc4,7,dt09(:,izb),1,ascrn,dh4dt9(:,izb),1)
             EndIf
           EndIf
         EndDo
       EndIf
     Else
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(rc1,rc2,rc3,rc4) &
+      !__dir_present(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+      !__dir_present(mask,t09,dt09)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
+          !__dir_loop_inner(1) &
+          !__dir_private(lambda1,dlam1dt9)
           Do k = 1, nr1
             lambda1 = 0.0
             dlam1dt9 = 0.0
@@ -699,6 +720,8 @@ Contains
             h1(k,izb) = ascrn*h1(k,izb) + lambda1
             dh1dt9(k,izb) = ascrn*dh1dt9(k,izb) + dlam1dt9
           EndDo
+          !__dir_loop_inner(1) &
+          !__dir_private(lambda2,dlam2dt9)
           Do k = 1, nr2
             lambda2 = 0.0
             dlam2dt9 = 0.0
@@ -709,6 +732,8 @@ Contains
             h2(k,izb) = ascrn*h2(k,izb) + lambda2
             dh2dt9(k,izb) = ascrn*dh2dt9(k,izb) + dlam2dt9
           EndDo
+          !__dir_loop_inner(1) &
+          !__dir_private(lambda3,dlam3dt9)
           Do k = 1, nr3
             lambda3 = 0.0
             dlam3dt9 = 0.0
@@ -719,6 +744,8 @@ Contains
             h3(k,izb) = ascrn*h3(k,izb) + lambda3
             dh3dt9(k,izb) = ascrn*dh3dt9(k,izb) + dlam3dt9
           EndDo
+          !__dir_loop_inner(1) &
+          !__dir_private(lambda4,dlam4dt9)
           Do k = 1, nr4
             lambda4 = 0.0
             dlam4dt9 = 0.0
@@ -734,10 +761,19 @@ Contains
     EndIf
 
     ! Calculate cross sections
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(n1i,n2i,n3i,n4i,iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
+    !__dir_present(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_present(csect1,csect2,csect3,csect4) &
+    !__dir_present(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_present(mask,rhot,ene,gg,dlngdt9,iweak,iffn,rffn,dlnrffndt9,innu,rnnu)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Calculate the csect for reactions with 1 reactant
+        !__dir_loop_inner(1) &
+        !__dir_private(rpf1,dlnrpf1dt9,p1,s1)
         Do k = 1, nr1
           If ( (iweak(izb) <  0 .and. iwk1(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk1(k) /= 0) ) Then
@@ -780,6 +816,8 @@ Contains
         EndDo
 
         ! Calculate the csect for reactions with 2 reactants
+        !__dir_loop_inner(1) &
+        !__dir_private(rpf2,dlnrpf2dt9,p2,s2)
         Do k = 1, nr2
           If ( (iweak(izb) <  0 .and. iwk2(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk2(k) /= 0) ) Then
@@ -812,6 +850,8 @@ Contains
         EndDo
 
         ! Calculate the csect for reactions with 3 reactants
+        !__dir_loop_inner(1) &
+        !__dir_private(rpf3,dlnrpf3dt9,p3,s3)
         Do k = 1, nr3
           If ( (iweak(izb) <  0 .and. iwk3(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk3(k) /= 0) ) Then
@@ -846,6 +886,8 @@ Contains
         EndDo
 
         ! Calculate the csect for reactions with 4 reactants
+        !__dir_loop_inner(1) &
+        !__dir_private(rpf4,dlnrpf4dt9,p4,s4)
         Do k = 1, nr4
           If ( (iweak(izb) <  0 .and. iwk4(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk4(k) /= 0) ) Then
@@ -877,13 +919,22 @@ Contains
             If ( iheat > 0 ) dcsect4dt9(k,izb) = csect4(k,izb)*(dh4dt9(k,izb)+dlnrpf4dt9)
           EndIf
         EndDo
+      EndIf
+    EndDo
+    !__dir_wait
 
-        ! Increment counter
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
         ktot(5,izb) = ktot(5,izb) + 1
       EndIf
     EndDo
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(csect1,csect2,csect3,csect4) &
+      !__dir_host(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+      !__dir_host(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -925,6 +976,19 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(yet,cv,etae,detaedt9) &
+    !__dir_copyout(csect1,csect2,csect3,csect4) &
+    !__dir_copyout(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_delete(iweak,rffn,dlnrffndt9,rnnu) &
+    !__dir_delete(t09,dt09,ene) &
+    !__dir_delete(gg,dlngdt9) &
+    !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_delete(mask,tt,rhot,t9t)
+
+    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_csect = timer_csect + stop_timer
