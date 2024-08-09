@@ -580,7 +580,7 @@ Contains
     Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0
     Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
       & phasei,dphaseidt9, ngrid, rffn, dlnrffndt9
-    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, rnnu
+    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, ltnu, fluxnu, rnnu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -672,12 +672,20 @@ Contains
       If ( parallel_IOProcessor() ) Then
         Call read_nnu_data(nnnu,data_dir)
       Else
+        Allocate (ltnu(nnuspec,nzevolve))
+        Allocate (fluxnu(nnuspec,nzevolve))
         Allocate (sigmanu(nnnu,ntnu))
+        ltnu = 0.0
+        fluxnu = 0.0
         sigmanu = 0.0
       EndIf
       Call parallel_bcast(sigmanu)
     Else
+      Allocate (ltnu(nnuspec,nzevolve))
+      Allocate (fluxnu(nnuspec,nzevolve))
       Allocate (sigmanu(1,ntnu))
+      ltnu = 0.0
+      fluxnu = 0.0
       sigmanu = 0.0
     EndIf
 
@@ -854,7 +862,7 @@ Contains
     !__dir_copyin(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
     !__dir_copyin(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
     !__dir_copyin(iffn,ffnsum,ffnenu,has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
-    !__dir_copyin(innu,sigmanu)
+    !__dir_copyin(innu,sigmanu,ltnu,fluxnu)
     !!__dir_create(csect1,csect2,csect3,csect4,b1,b2,b3,b4) &
     !!__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
     !!__dir_create(rffn,dlnrffndt9,rnnu)
