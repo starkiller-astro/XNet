@@ -579,7 +579,7 @@ Contains
     Use xnet_constants, Only: five3rd
     Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0
     Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
-      & ngrid, rffn, dlnrffndt9
+      & phasei,dphaseidt9, ngrid, rffn, dlnrffndt9
     Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, rnnu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
@@ -628,39 +628,44 @@ Contains
         ffnsum = 0.0
         ffnenu = 0.0
         has_logft = 0
-        If ( abs(iweak0) == 2 ) Then
-          ! Additional data for logft rates
-          Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
-          Allocate (ffn_qval(nffn))
-          ffn_ec = 0.0
-          ffn_beta = 0.0
-          ffn_qval = 0.0
-        EndIf
+
+        ! Additional data for logft rates
+        Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
+        Allocate (ffn_qval(nffn))
+        Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
+        ffn_ec = 0.0
+        ffn_beta = 0.0
+        ffn_qval = 0.0
+        phasei = 0.0
+        dphaseidt9 = 0.0
       EndIf
       Call parallel_bcast(ffnsum)
       Call parallel_bcast(ffnenu)
       Call parallel_bcast(has_logft)
-      If ( abs(iweak0) == 2 ) Then
-        ! Additional data for logft rates
-        Call parallel_bcast(ffn_ec)
-        Call parallel_bcast(ffn_beta)
-        Call parallel_bcast(ffn_qval)
-      EndIf
+
+      ! Additional data for logft rates
+      Call parallel_bcast(ffn_ec)
+      Call parallel_bcast(ffn_beta)
+      Call parallel_bcast(ffn_qval)
+      Call parallel_bcast(phasei)
+      Call parallel_bcast(dphaseidt9)
     Else
       Allocate(ffnsum(1,ngrid),ffnenu(1,ngrid))
       Allocate (has_logft(1))
       ffnsum = 0.0
       ffnenu = 0.0
       has_logft = 0
+
       ! Additional arrays for logft rates
-      If ( abs(iweak0) == 2 ) Then
-         Allocate (ffn_ec(1,ngrid),ffn_beta(1,ngrid))
-         Allocate (ffn_qval(1))
-         ffn_ec = 0.0
-         ffn_beta = 0.0
-         ffn_qval = 0.0
-      Endif
-    Endif
+      Allocate (ffn_ec(1,ngrid),ffn_beta(1,ngrid))
+      Allocate (ffn_qval(1))
+      Allocate (phasei(1,nzevolve),dphaseidt9(1,nzevolve))
+      ffn_ec = 0.0
+      ffn_beta = 0.0
+      ffn_qval = 0.0
+      phasei = 0.0
+      dphaseidt9 = 0.0
+    EndIf
 
     ! If there are NNU rates, read in the NNU data and set NNU array sizes
     If ( nnnu > 0 ) Then
@@ -848,7 +853,8 @@ Contains
     !__dir_copyin(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !__dir_copyin(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
     !__dir_copyin(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !__dir_copyin(iffn,ffnsum,ffnenu,innu,sigmanu)
+    !__dir_copyin(iffn,ffnsum,ffnenu,has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
+    !__dir_copyin(innu,sigmanu)
     !!__dir_create(csect1,csect2,csect3,csect4,b1,b2,b3,b4) &
     !!__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
     !!__dir_create(rffn,dlnrffndt9,rnnu)

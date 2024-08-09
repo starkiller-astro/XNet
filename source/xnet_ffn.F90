@@ -4,6 +4,8 @@
 ! weak reactions and routines to read the data and calculate the reaction rates.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_ffn
   !-------------------------------------------------------------------------------------------------
   ! This module contains the data to calculate FFN formatted weak reactions.
@@ -34,7 +36,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine decides whether to call the standard read or the logft table read
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0
+    Use xnet_controls, Only: iweak0, nzevolve
     Implicit None
 
     ! Input variables
@@ -43,6 +45,18 @@ Contains
 
     Allocate (has_logft(nffn))
     has_logft = 0
+
+    Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
+    Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
+    Allocate (ffn_qval(nffn))
+    Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
+    ffnsum = 0.0
+    ffnenu = 0.0
+    ffn_ec = 0.0
+    ffn_beta = 0.0
+    ffn_qval = 0.0
+    phasei = 0.0
+    dphaseidt9 = 0.0
 
     If ( abs(iweak0) == 2 ) Then  ! Allows to use -2 for weak interactions only
       Call read_ffn_data_logft(nffn,data_dir)
@@ -65,10 +79,6 @@ Contains
     ! Local variables
     Integer :: i, j, lun_ffn
 
-    Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
-    ffnsum = 0.0
-    ffnenu = 0.0
-
     Open(newunit=lun_ffn, file=trim(data_dir)//"/netweak", status='old', action='read')
     Do i = 1, nffn
       Read(lun_ffn,*)
@@ -83,7 +93,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine allocates and loads the data structures for FFN reaction rates.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_diag, nzevolve
+    Use xnet_controls, Only: lun_diag
     Implicit None
 
     ! Input variables
@@ -96,18 +106,6 @@ Contains
     Character(3) :: desc
     Real(dp) :: qval_in
 
-    Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
-    Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
-    Allocate (ffn_qval(nffn))
-    Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
-    ffnsum = 0.0
-    ffnenu = 0.0
-    ffn_ec = 0.0
-    ffn_beta = 0.0
-    ffn_qval = 0.0
-    phasei = 0.0
-    dphaseidt9 = 0.0
-
     Open(newunit=lun_ffn, file=trim(data_dir)//"/netweak", status='old')
     Do i = 1, nffn
       Read(lun_ffn,*)  nuc1, nuc2,desc, ffn_qval(i)
@@ -119,9 +117,9 @@ Contains
       Else
         has_logft(i) = 0
       EndIf
-      Read(lun_ffn,*) (ffn_beta(i,j),ffn_ec(i,j),ffnsum(i,j), ffnenu(i,j), j=1,ngrid)
 
-    ! Read logft, beta-decay rate and sum.
+      ! Read logft, beta-decay rate and sum.
+      Read(lun_ffn,*) (ffn_beta(i,j),ffn_ec(i,j),ffnsum(i,j), ffnenu(i,j), j=1,ngrid)
     EndDo
     Close(lun_ffn)
 
@@ -162,7 +160,8 @@ Contains
     Real(dp) :: r1, r2, dr1, dr2, dr1_ec, dr2_ec
     Real(dp) :: rf_beta, rf_ec, cheme
     Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt, drec_dt
-    Integer :: i, izb, k, le1, lt1, i1, i2, i3, i4
+    Integer :: i, izb, k, le1, i1, i2, i3, i4
+    Integer :: lt1(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -172,44 +171,65 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(rf,dlnrfdt9,lt1) &
+    !__dir_copyin(mask,t9,ene,etae)
+
     ! Pre-calculate phase space integrals and derivatives
+    !__dir_loop(2) &
+    !__dir_async &
+    !__dir_present(mask,t9,has_logft,ffn_qval,phasei,dphaseidt9) &
+    !__dir_private(cheme)
     Do izb = zb_lo, zb_hi
       Do k = 1, nffn
         If ( mask(izb) .and. has_logft(k) > 0 ) Then
           cheme = etae(izb)*bok*t9(izb) + m_e
-          If ( has_logft(k) == 1 ) Then
-            Call effphase(t9(izb),+cheme,ffn_qval(k),phasei(k,izb),dphaseidt9(k,izb))
-          ElseIf ( has_logft(k) == 2 ) Then
-            Call effphase(t9(izb),-cheme,ffn_qval(k),phasei(k,izb),dphaseidt9(k,izb))
-          EndIf
+          cheme = sign(cheme,-real(has_logft(k),dp) - 1.5)
+          Call effphase(t9(izb),cheme,ffn_qval(k),phasei(k,izb),dphaseidt9(k,izb))
         EndIf
       EndDo
     EndDo
 
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,t9,lt1)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Find the temperature grid point
+        !__dir_loop_serial(1)
         Do i = 1, nt9grid
           If ( t9(izb) <= t9grid(i) ) Exit
         EndDo
-        lt1 = max(i-1,1)
+        lt1(izb) = max(i-1,1)
+      End If
+    End Do
 
-        ! Find the density grid point (on log grid)
-        enel = log10(ene(izb))
-        le1 = max(int(enel),1)
+    !__dir_loop(2) &
+    !__dir_async &
+    !__dir_present(mask,t9,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
+    !__dir_present(phasei,dphaseidt9) &
+    !__dir_private(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
+    !__dir_private(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt)
+    Do izb = zb_lo, zb_hi
+      Do k = 1, nffn
+        If ( mask(izb) ) Then
 
-        ! Bi-linear interpolation
-        dt9 = t9grid(lt1+1) - t9grid(lt1)
-        rdt9 = (t9(izb) - t9grid(lt1)) / dt9
-        dene = enegrid(le1+1) - enegrid(le1)
-        rdene = (enel - enegrid(le1)) / dene
-        i1 = nt9grid*(le1-1) + lt1
-        i2 = i1 + 1
-        i3 = nt9grid*le1 + lt1
-        i4 = i3 + 1
+          ! Find the density grid point (on log grid)
+          enel = log10(ene(izb))
+          le1 = max(int(enel),1)
 
-        Do k = 1, nffn
+          ! Bi-linear interpolation
+          dt9 = t9grid(lt1(izb)+1) - t9grid(lt1(izb))
+          rdt9 = (t9(izb) - t9grid(lt1(izb))) / dt9
+          dene = enegrid(le1+1) - enegrid(le1)
+          rdene = (enel - enegrid(le1)) / dene
+          i1 = nt9grid*(le1-1) + lt1(izb)
+          i2 = i1 + 1
+          i3 = nt9grid*le1 + lt1(izb)
+          i4 = i3 + 1
+
           If ( has_logft(k) > 0 ) Then
 
             dr1_ec = ffn_ec(k,i2) - ffn_ec(k,i1)
@@ -263,11 +283,14 @@ Contains
               dlnrfdt9(k,izb) = ln_10 * ( rdene*dr2 + (1.0-rdene)*dr1 ) / dt9
             EndIf
           EndIf
-        EndDo
-      EndIf
+        EndIf
+      EndDo
     EndDo
 
     If ( idiag >= 5 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(rf,dlnrfdt9,phasei,dphaseidt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Do k = 1, nffn
@@ -280,6 +303,14 @@ Contains
       EndDo
     EndIf
 
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(rf,dlnrfdt9) &
+    !__dir_delete(lt1) &
+    !__dir_delete(mask,t9,ene,etae)
+
+    !__dir_wait
+
     Return
   End Subroutine ffn_rate
 
@@ -291,6 +322,7 @@ Contains
     Use xnet_constants, Only: m_e, bok
     Use xnet_types, Only: dp
     Use fd, Only: fd0h, fd2h, fd4h, fd6h, fd8h
+    !__dir_routine_seq
     Implicit None
 
     ! Input variables
