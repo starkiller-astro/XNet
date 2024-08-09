@@ -37,8 +37,8 @@ Module nuclear_data
   ! non-nuclei. The array sizes are set in read_nuclear_data.
   !-------------------------------------------------------------------------------------------------
   Integer, Parameter    :: ng = 24      ! Number of grid points for partition function data
-  Integer               :: it9i(ng)     ! Raw partition function temperature grid from file
-  Real(dp)              :: t9i(ng)      ! Temperature grid for partition function data
+  Integer, Allocatable  :: it9i(:)      ! Raw partition function temperature grid from file
+  Real(dp), Allocatable :: t9i(:)       ! Temperature grid for partition function data
   Real(dp), Allocatable :: g(:,:)       ! Partition function data
   Real(dp), Allocatable :: gg(:,:)      ! Interpolated partition function
   Real(dp), Allocatable :: angm(:)      ! Angular momentum
@@ -133,8 +133,19 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(gg,dlngdt9) &
+    !__dir_copyin(mask,t9)
+
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,t9,t9i,gg,g,dlngdt9) &
+    !__dir_private(ii,rdt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+
+        !__dir_loop_serial(1)
         Do i = 1, ng
           If ( t9(izb) <= t9i(i) ) Exit
         EndDo
@@ -144,15 +155,18 @@ Contains
         gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
         Select Case (ii)
         Case (1)
+          !__dir_loop_inner(1)
           Do k = 1, ny
             gg(k,izb) = g(1,k)
           EndDo
         Case (ng+1)
+          !__dir_loop_inner(1)
           Do k = 1, ny
             gg(k,izb) = g(ng,k)
           EndDo
         Case Default
           rdt9 = (t9(izb)-t9i(ii-1)) / (t9i(ii)-t9i(ii-1))
+          !__dir_loop_inner(1)
           Do k = 1, ny
             gg(k,izb) = safe_exp( rdt9*log(g(ii,k)) + (1.0-rdt9)*log(g(ii-1,k)) )
           EndDo
@@ -162,14 +176,17 @@ Contains
           dlngdt9(0,izb) = 0.0
           Select Case (ii)
           Case (1)
+            !__dir_loop_inner(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(2,k)/g(1,k)) / (t9i(2)-t9i(1))
             EndDo
           Case (ng+1)
+            !__dir_loop_inner(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(ng,k)/g(ng-1,k)) / (t9i(ng)-t9i(ng-1))
             EndDo
           Case Default
+            !__dir_loop_inner(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(ii,k)/g(ii-1,k)) / (t9i(ii)-t9i(ii-1))
             EndDo
@@ -186,6 +203,13 @@ Contains
     !    EndIf
     !  EndDo
     !EndIf
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(gg,dlngdt9) &
+    !__dir_delete(mask,t9)
+
+    !__dir_wait
 
     Return
   End Subroutine partf
@@ -254,6 +278,8 @@ Contains
     If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
 
     ! Read in the partition function iteration grid, and fix endpoints
+    If ( .not. allocated(it9i) ) Allocate (it9i(ng))
+    If ( .not. allocated(t9i) )  Allocate (t9i(ng))
     Read(lun_winv,"(24i3)",iostat=ierr) (it9i(j), j=1,ng)
     If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
 
@@ -340,8 +366,10 @@ Contains
     If ( .not. allocated(nname) ) Allocate (nname(0:ny))
     Allocate (aa(ny),zz(ny),nn(ny),be(ny),mex(ny),mm(ny),ia(ny),iz(ny),in(ny))
     Allocate (zz2(ny),zz53(ny),zzi(ny))
+    Allocate (it9i(ng),t9i(ng))
     Allocate (g(ng,ny),angm(0:ny))
     If ( parallel_IOProcessor() ) Call read_netwinv(data_dir)
+    Call parallel_bcast(it9i)
     Call parallel_bcast(t9i)
     Call parallel_bcast(nname)
     Call parallel_bcast(aa)

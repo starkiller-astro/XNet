@@ -56,6 +56,7 @@ Contains
     ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
     !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: dp
+    !__dir_routine_seq
     Implicit None
 
     ! Input variables
@@ -74,6 +75,7 @@ Contains
     ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
     !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: dp
+    !__dir_routine_seq
     Implicit None
 
     ! Input variables
