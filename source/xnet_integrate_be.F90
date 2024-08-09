@@ -194,9 +194,10 @@ Contains
     ! If successful, inr = 1
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, nname
-    Use reaction_data, Only: b1, b2, b3, b4, dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
+    Use reaction_data, Only: b1, b2, b3, b4, csect1, csect2, csect3, csect4, &
+      & dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: y, ydot, yt, xext
-    Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, tdel, nh
+    Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, yet, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
       & szbatch, zb_lo, zb_hi
     Use xnet_integrate, Only: cross_sect, yderiv
@@ -229,8 +230,10 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(cv,b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyin(y,yt,ydot,t9,t9t,t9dot,tdel,inr)
+    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_copyin(y,t9,tdel) &
+    !__dir_copyin(yt,ydot,t9t,t9dot,inr)
 
     !__dir_enter_data &
     !__dir_async &
@@ -299,7 +302,8 @@ Contains
       Call cross_sect(mask_in = eval_rates)
       !__dir_update &
       !__dir_async &
-      !__dir_device(cv,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+      !__dir_device(csect1,csect2,csect3,csect4) &
+      !__dir_device(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
       Call yderiv(mask_in = iterate)
       Call jacobian_build(diag_in = rdt,mult_in = mult,mask_in = rebuild)
       Call jacobian_decomp(kstep,mask_in = rebuild)
@@ -477,7 +481,9 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_delete(y,t9,tdel,cv,b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_delete(y,t9,tdel) &
     !__dir_copyout(yt,ydot,t9t,t9dot,inr)
 
     !__dir_wait

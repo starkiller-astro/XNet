@@ -172,7 +172,8 @@ Contains
 
     !__dir_loop_outer(2) &
     !__dir_async &
-    !__dir_present(mask,mult,diag,jac,dydotdy)
+    !__dir_present(jac,dydotdy) &
+    !__dir_present(mask,diag,mult)
     Do izb = zb_lo, zb_hi
       Do j1 = 1, msize
         If ( mask(izb) ) Then
@@ -255,8 +256,8 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_copyin(yt,b1,b2,b3,b4,cv,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyin(mask)
+    !__dir_copyin(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_copyin(mask,yt,cv)
 
     ! Build the Jacobian
     !__dir_loop_outer(2) &
@@ -264,8 +265,9 @@ Contains
     !__dir_private(s1,s2,s3,s4) &
     !__dir_present(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
     !__dir_present(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !__dir_present(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_present(mu1,mu2,mu3,mu4,a1,a2,a3,a4)
+    !__dir_present(mu1,mu2,mu3,mu4,a1,a2,a3,a4) &
+    !__dir_present(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_present(mask,yt,cv)
     Do izb = zb_lo, zb_hi
       Do i0 = 1, ny
         If ( mask(izb) ) Then
@@ -395,8 +397,8 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_delete(yt,b1,b2,b3,b4,cv,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_delete(mask)
+    !__dir_delete(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_delete(mask,yt,cv)
 
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
@@ -444,7 +446,8 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_copyin(mask)
+    !__dir_create(dy,dt9) &
+    !__dir_copyin(mask,yrhs,t9rhs)
 
     !__dir_loop_outer(1) &
     !__dir_async &
@@ -507,7 +510,10 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_delete(mask)
+    !__dir_copyout(dy,dt9) &
+    !__dir_delete(mask,yrhs,t9rhs)
+
+    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -573,6 +579,8 @@ Contains
       EndDo
     EndIf
 
+    !__dir_wait
+
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
     timer_decmp = timer_decmp + stop_timer
@@ -621,7 +629,8 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_copyin(mask)
+    !__dir_create(dy,dt9) &
+    !__dir_copyin(mask,yrhs,t9rhs)
 
     !__dir_loop_outer(1) &
     !__dir_async &
@@ -685,7 +694,10 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_delete(mask)
+    !__dir_copyout(dy,dt9) &
+    !__dir_delete(mask,yrhs,t9rhs)
+
+    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer

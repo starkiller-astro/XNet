@@ -344,6 +344,8 @@ Program net
   !__dir_async &
   !__dir_delete(xext,aext,zext)
 
+  !__dir_wait
+
   Call gpu_finalize()
 
   ! Wait for all nodes to finish

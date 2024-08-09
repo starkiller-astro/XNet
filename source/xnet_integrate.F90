@@ -66,7 +66,6 @@ Contains
     EndDo
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
-    !__dir_wait
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -308,9 +307,21 @@ Contains
     start_timer = xnet_wtime()
     timer_eos = timer_eos - start_timer
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(yet,cv,etae,detaedt9) &
+    !__dir_copyin(mask,t9t,rhot,yt)
+
     Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
       & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(yet,cv,etae,detaedt9) &
+    !__dir_delete(mask,t9t,rhot,yt)
+
+    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_eos = timer_eos + stop_timer
@@ -355,8 +366,9 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(b1,b2,b3,b4,ydot,t9dot) &
-    !__dir_copyin(mask,yt,t9t,cv,csect1,csect2,csect3,csect4)
+    !__dir_create(ydot,t9dot,b1,b2,b3,b4) &
+    !__dir_copyin(csect1,csect2,csect3,csect4) &
+    !__dir_copyin(mask,yt,t9t,cv)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
@@ -516,8 +528,11 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_copyout(b1,b2,b3,b4,ydot,t9dot) &
-    !__dir_delete(mask,yt,t9t,cv,csect1,csect2,csect3,csect4)
+    !__dir_copyout(ydot,t9dot,b1,b2,b3,b4) &
+    !__dir_delete(csect1,csect2,csect3,csect4) &
+    !__dir_delete(mask,yt,t9t,cv)
+
+    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer
