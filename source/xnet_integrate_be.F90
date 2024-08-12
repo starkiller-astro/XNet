@@ -23,15 +23,12 @@ Contains
     ! derivative of the trial abundance calculated from reaction rates and tdel is the timestep.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use reaction_data, Only: b1, b2, b3, b4, csect1, csect2, csect3, csect4, &
-      & dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
-    Use xnet_abundances, Only: y, yo, yt, ydot
-    Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, t9dot, rho, rhoo, &
-      & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind, cv, etae, detaedt9
+    Use xnet_abundances, Only: y, yo, yt
+    Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
+      & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
       & szbatch, zb_lo, zb_hi
     Use xnet_integrate, Only: timestep
-    Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
 
@@ -54,12 +51,9 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_create(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
     !__dir_copyin(t,to,tt,tdel,tdel_next,tdelstart,nto,nt,ntt) &
-    !__dir_copyin(t9o,t9,t9t,t9dot,rhoo,rho,rhot,yo,y,yt,ydot) &
-    !__dir_copyin(yeo,ye,yet,cv,etae,detaedt9) &
+    !__dir_copyin(t9o,t9,t9t,rhoo,rho,rhot,yo,y,yt) &
+    !__dir_copyin(yeo,ye,yet) &
     !__dir_copyin(kmon,ktot) &
     !__dir_create(inr,mykts,lzstep) &
     !__dir_copyin(its)
@@ -225,12 +219,9 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
     !__dir_copyout(t,to,tt,tdel,tdel_next,tdelstart,nto,nt,ntt) &
-    !__dir_copyout(t9o,t9,t9t,t9dot,rhoo,rho,rhot,yo,y,yt,ydot) &
-    !__dir_copyout(yeo,ye,yet,cv,etae,detaedt9) &
+    !__dir_copyout(t9o,t9,t9t,rhoo,rho,rhot,yo,y,yt) &
+    !__dir_copyout(yeo,ye,yet) &
     !__dir_copyout(kmon,ktot) &
     !__dir_delete(inr,mykts,lzstep) &
     !__dir_copyout(its)

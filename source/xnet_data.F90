@@ -44,6 +44,11 @@ Module nuclear_data
   Real(dp), Allocatable :: angm(:)      ! Angular momentum
   Real(dp), Allocatable :: dlngdt9(:,:) ! d(ln(partition functions))/dT9
 
+  Interface benuc
+    Module Procedure benuc_scalar
+    Module Procedure benuc_vector
+  End Interface benuc
+
 Contains
 
   Subroutine index_from_name(nuc_name,inuc)
@@ -76,7 +81,7 @@ Contains
     Return
   End Subroutine index_from_name
 
-  Subroutine benuc(y,enb,enm)
+  Subroutine benuc_scalar(y,enb,enm)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the binding energy and mass excess energy [ergs/g] of the abundance
     ! distribution.
@@ -94,9 +99,14 @@ Contains
 
     ! Local variables
     Real(dp) :: ztot ! Total proton number
+    Integer :: k
 
-    ztot = sum(y * zz)
-    enb  = sum(y * be)
+    ztot = 0.0
+    enb  = 0.0
+    Do k = 1, ny
+      ztot = ztot + y(k) * zz(k)
+      enb  = enb  + y(k) * be(k)
+    EndDo
     enm  = mex_p*ztot + mex_n*(1.0-ztot) - enb
 
     ! Change units from MeV/nucleon to erg/g
@@ -104,7 +114,75 @@ Contains
     enm = epmev * avn * enm
 
     Return
-  End Subroutine benuc
+  End Subroutine benuc_scalar
+
+  Subroutine benuc_vector(y,enb,enm,mask_in)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculates the binding energy and mass excess energy [ergs/g] of the abundance
+    ! distribution.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_constants, Only: epmev, avn
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
+
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: enb(zb_lo:zb_hi) ! Binding energy [ergs g^{-1}]
+    Real(dp), Intent(inout) :: enm(zb_lo:zb_hi) ! Mass excess [ergs g^{-1}]
+
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
+    ! Local variables
+    Real(dp) :: ztot, btot
+    Integer :: k, izb
+    Logical, Pointer :: mask(:)
+
+    If ( present(mask_in) ) Then
+      mask(zb_lo:) => mask_in
+    Else
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+    EndIf
+    If ( .not. any(mask) ) Return
+
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(mask,y,enb,enm)
+
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,y,enb,enm,zz,be) &
+    !__dir_private(ztot,btot)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+
+        ztot = 0.0
+        btot = 0.0
+        !__dir_loop_inner(1) &
+        !__dir_reduction(+,ztot,btot)
+        Do k = 1, ny
+          ztot = ztot + y(k,izb) * zz(k)
+          btot = btot + y(k,izb) * be(k)
+        EndDo
+        enb(izb) = btot
+        enm(izb) = mex_p*ztot + mex_n*(1.0-ztot) - btot
+
+        ! Change units from MeV/nucleon to erg/g
+        enb(izb) = epmev * avn * enb(izb)
+        enm(izb) = epmev * avn * enm(izb)
+      EndIf
+    EndDo
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(enb,enm) &
+    !__dir_delete(mask,y)
+
+    Return
+  End Subroutine benuc_vector
 
   Subroutine partf(t9,mask_in)
     !-----------------------------------------------------------------------------------------------

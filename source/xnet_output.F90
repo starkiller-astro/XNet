@@ -4,6 +4,8 @@
 ! timestep, and the final_output routine, which controls the output at the end of the evolution.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_output
   !-------------------------------------------------------------------------------------------------
   ! This module contains data and routines used for output.
@@ -65,6 +67,9 @@ Contains
     EndIf
 
     If ( itsout >= 1 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(t,t9,rho,tdel,edot,y,kmon)
       Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,2es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then

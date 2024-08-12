@@ -23,15 +23,19 @@ Contains
     ! Integration is performed by a choice of methods controlled by the isolv flag.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname, aa, benuc
+    Use reaction_data, Only: b1, b2, b3, b4, csect1, csect2, csect3, csect4, &
+      & dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: yo, y, yt, ystart, ydot, xext, aext, zext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
-      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart
+      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, tdelstart, nstart, t9start, rhostart, yestart, &
+      & ints, intso, nh, th, t9h, rhoh, cv, etae, detaedt9
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
       & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id
     Use xnet_integrate, Only: timestep
     Use xnet_integrate_be, Only: solve_be
     Use xnet_integrate_bdf, Only: solve_bdf
     Use xnet_output, Only: final_output, ts_output, write_xnet_th, write_xnet_inab
+    Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_xnet
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -59,10 +63,45 @@ Contains
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
 
+    ! Initialize timestep loop flags
+    kstep = 0
+    mykstep = 0
+    lzsolve = lzactive(zb_lo:zb_hi)
+    lzoutput = lzsolve
+    Do izb = zb_lo, zb_hi
+      If ( lzsolve(izb) ) Then
+        its(izb) = 0
+      Else
+        its(izb) = -1
+      EndIf
+    EndDo
+
     ! Set reaction controls not read in from control
     idiag0 = idiag
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(its,mykstep,lzsolve,lzoutput) &
+    !__dir_copyin(lzactive,t,tdel,tdelstart,tstop,nt,t9,rho,ye,y) &
+    !__dir_copyin(nh,th,t9h,rhoh) &
+    !__dir_create(kmon,ktot) &
+    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_create(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_create(to,tt,tdel_old,tdel_next,nto,ntt,ints,intso) &
+    !__dir_create(t9o,t9t,t9dot,rhoo,rhot,yeo,yet,yo,yt,ydot) &
+    !__dir_create(cv,etae,detaedt9) &
+    !__dir_create(enm,enb,enold,en0,delta_en,edot)
+
+    ! Calculate the total energy of the nuclei
+    Call benuc(y,enb,enm)
+
     ! Initialize trial time step abundances and conditions
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
+    !__dir_present(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
+    !__dir_present(enm,enb,enold,en0,delta_en,edot)
     Do izb = zb_lo, zb_hi
       tdel_old(izb) = tdel(izb)
       tdel_next(izb) = tdel(izb)
@@ -76,42 +115,21 @@ Contains
       rhot(izb) = rho(izb)
       yeo(izb) = ye(izb)
       yet(izb) = ye(izb)
+      !__dir_loop_inner(1)
       Do k = 1, ny
         yo(k,izb) = y(k,izb)
         yt(k,izb) = y(k,izb)
       EndDo
+      !__dir_loop_inner(1)
       Do k = 1, 5
         kmon(k,izb) = 0
         ktot(k,izb) = 0
       EndDo
-    EndDo
-
-    en0 = 0.0
-    enm = 0.0
-    delta_en = 0.0
-    edot = 0.0
-    Do izb = zb_lo, zb_hi
-      If ( lzactive(izb) ) Then
-
-        ! Calculate the total energy of the nuclei
-        Call benuc(yt(:,izb),enb(izb),enm(izb))
-        en0(izb) = enm(izb)
-        delta_en(izb) = 0.0
-        edot(izb) = 0.0
-      EndIf
-    EndDo
-
-    ! Initialize timestep loop flags
-    kstep = 0
-    mykstep = 0
-    lzsolve = lzactive(zb_lo:zb_hi)
-    lzoutput = lzsolve
-    Do izb = zb_lo, zb_hi
-      If ( lzsolve(izb) ) Then
-        its(izb) = 0
-      Else
-        its(izb) = -1
-      EndIf
+      enb(izb) = 0.0
+      enold(izb) = 0.0
+      en0(izb) = enm(izb)
+      delta_en(izb) = 0.0
+      edot(izb) = 0.0
     EndDo
 
     ! Output initial abundances and conditions
@@ -136,7 +154,6 @@ Contains
 
       ! Calculate an initial guess for the timestep
       Call timestep(kstep,mask_in = lzsolve)
-      !__dir_wait
 
       ! Take integration step (only worry about solve_be for now)
       Select Case (isolv)
@@ -150,6 +167,9 @@ Contains
 
       ! If convergence is successful, output timestep results
       If ( idiag >= 1 ) Then
+        !__dir_update &
+        !__dir_wait &
+        !__dir_host(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
           If ( its(izb) == 0 .and. idiag >= 1 ) Then
@@ -168,13 +188,14 @@ Contains
         EndDo
       EndIf
 
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(enm,enold) &
+      !__dir_present(its,t,tstop,mykstep,lzsolve,lzoutput)
       Do izb = zb_lo, zb_hi
         If ( its(izb) == 0 ) Then
 
           enold(izb) = enm(izb)
-          Call benuc(yt(:,izb),enb(izb),enm(izb))
-          delta_en(izb) = enm(izb) - en0(izb)
-          edot(izb) = -(enm(izb)-enold(izb)) / tdel(izb)
 
           ! If this zone reaches the stop time, flag it to remove from loop
           If ( t(izb) >= tstop(izb) ) Then
@@ -194,11 +215,43 @@ Contains
         EndIf
       EndDo
 
+      Call benuc(yt,enb,enm,mask_in = lzoutput)
+
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(its,enm,enold,en0,delta_en,edot,tdel)
+      Do izb = zb_lo, zb_hi
+        If ( its(izb) == 0 ) Then
+          delta_en(izb) = enm(izb) - en0(izb)
+          edot(izb) = -(enm(izb)-enold(izb)) / tdel(izb)
+        EndIf
+      EndDo
+
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(lzoutput,lzsolve)
       Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
 
       ! Test if all zones have stopped
       If ( .not. any( lzsolve ) ) Exit
     EndDo
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(its,mykstep,kmon,ktot) &
+    !__dir_copyout(t,tdel,t9,rho,ye,y) &
+    !__dir_delete(nh,th,t9h,rhoh) &
+    !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_delete(to,tt,tdel_old,tdel_next,nto,ntt,ints,intso) &
+    !__dir_delete(t9o,t9t,t9dot,rhoo,rhot,yeo,yet,yo,yt,ydot) &
+    !__dir_delete(cv,etae,detaedt9) &
+    !__dir_delete(lzactive,tdelstart,tstop,nt) &
+    !__dir_delete(enm,enb,enold,en0,delta_en,edot) &
+    !__dir_delete(lzsolve,lzoutput)
+
+    !__dir_wait
 
     ! Test that the stop time is reached
     Do izb = zb_lo, zb_hi
