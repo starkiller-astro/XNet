@@ -511,7 +511,7 @@ Contains
 
     ! Solve the linear system
 #if defined(XNET_GPU)
-#if defined(USE_NOPIVOT)
+#if USE_NOPIVOT
     any_pivot = any(pivot(zb_lo:zb_hi))
 #else
     any_pivot = .true.
@@ -599,7 +599,7 @@ Contains
 
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
-#if defined(USE_NOPIVOT)
+#if USE_NOPIVOT
     any_pivot = any(pivot(zb_lo:zb_hi))
 #else
     any_pivot = .true.
@@ -702,7 +702,7 @@ Contains
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
     ! TODO: pack djac pointers into djacp array with only non-converged points
-#if defined(USE_NOPIVOT)
+#if USE_NOPIVOT
     any_pivot = any(pivot(zb_lo:zb_hi))
 #else
     any_pivot = .true.
