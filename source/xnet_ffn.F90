@@ -174,7 +174,7 @@ Contains
     !__dir_enter_data &
     !__dir_async &
     !__dir_create(rf,dlnrfdt9,lt1) &
-    !__dir_copyin(mask,t9,ene,etae)
+    !__dir_copyin(mask,t9,ene)
 
     ! Pre-calculate phase space integrals and derivatives
     !__dir_loop(2) &
@@ -307,9 +307,7 @@ Contains
     !__dir_async &
     !__dir_copyout(rf,dlnrfdt9) &
     !__dir_delete(lt1) &
-    !__dir_delete(mask,t9,ene,etae)
-
-    !!__dir_wait
+    !__dir_delete(mask,t9,ene)
 
     Return
   End Subroutine ffn_rate

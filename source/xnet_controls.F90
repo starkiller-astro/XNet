@@ -391,6 +391,10 @@ Contains
     !__dir_async &
     !__dir_device(iheat,iscrn)
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(lzactive,iweak,kmon,ktot)
+
     Return
   End Subroutine read_controls
 

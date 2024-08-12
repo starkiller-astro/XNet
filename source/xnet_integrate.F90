@@ -22,10 +22,9 @@ Contains
     ! conditions are changing too rapidly.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
-    Use xnet_abundances, Only: y, yo, yt, ydot
+    Use xnet_abundances, Only: y, yo, ydot
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
-      & rhot, t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind, &
-      & etae, detaedt9
+      & rhot, t9dot, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
       & ymin, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
@@ -59,9 +58,6 @@ Contains
     !__dir_enter_data &
     !__dir_async &
     !__dir_create(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
-    !__dir_copyin(t,tt,tdel,tdel_next,tdel_old,tstop,tdelstart,nt,ntt,ints,intso) &
-    !__dir_copyin(nh,th,t9h,rhoh) &
-    !__dir_copyin(y,yo,yt,ydot,t9,t9o,t9t,t9dot,rho,rhot,cv,etae,detaedt9) &
     !__dir_copyin(mask)
 
     ! Retain old values of timestep and thermo and calculate remaining time
@@ -275,12 +271,7 @@ Contains
     !__dir_exit_data &
     !__dir_async &
     !__dir_delete(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
-    !__dir_delete(t,tstop,tdelstart) &
-    !__dir_delete(nh,th,t9h,rhoh) &
-    !__dir_delete(y,yo,yt,t9,t9o,rho,nt) &
-    !__dir_delete(mask) &
-    !__dir_copyout(tt,tdel,tdel_next,tdel_old) &
-    !__dir_copyout(ydot,t9t,t9dot,rhot,cv,etae,detaedt9,ntt,ints,intso)
+    !__dir_delete(mask)
 
     Return
   End Subroutine timestep
@@ -312,7 +303,6 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(iweak) &
     !__dir_copyin(mask,t9)
 
     !__dir_loop_outer(1) &
@@ -333,10 +323,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_copyout(iweak) &
     !__dir_delete(mask,t9)
-
-    !!__dir_wait
 
     Return
   End Subroutine update_iweak
@@ -372,8 +359,7 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(yet,cv,etae,detaedt9) &
-    !__dir_copyin(mask,t9t,rhot,yt)
+    !__dir_copyin(mask)
 
     Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
       & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
@@ -381,10 +367,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_copyout(yet,cv,etae,detaedt9) &
-    !__dir_delete(mask,t9t,rhot,yt)
-
-    !!__dir_wait
+    !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
     timer_eos = timer_eos + stop_timer
@@ -429,9 +412,7 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(ydot,t9dot,b1,b2,b3,b4) &
-    !__dir_copyin(csect1,csect2,csect3,csect4) &
-    !__dir_copyin(mask,yt,t9t,cv,ktot)
+    !__dir_copyin(mask)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
@@ -595,12 +576,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_copyout(ydot,t9dot,b1,b2,b3,b4) &
-    !__dir_delete(csect1,csect2,csect3,csect4) &
-    !__dir_copyout(ktot) &
-    !__dir_delete(mask,yt,t9t,cv)
-
-    !!__dir_wait
+    !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer
@@ -614,7 +590,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: nname, gg, dlngdt9, partf
     Use reaction_data
-    Use xnet_conditions, Only: tt, rhot, t9t, yet, cv, etae, detaedt9
+    Use xnet_conditions, Only: tt, rhot, t9t, yet
     Use xnet_constants, Only: third, two3rd, four3rd, five3rd
     Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, &
       & zb_lo, zb_hi, lzactive
@@ -660,14 +636,8 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_copyin(yet,cv,etae,detaedt9) &
-    !__dir_create(csect1,csect2,csect3,csect4) &
-    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_create(iweak,rffn,dlnrffndt9,rnnu) &
     !__dir_create(t09,dt09,ene) &
-    !__dir_copyin(gg,dlngdt9) &
-    !__dir_copyin(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_copyin(mask,tt,rhot,t9t,ktot)
+    !__dir_copyin(mask)
 
     ! Update thermodynamic state
     Call update_eos(mask_in = mask)
@@ -1028,17 +998,8 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_copyout(yet,cv,etae,detaedt9) &
-    !__dir_copyout(csect1,csect2,csect3,csect4) &
-    !__dir_copyout(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_delete(iweak,rffn,dlnrffndt9,rnnu) &
     !__dir_delete(t09,dt09,ene) &
-    !__dir_delete(gg,dlngdt9) &
-    !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_copyout(ktot) &
-    !__dir_delete(mask,tt,rhot,t9t)
-
-    !!__dir_wait
+    !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
     timer_csect = timer_csect + stop_timer

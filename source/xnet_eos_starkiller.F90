@@ -55,6 +55,10 @@ Contains
     zibar = 0.0
     sratio = 0.0
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+
     Return
   End Subroutine eos_initialize
 
@@ -168,7 +172,6 @@ Contains
     !__dir_enter_data &
     !__dir_async &
     !__dir_create(ye,cv,etae,detaedt9) &
-    !__dir_create(ytot,abar,zbar,z2bar,zibar) &
     !__dir_copyin(mask,t9,rho,y,xext,aext,zext)
 
     ! Calculate Ye
@@ -200,10 +203,7 @@ Contains
     !__dir_exit_data &
     !__dir_async &
     !__dir_copyout(ye,cv,etae,detaedt9) &
-    !__dir_copyout(ytot,abar,zbar,z2bar,zibar) &
     !__dir_delete(mask,t9,rho,y,xext,aext,zext)
-
-    !!__dir_wait
 
     Return
   End Subroutine eos_interface_vector
@@ -285,7 +285,6 @@ Contains
     !__dir_enter_data &
     !__dir_async &
     !__dir_create(ztilde,zinter,lambda0,gammae,dztildedt9) &
-    !__dir_create(ye,ytot,abar,zbar,z2bar,zibar,sratio) &
     !__dir_copyin(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
     ! Calculate Ye
@@ -327,10 +326,7 @@ Contains
     !__dir_exit_data &
     !__dir_async &
     !__dir_copyout(ztilde,zinter,lambda0,gammae,dztildedt9) &
-    !__dir_copyout(ye,ytot,abar,zbar,z2bar,zibar,sratio) &
     !__dir_delete(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
-
-    !!__dir_wait
 
     Return
   End Subroutine eos_screen_vector
@@ -429,8 +425,6 @@ Contains
     !__dir_async &
     !__dir_copyout(ratio,dratiodeta) &
     !__dir_delete(mask,eta)
-
-    !!__dir_wait
 
     Return
   End Subroutine salpeter_ratio_vector

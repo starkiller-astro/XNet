@@ -213,7 +213,6 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(gg,dlngdt9) &
     !__dir_copyin(mask,t9)
 
     !__dir_loop_outer(1) &
@@ -284,10 +283,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_copyout(gg,dlngdt9) &
     !__dir_delete(mask,t9)
-
-    !!__dir_wait
 
     Return
   End Subroutine partf
@@ -506,8 +502,8 @@ Contains
     !__dir_async &
     !__dir_copyin(aa,zz,nn,be,mex,mm,ia,iz,in) &
     !__dir_copyin(zz2,zz53,zzi,zseq,zseq53,zseqi) &
-    !__dir_copyin(it9i,t9i,g,angm)
-    !!__dir_create(gg,dlngdt9)
+    !__dir_copyin(it9i,t9i,g,angm) &
+    !__dir_create(gg,dlngdt9)
 
     Return
   End Subroutine read_nuclear_data
@@ -939,11 +935,12 @@ Contains
     !__dir_copyin(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !__dir_copyin(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
     !__dir_copyin(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !__dir_copyin(iffn,ffnsum,ffnenu,has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
-    !__dir_copyin(innu,sigmanu,ltnu,fluxnu)
-    !!__dir_create(csect1,csect2,csect3,csect4,b1,b2,b3,b4) &
-    !!__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !!__dir_create(rffn,dlnrffndt9,rnnu)
+    !__dir_copyin(iffn,ffnsum,ffnenu) &
+    !__dir_copyin(has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
+    !__dir_copyin(innu,sigmanu,ltnu,fluxnu) &
+    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_create(rffn,dlnrffndt9,rnnu)
 
     Return
   End Subroutine read_reaction_data

@@ -23,19 +23,15 @@ Contains
     ! Integration is performed by a choice of methods controlled by the isolv flag.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname, aa, benuc
-    Use reaction_data, Only: b1, b2, b3, b4, csect1, csect2, csect3, csect4, &
-      & dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
-    Use xnet_abundances, Only: yo, y, yt, ystart, ydot, xext, aext, zext
+    Use xnet_abundances, Only: yo, y, yt, ystart, ydot, xext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
-      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, tdelstart, nstart, t9start, rhostart, yestart, &
-      & ints, intso, nh, th, t9h, rhoh, cv, etae, detaedt9
+      & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
       & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id
     Use xnet_integrate, Only: timestep
     Use xnet_integrate_be, Only: solve_be
     Use xnet_integrate_bdf, Only: solve_bdf
     Use xnet_output, Only: final_output, ts_output, write_xnet_th, write_xnet_inab
-    Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_xnet
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -82,15 +78,6 @@ Contains
     !__dir_enter_data &
     !__dir_async &
     !__dir_copyin(its,mykstep,lzsolve,lzoutput) &
-    !__dir_copyin(lzactive,t,tdel,tdelstart,tstop,nt,t9,rho,ye,y) &
-    !__dir_copyin(nh,th,t9h,rhoh) &
-    !__dir_create(kmon,ktot) &
-    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_create(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_create(to,tt,tdel_old,tdel_next,nto,ntt,ints,intso) &
-    !__dir_create(t9o,t9t,t9dot,rhoo,rhot,yeo,yet,yo,yt,ydot) &
-    !__dir_create(cv,etae,detaedt9) &
     !__dir_create(enm,enb,enold,en0,delta_en,edot)
 
     ! Calculate the total energy of the nuclei
@@ -236,22 +223,9 @@ Contains
       If ( .not. any( lzsolve ) ) Exit
     EndDo
 
-    !__dir_exit_data &
-    !__dir_async &
-    !__dir_copyout(its,mykstep,kmon,ktot) &
-    !__dir_copyout(t,tdel,t9,rho,ye,y) &
-    !__dir_delete(nh,th,t9h,rhoh) &
-    !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_delete(to,tt,tdel_old,tdel_next,nto,ntt,ints,intso) &
-    !__dir_delete(t9o,t9t,t9dot,rhoo,rhot,yeo,yet,yo,yt,ydot) &
-    !__dir_delete(cv,etae,detaedt9) &
-    !__dir_delete(lzactive,tdelstart,tstop,nt) &
-    !__dir_delete(enm,enb,enold,en0,delta_en,edot) &
-    !__dir_delete(lzsolve,lzoutput)
-
-    !__dir_wait
+    !__dir_update &
+    !__dir_wait &
+    !__dir_host(its,mykstep,t,tdel)
 
     ! Test that the stop time is reached
     Do izb = zb_lo, zb_hi
@@ -279,6 +253,13 @@ Contains
       EndIf
     EndDo
     kstep = max(1, maxval(mykstep))
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_delete(enm,enb,enold,en0,delta_en,edot) &
+    !__dir_delete(its,mykstep,lzsolve,lzoutput)
+
+    !__dir_wait
 
     Call parallel_barrier()
 

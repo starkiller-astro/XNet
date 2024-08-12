@@ -121,7 +121,8 @@ Contains
       !__dir_enter_data &
       !__dir_async &
       !__dir_copyin(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
-      !__dir_copyin(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i)
+      !__dir_copyin(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
+      !__dir_copyin(ztilde,zinter,lambda0,gammae,dztildedt9)
     EndIf
 
     Allocate (h1(nr1,nzevolve))
@@ -140,6 +141,10 @@ Contains
     dh2dt9 = 0.0
     dh3dt9 = 0.0
     dh4dt9 = 0.0
+
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
 
     Return
   End Subroutine screening_init
@@ -194,9 +199,7 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_create(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_create(ztilde,zinter,lambda0,gammae,dztildedt9) &
-    !__dir_copyin(mask,t9t,rhot,yt,etae,detaedt9)
+    !__dir_copyin(mask)
 
     ! Call EOS to get plasma quantities
     Call eos_screen(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi),etae(zb_lo:zb_hi), &
@@ -411,11 +414,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_copyout(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_delete(ztilde,zinter,lambda0,gammae,dztildedt9) &
-    !__dir_delete(mask,t9t,rhot,yt,etae,detaedt9)
-
-    !!__dir_wait
+    !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
     timer_scrn = timer_scrn + stop_timer

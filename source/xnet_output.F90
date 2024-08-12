@@ -156,6 +156,9 @@ Contains
 
     ! Write final abundances to diagnostic output (in ASCII)
     If ( idiag >= 0 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(t,t9,rho,ye,y)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -171,6 +174,9 @@ Contains
 
     ! Write performance counters and timers to diagnostic output (or to stdout if idiag = -1)
     If ( idiag >= 0 .or. ( idiag >= -1 .and. parallel_IOProcessor() ) ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(ktot)
       Write(lun_diag,"(a10,a5,5a10)") 'Counters: ','Zone','TS','NR','Jacobian','Deriv','CrossSect'
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then

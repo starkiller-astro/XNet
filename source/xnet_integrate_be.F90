@@ -51,12 +51,7 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_copyin(t,to,tt,tdel,tdel_next,tdelstart,nto,nt,ntt) &
-    !__dir_copyin(t9o,t9,t9t,rhoo,rho,rhot,yo,y,yt) &
-    !__dir_copyin(yeo,ye,yet) &
-    !__dir_copyin(kmon,ktot) &
-    !__dir_create(inr,mykts,lzstep) &
-    !__dir_copyin(its)
+    !__dir_create(inr,mykts,lzstep)
 
     ! If the zone has previously converged or failed, do not iterate
     !__dir_loop_outer(1) &
@@ -189,6 +184,7 @@ Contains
           rho(izb) = rhot(izb)
           yeo(izb) = ye(izb)
           ye(izb) = yet(izb)
+          !__dir_loop_inner(1)
           Do k = 1, ny
             yo(k,izb) = y(k,izb)
             y(k,izb) = yt(k,izb)
@@ -203,13 +199,19 @@ Contains
     If ( idiag >= 0 ) Then
       !__dir_update &
       !__dir_wait &
-      !__dir_host(inr,mykts,t,tdel,t9t,rhot)
+      !__dir_host(inr)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
+          !__dir_update &
+          !__dir_wait &
+          !__dir_host(mykts(izb))
           Write(lun_diag,"(a,2i5,2i3)") &
             & 'BE TS Success',kstep,izone,mykts(izb),inr(izb)
         ElseIf ( inr(izb) == 0 ) Then
+          !__dir_update &
+          !__dir_wait &
+          !__dir_host(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
           Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
             & 'BE TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),inr(izb),mykts(izb)
           Write(lun_stdout,*) 'Timestep retrys fail after ',mykts(izb),' attempts'
@@ -219,14 +221,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_copyout(t,to,tt,tdel,tdel_next,tdelstart,nto,nt,ntt) &
-    !__dir_copyout(t9o,t9,t9t,rhoo,rho,rhot,yo,y,yt) &
-    !__dir_copyout(yeo,ye,yet) &
-    !__dir_copyout(kmon,ktot) &
-    !__dir_delete(inr,mykts,lzstep) &
-    !__dir_copyout(its)
-
-    !__dir_wait
+    !__dir_delete(inr,mykts,lzstep)
 
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer

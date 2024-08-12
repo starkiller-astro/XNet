@@ -256,8 +256,7 @@ Contains
 
     !__dir_enter_data &
     !__dir_async &
-    !__dir_copyin(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyin(mask,yt,cv,ktot)
+    !__dir_copyin(mask)
 
     ! Build the Jacobian
     !__dir_loop_outer(2) &
@@ -266,8 +265,7 @@ Contains
     !__dir_present(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
     !__dir_present(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
     !__dir_present(mu1,mu2,mu3,mu4,a1,a2,a3,a4) &
-    !__dir_present(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_present(mask,yt,cv)
+    !__dir_present(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
     Do izb = zb_lo, zb_hi
       Do i0 = 1, ny
         If ( mask(izb) ) Then
@@ -397,9 +395,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async &
-    !__dir_delete(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyout(ktot) &
-    !__dir_delete(mask,yt,cv)
+    !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
@@ -414,7 +410,6 @@ Contains
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
-    Use xnet_gpu, Only: stream, stream_sync
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
     Implicit None
@@ -514,8 +509,6 @@ Contains
     !__dir_copyout(dy,dt9) &
     !__dir_delete(mask,yrhs,t9rhs)
 
-    !!__dir_wait
-
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
 
@@ -527,7 +520,6 @@ Contains
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
-    Use xnet_gpu, Only: stream, stream_sync
     Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -580,8 +572,6 @@ Contains
       EndDo
     EndIf
 
-    !!__dir_wait
-
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
     timer_decmp = timer_decmp + stop_timer
@@ -596,7 +586,6 @@ Contains
     Use nuclear_data, Only: ny
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
-    Use xnet_gpu, Only: stream, stream_sync
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
     Implicit None
@@ -697,8 +686,6 @@ Contains
     !__dir_async &
     !__dir_copyout(dy,dt9) &
     !__dir_delete(mask,yrhs,t9rhs)
-
-    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
