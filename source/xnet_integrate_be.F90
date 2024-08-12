@@ -197,7 +197,7 @@ Contains
     Use reaction_data, Only: b1, b2, b3, b4, csect1, csect2, csect3, csect4, &
       & dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: y, ydot, yt, xext
-    Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, yet, tdel, nh
+    Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, yet, tdel, tt, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
       & szbatch, zb_lo, zb_hi
     Use xnet_integrate, Only: cross_sect, yderiv
@@ -232,8 +232,8 @@ Contains
     !__dir_async &
     !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
     !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyin(y,t9,tdel) &
-    !__dir_copyin(yt,ydot,t9t,t9dot,inr)
+    !__dir_copyin(y,t9,tdel,tt,rhot) &
+    !__dir_copyin(yt,ydot,t9t,t9dot,yet,cv,inr)
 
     !__dir_enter_data &
     !__dir_async &
@@ -479,8 +479,8 @@ Contains
     !__dir_async &
     !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
     !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_delete(y,t9,tdel) &
-    !__dir_copyout(yt,ydot,t9t,t9dot,inr)
+    !__dir_delete(y,t9,tdel,rhot) &
+    !__dir_copyout(yt,ydot,t9t,t9dot,yet,cv,inr)
 
     !__dir_wait
 

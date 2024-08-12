@@ -203,7 +203,7 @@ Contains
     !__dir_copyout(ytot,abar,zbar,z2bar,zibar) &
     !__dir_delete(mask,t9,rho,y,xext,aext,zext)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine eos_interface_vector
@@ -330,7 +330,7 @@ Contains
     !__dir_copyout(ye,ytot,abar,zbar,z2bar,zibar,sratio) &
     !__dir_delete(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine eos_screen_vector
@@ -430,7 +430,7 @@ Contains
     !__dir_copyout(ratio,dratiodeta) &
     !__dir_delete(mask,eta)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine salpeter_ratio_vector

@@ -66,6 +66,7 @@ Contains
     EndDo
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
+    !__dir_wait
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -288,7 +289,7 @@ Contains
     !__dir_copyout(iweak) &
     !__dir_delete(mask,t9)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine update_iweak
@@ -336,7 +337,7 @@ Contains
     !__dir_copyout(yet,cv,etae,detaedt9) &
     !__dir_delete(mask,t9t,rhot,yt)
 
-    !__dir_wait
+    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_eos = timer_eos + stop_timer
@@ -543,11 +544,12 @@ Contains
     EndIf
 
     !__dir_exit_data &
+    !__dir_async &
     !__dir_copyout(ydot,t9dot,b1,b2,b3,b4) &
     !__dir_delete(csect1,csect2,csect3,csect4) &
     !__dir_delete(mask,yt,t9t,cv)
 
-    !__dir_wait
+    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer
@@ -921,7 +923,6 @@ Contains
         EndDo
       EndIf
     EndDo
-    !__dir_wait
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -988,7 +989,7 @@ Contains
     !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
     !__dir_delete(mask,tt,rhot,t9t)
 
-    !__dir_wait
+    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_csect = timer_csect + stop_timer

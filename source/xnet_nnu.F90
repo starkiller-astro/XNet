@@ -318,7 +318,7 @@ Contains
     !__dir_copyout(rate) &
     !__dir_delete(mask,time)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine nnu_rate

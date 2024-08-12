@@ -209,7 +209,7 @@ Contains
     !__dir_copyout(gg,dlngdt9) &
     !__dir_delete(mask,t9)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine partf

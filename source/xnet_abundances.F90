@@ -184,7 +184,7 @@ Contains
     !__dir_copyout(ye,ytot,abar,zbar,z2bar,zibar) &
     !__dir_delete(mask,y,xext,aext,zext)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine y_moment_vector

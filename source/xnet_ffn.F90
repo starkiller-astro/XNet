@@ -309,7 +309,7 @@ Contains
     !__dir_delete(lt1) &
     !__dir_delete(mask,t9,ene,etae)
 
-    !__dir_wait
+    !!__dir_wait
 
     Return
   End Subroutine ffn_rate

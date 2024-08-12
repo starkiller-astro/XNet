@@ -415,7 +415,7 @@ Contains
     !__dir_delete(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !__dir_delete(mask,t9t,rhot,yt,etae,detaedt9)
 
-    !__dir_wait
+    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_scrn = timer_scrn + stop_timer

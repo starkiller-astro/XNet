@@ -513,7 +513,7 @@ Contains
     !__dir_copyout(dy,dt9) &
     !__dir_delete(mask,yrhs,t9rhs)
 
-    !__dir_wait
+    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -579,7 +579,7 @@ Contains
       EndDo
     EndIf
 
-    !__dir_wait
+    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -697,7 +697,7 @@ Contains
     !__dir_copyout(dy,dt9) &
     !__dir_delete(mask,yrhs,t9rhs)
 
-    !__dir_wait
+    !!__dir_wait
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
