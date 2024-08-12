@@ -469,8 +469,8 @@ Contains
       Write(lun_out,"(a)") trim(adjustl(data_dir))
       Write(lun_out,"(a)") '# Initial Abundance and Thermodynamic Trajectory Files'
       Do izone = 1, nzone
-        Write(lun_out,"(a)") thermo_file(izone)
         Write(lun_out,"(a)") inab_file(izone)
+        Write(lun_out,"(a)") thermo_file(izone)
       EndDo
 
     EndIf
