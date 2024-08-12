@@ -106,6 +106,7 @@ Contains
       ! Reset temperature and density for failed integrations
       Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
         & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
+      !__dir_wait
       If ( iheat > 0 ) Then
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
@@ -124,6 +125,7 @@ Contains
           EndIf
         EndDo
         Call timestep(kstep,mask_in = lzstep)
+        !__dir_wait
       EndIf
 
       ! Log the failed integration attempts
@@ -479,7 +481,7 @@ Contains
     !__dir_async &
     !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
     !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_delete(y,t9,tdel,rhot) &
+    !__dir_delete(y,t9,tdel,tt,rhot) &
     !__dir_copyout(yt,ydot,t9t,t9dot,yet,cv,inr)
 
     !__dir_wait

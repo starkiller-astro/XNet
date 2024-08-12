@@ -4,6 +4,8 @@
 ! matter undergoing nucleosynthesis.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_conditions
   !-------------------------------------------------------------------------------------------------
   ! This module contains data on the current time and thermodynamic conditions.
@@ -52,6 +54,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
     Use xnet_types, Only: dp
+    !__dir_routine_seq
     Implicit None
 
     ! Input variables
@@ -130,12 +133,24 @@ Contains
     End If
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_copyin(mask,tf,nf,t9f,rhof,nh,th,t9h,rhoh)
+
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Call t9rhofind_scalar(kstep,tf(izb),nf(izb),t9f(izb),rhof(izb), &
           & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
       EndIf
     EndDo
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_copyout(nf,t9f,rhof) &
+    !__dir_delete(mask,tf,nh,th,t9h,rhoh)
 
     Return
   End Subroutine t9rhofind_vector

@@ -24,7 +24,8 @@ Contains
     Use nuclear_data, Only: ny, nname
     Use xnet_abundances, Only: y, yo, yt, ydot
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
-      & rhot, t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
+      & rhot, t9dot, cv, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind, &
+      & etae, detaedt9
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
       & ymin, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
@@ -55,7 +56,18 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
+    !__dir_copyin(t,tt,tdel,tdel_next,tdel_old,tstop,tdelstart,nt,ntt,ints,intso) &
+    !__dir_copyin(nh,th,t9h,rhoh) &
+    !__dir_copyin(y,yo,yt,ydot,t9,t9o,t9t,t9dot,rho,rhot,cv,etae,detaedt9) &
+    !__dir_copyin(mask)
+
     ! Retain old values of timestep and thermo and calculate remaining time
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,mask_init,tdel,tdel_old)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel_old(izb) = tdel(izb)
@@ -64,10 +76,17 @@ Contains
         mask_init(izb) = .false.
       EndIf
     EndDo
+    !__dir_update &
+    !__dir_wait &
+    !__dir_host(mask_init)
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
-    !__dir_wait
 
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,mask_init,t,tt,tstop,y,yo,ydot,t9,t9o,t9dot,ints,intso,nh) &
+    !__dir_present(tdel,tdel_next,tdel_old,tdelstart,tdel_stop,tdel_dy,tdel_dt9) &
+    !__dir_private(tdel_init,rtau_y,rtau_t9,changey,changet9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel_stop(izb) = tstop(izb) - t(izb)
@@ -100,7 +119,10 @@ Contains
 
         ! Estimate timestep from relevant timescales
         If ( tdel_old(izb) >= 0.0 ) Then
+
           ! Calculate timescales for abundance changes, Y/(dY/dt)
+          !__dir_loop_inner(1) &
+          !__dir_private(yfloor)
           Do k = 1, ny
             If ( y(k,izb) > ymin ) Then
               yfloor = max(y(k,izb),yacc)
@@ -157,6 +179,10 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(tdel,tdel_old,tdel_stop,tdel_next,tdel_dy,tdel_dt9) &
+      !__dir_host(ints,intso,y,t)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -169,6 +195,9 @@ Contains
           If ( ints(izb) /= intso(izb) ) Then
             Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
             intso(izb) = ints(izb)
+            !__dir_update &
+            !__dir_async &
+            !__dir_device(intso(izb))
           EndIf
         EndIf
       EndDo
@@ -179,11 +208,15 @@ Contains
 
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) .and. nh(izb) > 1 ) Then
           Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
             & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
           If ( ntt(izb)-1 > nt(izb) ) Then
+            !__dir_loop_serial(1)
             Do j = nt(izb), ntt(izb)-1
               If ( t9h(j,izb) > t9(izb) .and. t9h(j,izb) > t9t(izb) ) Then
                 tdel(izb) = th(j,izb) - t(izb)
@@ -205,6 +238,7 @@ Contains
           ! Limit timestep if fractional density change is larger than changeth (10% by default)
           ! or fraction temperature change is larger than 0.1*changeth (1% by default)
           dtherm(izb) = 0.0
+          !__dir_loop_serial(1)
           Do i = 1, 10
             Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
               & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
@@ -221,6 +255,9 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 2 ) Then
+        !__dir_update &
+        !__dir_wait &
+        !__dir_host(dtherm,tdel,t9t,rhot)
         Do izb = zb_lo, zb_hi
           If ( mask(izb) .and. nh(izb) > 1 ) Then
             izone = izb + szbatch - zb_lo
@@ -234,6 +271,16 @@ Contains
         EndDo
       EndIf
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_delete(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
+    !__dir_delete(t,tstop,tdelstart) &
+    !__dir_delete(nh,th,t9h,rhoh) &
+    !__dir_delete(y,yo,yt,t9,t9o,rho,nt) &
+    !__dir_delete(mask) &
+    !__dir_copyout(tt,tdel,tdel_next,tdel_old) &
+    !__dir_copyout(ydot,t9t,t9dot,rhot,cv,etae,detaedt9,ntt,ints,intso)
 
     Return
   End Subroutine timestep

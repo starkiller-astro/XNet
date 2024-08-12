@@ -5,6 +5,8 @@
 ! with "batching", but for large numbers of trajectories still need to be managed externally.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_evolve
   !-------------------------------------------------------------------------------------------------
   ! This module contains the data and routines to perform the evolution of the reaction network
@@ -134,6 +136,7 @@ Contains
 
       ! Calculate an initial guess for the timestep
       Call timestep(kstep,mask_in = lzsolve)
+      !__dir_wait
 
       ! Take integration step (only worry about solve_be for now)
       Select Case (isolv)
