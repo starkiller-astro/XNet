@@ -42,6 +42,9 @@ Module xnet_jacobian
   Real(dp), Allocatable, Target :: diag0(:)
   Real(dp), Allocatable, Target :: mult1(:)
 
+  Real(dp), Parameter :: pivot_thresh = 1.0e+16
+  Logical, Allocatable :: pivot(:)
+
 Contains
 
   Subroutine read_jacobian_data(data_dir)
@@ -68,8 +71,10 @@ Contains
 
     Allocate (diag0(nzevolve))
     Allocate (mult1(nzevolve))
+    Allocate (pivot(nzevolve))
     diag0 = 0.0
     mult1 = 1.0
+    pivot = .false.
 
     Allocate (dydotdy(msize,msize,nzevolve))
     Allocate (jac(msize,msize,nzevolve))
@@ -84,7 +89,7 @@ Contains
 
     !__dir_enter_data &
     !__dir_async(tid) &
-    !__dir_copyin(dydotdy,jac,rhs,indx,info,diag0,mult1)
+    !__dir_copyin(dydotdy,jac,rhs,indx,info,diag0,mult1,pivot)
 
     Allocate (hjac(nzevolve))
     Allocate (hrhs(nzevolve))
@@ -117,9 +122,9 @@ Contains
 
     !__dir_exit_data &
     !__dir_async(tid) &
-    !__dir_delete(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
+    !__dir_delete(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
 
-    Deallocate (diag0,mult1)
+    Deallocate (diag0,mult1,pivot)
     Deallocate (dydotdy,jac,rhs,indx,info)
     Deallocate (hjac,hrhs,hindx)
     Deallocate (djac,drhs,dindx)
@@ -173,21 +178,55 @@ Contains
 
     !__dir_loop_outer(2) &
     !__dir_async(tid) &
-    !__dir_present(jac,dydotdy) &
-    !__dir_present(mask,diag,mult)
+    !__dir_present(jac,dydotdy,pivot) &
+    !__dir_present(mask,diag,mult) &
+    !__dir_private(rsum)
     Do izb = zb_lo, zb_hi
       Do j1 = 1, msize
         If ( mask(izb) ) Then
-          !__dir_loop_inner(1)
+          rsum = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_reduction(+,rsum)
           Do i0 = 1, msize
             jac(i0,j1,izb) = mult(izb) * dydotdy(j1,i0,izb)
             If ( i0 == j1 ) Then
               jac(i0,j1,izb) = jac(i0,j1,izb) + diag(izb)
+            Else
+              rsum = rsum + abs(jac(i0,j1,izb))
             EndIf
           EndDo
+          pivot(izb) = ( rsum*pivot_thresh > abs(jac(j1,j1,izb)) )
         EndIf
       EndDo
     EndDo
+    !__dir_update &
+    !__dir_async(tid) &
+    !__dir_host(pivot)
+
+    If ( idiag >= 3 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(pivot,jac)
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          If ( pivot(izb) ) Then
+            Do j = 1, msize
+              rsum = 0.0
+              Do i = 1, msize
+                If ( i /= j ) Then
+                  rsum = rsum + abs(jac(j,j,izb))
+                EndIf
+              EndDo
+              i = maxloc(abs(jac(:,j,izb)),dim=1)
+              If ( i /= j ) Then
+                Write(lun_diag,"(a,2i5,3es24.16)") 'JAC_DIAG',i,j,jac(j,j,izb),jac(i,j,izb),rsum
+              EndIf
+            EndDo
+          EndIf
+        EndIf
+      EndDo
+    EndIf
 
     If ( idiag >= 5 ) Then
       !__dir_update &
@@ -430,6 +469,7 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izone, istat
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -467,9 +507,10 @@ Contains
 
     ! Solve the linear system
 #if defined(XNET_GPU)
+    any_pivot = any(pivot(zb_lo:zb_hi))
     call LinearSolveBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
+      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -534,6 +575,7 @@ Contains
 
     ! Local variables
     Integer :: i, j, izb, izone, istat
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -549,9 +591,11 @@ Contains
 
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
+    any_pivot = any(pivot(zb_lo:zb_hi))
+    Write(lun_diag,*) '  pivot=',any_pivot
     call LUDecompBatched_GPU &
       & ( msize, msize, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), info(zb_lo), nzbatch )
+      &   dindx(zb_lo), info(zb_lo), nzbatch, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -606,6 +650,7 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izone
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -645,9 +690,10 @@ Contains
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
     ! TODO: pack djac pointers into djacp array with only non-converged points
+    any_pivot = any(pivot(zb_lo:zb_hi))
     call LUBksubBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
+      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then

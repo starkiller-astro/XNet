@@ -1775,7 +1775,7 @@ Contains
   End Subroutine LinearSolveBatched_CPU
 
 
-  Subroutine LinearSolveBatched_GPU( trans, n, nrhs, a, da, lda, ipiv, dipiv, b, db, ldb, info, batchcount )
+  Subroutine LinearSolveBatched_GPU( trans, n, nrhs, a, da, lda, ipiv, dipiv, b, db, ldb, info, batchcount, pivot )
 
     Character                          :: trans
     Integer                            :: n, nrhs, lda, ldb, batchcount
@@ -1784,11 +1784,12 @@ Contains
     Integer,  Dimension(*),     Target :: ipiv
     Integer,  Dimension(*),     Target :: info
     Type(C_PTR), Dimension(*),  Target :: da, dipiv, db
+    Logical, Optional                  :: pivot
 
     Call LUDecompBatched_GPU &
-      & ( n, n, a, da(1), lda, ipiv, dipiv(1), info, batchcount )
+      & ( n, n, a, da(1), lda, ipiv, dipiv(1), info, batchcount, pivot )
     Call LUBksubBatched_GPU &
-      & ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
+      & ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount, pivot )
 
   End Subroutine LinearSolveBatched_GPU
 
@@ -1812,18 +1813,27 @@ Contains
   End Subroutine LUDecompBatched_CPU
 
 
-  Subroutine LUDecompBatched_GPU( m, n, a, da, lda, ipiv, dipiv, info, batchcount )
+  Subroutine LUDecompBatched_GPU( m, n, a, da, lda, ipiv, dipiv, info, batchcount, pivot )
 
     Integer                            :: m, n, lda, batchcount
     Real(dp), Dimension(lda,*), Target :: a
     Integer,  Dimension(*),     Target :: ipiv
     Integer,  Dimension(*),     Target :: info
     Type(C_PTR), Dimension(*),  Target :: da, dipiv
+    Logical, Optional                  :: pivot
 
     Integer                         :: ierr, i, stridea, strideipiv
     Integer(C_INT64_T)              :: strideP_64
     Integer,  Dimension(:), Pointer :: pinfo
     Type(C_PTR)                     :: da_array, dipiv_array, dinfo
+    Logical                         :: lpiv
+    Type(C_PTR)                     :: dipiv0
+
+    If ( present(pivot) ) Then
+      lpiv = pivot
+    Else
+      lpiv = .true.
+    EndIf
 
     stridea    = n * n
     strideipiv = n
@@ -1835,8 +1845,14 @@ Contains
     dinfo = dev_ptr( pinfo(1) )
 
 #if defined(XNET_LA_CUBLAS)
-    ierr = cublasDgetrfBatched &
-           ( cublas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount )
+    If ( lpiv ) Then
+      ierr = cublasDgetrfBatched &
+             ( cublas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount )
+    Else
+      dipiv0 = C_NULL_PTR
+      ierr = cublasDgetrfBatched &
+             ( cublas_handle, n, da_array, lda, dipiv0, dinfo, batchcount )
+    EndIf
 #elif defined(XNET_LA_ROCM)
     !strideP_64 = n
     !Call rocsolverCheck( rocsolver_dgetrf_batched &
@@ -1878,7 +1894,7 @@ Contains
   End Subroutine LUBksubBatched_CPU
 
 
-  Subroutine LUBksubBatched_GPU( trans, n, nrhs, a, da, lda, ipiv, dipiv, b, db, ldb, info, batchcount )
+  Subroutine LUBksubBatched_GPU( trans, n, nrhs, a, da, lda, ipiv, dipiv, b, db, ldb, info, batchcount, pivot )
 
     Character                          :: trans
     Integer                            :: n, nrhs, lda, ldb, batchcount
@@ -1887,6 +1903,7 @@ Contains
     Integer,  Dimension(*),     Target :: ipiv
     Integer,  Dimension(*),     Target :: info
     Type(C_PTR), Dimension(*),  Target :: da, dipiv, db
+    Logical, Optional                  :: pivot
 
     Integer                         :: ierr, i, stridea, strideb, strideipiv
     Integer(C_INT)                  :: itrans
@@ -1894,6 +1911,14 @@ Contains
     Integer,  Dimension(:), Pointer :: pinfo
     Type(C_PTR)                     :: hinfo
     Type(C_PTR)                     :: da_array, db_array, dipiv_array, dinfo
+    Type(C_PTR)                     :: dipiv0
+    Logical                         :: lpiv
+
+    If ( present(pivot) ) Then
+      lpiv = pivot
+    Else
+      lpiv = .true.
+    EndIf
 
     stridea    = n * n
     strideb    = n * nrhs
@@ -1911,8 +1936,14 @@ Contains
     itrans = itrans_from_char( trans )
 
 #if defined(XNET_LA_CUBLAS)
-    ierr = cublasDgetrsBatched &
-           ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount )
+    If ( lpiv ) Then
+      ierr = cublasDgetrsBatched &
+             ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount )
+    Else
+      dipiv0 = C_NULL_PTR
+      ierr = cublasDgetrsBatched &
+             ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv0, db_array, ldb, hinfo, batchcount )
+    EndIf
 #elif defined(XNET_LA_ROCM)
     !strideP_64 = n
     !Call rocsolverCheck( rocsolver_dgetrs_batched &
