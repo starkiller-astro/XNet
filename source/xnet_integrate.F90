@@ -431,7 +431,7 @@ Contains
     !__dir_async &
     !__dir_create(ydot,t9dot,b1,b2,b3,b4) &
     !__dir_copyin(csect1,csect2,csect3,csect4) &
-    !__dir_copyin(mask,yt,t9t,cv)
+    !__dir_copyin(mask,yt,t9t,cv,ktot)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
@@ -520,6 +520,9 @@ Contains
       EndDo
     EndIf
 
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ktot(4,izb) = ktot(4,izb) + 1
@@ -594,6 +597,7 @@ Contains
     !__dir_async &
     !__dir_copyout(ydot,t9dot,b1,b2,b3,b4) &
     !__dir_delete(csect1,csect2,csect3,csect4) &
+    !__dir_copyout(ktot) &
     !__dir_delete(mask,yt,t9t,cv)
 
     !!__dir_wait
@@ -663,7 +667,7 @@ Contains
     !__dir_create(t09,dt09,ene) &
     !__dir_copyin(gg,dlngdt9) &
     !__dir_copyin(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_copyin(mask,tt,rhot,t9t)
+    !__dir_copyin(mask,tt,rhot,t9t,ktot)
 
     ! Update thermodynamic state
     Call update_eos(mask_in = mask)
@@ -816,7 +820,7 @@ Contains
     !__dir_present(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
     !__dir_present(csect1,csect2,csect3,csect4) &
     !__dir_present(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_present(mask,rhot,ene,gg,dlngdt9,iweak,iffn,rffn,dlnrffndt9,innu,rnnu)
+    !__dir_present(mask,rhot,ene,gg,dlngdt9,iweak,iffn,rffn,dlnrffndt9,innu,rnnu,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
@@ -968,11 +972,8 @@ Contains
             If ( iheat > 0 ) dcsect4dt9(k,izb) = csect4(k,izb)*(dh4dt9(k,izb)+dlnrpf4dt9)
           EndIf
         EndDo
-      EndIf
-    EndDo
 
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
+        ! Increment counter
         ktot(5,izb) = ktot(5,izb) + 1
       EndIf
     EndDo
@@ -1034,6 +1035,7 @@ Contains
     !__dir_delete(t09,dt09,ene) &
     !__dir_delete(gg,dlngdt9) &
     !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_copyout(ktot) &
     !__dir_delete(mask,tt,rhot,t9t)
 
     !!__dir_wait

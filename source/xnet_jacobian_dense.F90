@@ -257,7 +257,7 @@ Contains
     !__dir_enter_data &
     !__dir_async &
     !__dir_copyin(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyin(mask,yt,cv)
+    !__dir_copyin(mask,yt,cv,ktot)
 
     ! Build the Jacobian
     !__dir_loop_outer(2) &
@@ -359,9 +359,9 @@ Contains
       EndDo
     EndIf
 
-    !!__dir_loop_outer &
-    !!__dir_async &
-    !!__dir_present(mask,ktot)
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ktot(3,izb) = ktot(3,izb) + 1
@@ -398,6 +398,7 @@ Contains
     !__dir_exit_data &
     !__dir_async &
     !__dir_delete(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_copyout(ktot) &
     !__dir_delete(mask,yt,cv)
 
     stop_timer = xnet_wtime()

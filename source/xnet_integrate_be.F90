@@ -23,12 +23,15 @@ Contains
     ! derivative of the trial abundance calculated from reaction rates and tdel is the timestep.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_abundances, Only: y, yo, yt
-    Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
-      & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
+    Use reaction_data, Only: b1, b2, b3, b4, csect1, csect2, csect3, csect4, &
+      & dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
+    Use xnet_abundances, Only: y, yo, yt, ydot
+    Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, t9dot, rho, rhoo, &
+      & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind, cv, etae, detaedt9
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
       & szbatch, zb_lo, zb_hi
     Use xnet_integrate, Only: timestep
+    Use xnet_screening, Only: h1, h2, h3, h4, dh1dt9, dh2dt9, dh3dt9, dh4dt9
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
 
@@ -49,7 +52,22 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
+    !__dir_enter_data &
+    !__dir_async &
+    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_create(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_copyin(t,to,tt,tdel,tdel_next,tdelstart,nto,nt,ntt) &
+    !__dir_copyin(t9o,t9,t9t,t9dot,rhoo,rho,rhot,yo,y,yt,ydot) &
+    !__dir_copyin(yeo,ye,yet,cv,etae,detaedt9) &
+    !__dir_copyin(kmon,ktot) &
+    !__dir_create(inr,mykts,lzstep) &
+    !__dir_copyin(its)
+
     ! If the zone has previously converged or failed, do not iterate
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(its,inr,lzstep,mykts)
     Do izb = zb_lo, zb_hi
       If ( its(izb) /= 0 ) Then
         inr(izb) = -1
@@ -71,6 +89,9 @@ Contains
       ! Attempt Backward Euler integration over desired timestep
       Call step_be(kstep,inr)
 
+      !__dir_loop_outer(1) &
+      !__dir_async &
+      !__dir_present(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot)
       Do izb = zb_lo, zb_hi
 
         ! If integration fails, reset abundances, reduce timestep and retry.
@@ -80,6 +101,7 @@ Contains
           yet(izb) = ye(izb)
           mykts(izb) = kts+1
 
+          !__dir_loop_inner(1)
           Do k = 1, ny
             yt(k,izb) = y(k,izb)
           EndDo
@@ -102,12 +124,17 @@ Contains
         EndIf
         lzstep(izb) = ( inr(izb) == 0 )
       EndDo
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(lzstep)
 
       ! Reset temperature and density for failed integrations
       Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
         & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
-      !__dir_wait
       If ( iheat > 0 ) Then
+        !__dir_loop_outer(1) &
+        !__dir_async &
+        !__dir_present(lzstep,t9t,t9)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
             t9t(izb) = t9(izb)
@@ -118,6 +145,9 @@ Contains
       ! For the last attempt, re-calculate timestep based on derivatives
       ! as is done for the first timestep.
       If ( kts == ktsmx-1 ) Then
+        !__dir_loop_outer(1) &
+        !__dir_async &
+        !__dir_present(lzstep,tdel,tdelstart)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
             tdel(izb) = 0.0
@@ -125,11 +155,13 @@ Contains
           EndIf
         EndDo
         Call timestep(kstep,mask_in = lzstep)
-        !__dir_wait
       EndIf
 
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
+        !__dir_update &
+        !__dir_wait &
+        !__dir_host(inr,tt,tdel)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
             izone = izb + szbatch - zb_lo
@@ -143,6 +175,10 @@ Contains
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
+    !__dir_loop_outer(1) &
+    !__dir_async &
+    !__dir_present(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
+    !__dir_present(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
     Do izb = zb_lo, zb_hi
       If ( inr(izb) >= 0 ) Then
         kmon(1,izb) = mykts(izb)
@@ -171,6 +207,9 @@ Contains
 
     ! Log TS success/failure
     If ( idiag >= 0 ) Then
+      !__dir_update &
+      !__dir_wait &
+      !__dir_host(inr,mykts,t,tdel,t9t,rhot)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
@@ -184,6 +223,20 @@ Contains
       EndDo
     EndIf
 
+    !__dir_exit_data &
+    !__dir_async &
+    !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_delete(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !__dir_copyout(t,to,tt,tdel,tdel_next,tdelstart,nto,nt,ntt) &
+    !__dir_copyout(t9o,t9,t9t,t9dot,rhoo,rho,rhot,yo,y,yt,ydot) &
+    !__dir_copyout(yeo,ye,yet,cv,etae,detaedt9) &
+    !__dir_copyout(kmon,ktot) &
+    !__dir_delete(inr,mykts,lzstep) &
+    !__dir_copyout(its)
+
+    !__dir_wait
+
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer
 
@@ -196,10 +249,8 @@ Contains
     ! If successful, inr = 1
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, nname
-    Use reaction_data, Only: b1, b2, b3, b4, csect1, csect2, csect3, csect4, &
-      & dcsect1dt9, dcsect2dt9, dcsect3dt9, dcsect4dt9
     Use xnet_abundances, Only: y, ydot, yt, xext
-    Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, yet, tdel, tt, nh
+    Use xnet_conditions, Only: t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
       & szbatch, zb_lo, zb_hi
     Use xnet_integrate, Only: cross_sect, yderiv
@@ -229,13 +280,6 @@ Contains
 
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
-
-    !__dir_enter_data &
-    !__dir_async &
-    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_copyin(y,t9,tdel,tt,rhot) &
-    !__dir_copyin(yt,ydot,t9t,t9dot,yet,cv,inr)
 
     !__dir_enter_data &
     !__dir_async &
@@ -476,15 +520,6 @@ Contains
     !__dir_async &
     !__dir_delete(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
     !__dir_delete(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
-
-    !__dir_exit_data &
-    !__dir_async &
-    !__dir_delete(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !__dir_delete(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_delete(y,t9,tdel,tt,rhot) &
-    !__dir_copyout(yt,ydot,t9t,t9dot,yet,cv,inr)
-
-    !__dir_wait
 
     stop_timer = xnet_wtime()
     timer_nraph = timer_nraph + stop_timer
