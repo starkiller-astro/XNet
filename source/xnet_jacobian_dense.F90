@@ -11,6 +11,10 @@
 
 #include "xnet_macros.fh"
 
+#if !defined(USE_NOPIVOT)
+#define USE_NOPIVOT 0
+#endif
+
 Module xnet_jacobian
   !-------------------------------------------------------------------------------------------------
   ! The Jacobian matrix for the solver.
@@ -42,7 +46,7 @@ Module xnet_jacobian
   Real(dp), Allocatable, Target :: diag0(:)
   Real(dp), Allocatable, Target :: mult1(:)
 
-  Real(dp), Parameter :: pivot_thresh = 1.0e+16
+  Real(dp), Parameter :: pivot_thresh = 1.0e-4
   Logical, Allocatable :: pivot(:)
 
 Contains
@@ -507,7 +511,11 @@ Contains
 
     ! Solve the linear system
 #if defined(XNET_GPU)
+#if defined(USE_NOPIVOT)
     any_pivot = any(pivot(zb_lo:zb_hi))
+#else
+    any_pivot = .true.
+#endif
     call LinearSolveBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
       &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
@@ -591,7 +599,11 @@ Contains
 
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
+#if defined(USE_NOPIVOT)
     any_pivot = any(pivot(zb_lo:zb_hi))
+#else
+    any_pivot = .true.
+#endif
     Write(lun_diag,*) '  pivot=',any_pivot
     call LUDecompBatched_GPU &
       & ( msize, msize, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
@@ -690,7 +702,11 @@ Contains
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
     ! TODO: pack djac pointers into djacp array with only non-converged points
+#if defined(USE_NOPIVOT)
     any_pivot = any(pivot(zb_lo:zb_hi))
+#else
+    any_pivot = .true.
+#endif
     call LUBksubBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
       &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
