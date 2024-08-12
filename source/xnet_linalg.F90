@@ -12,6 +12,7 @@ Module xnet_linalg
   Use, Intrinsic :: iso_c_binding
   Use xnet_types, Only: dp
   Use xnet_constants, Only: pi
+  Use xnet_controls, Only: tid
   Use xnet_gpu, Only: &
     mydevice, &
     device_is_present, &
@@ -1721,7 +1722,7 @@ Contains
         dipiv(i) = dev_ptr( pipiv(osa) )
       End Do
       !__dir_enter_data &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_copyin(da,db,dipiv)
 
       Call LinearSolveBatched_GPU &
@@ -1731,7 +1732,7 @@ Contains
 #endif
 
       !__dir_exit_data &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_delete(da,db,dipiv)
 
     Else

@@ -33,7 +33,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine initializes starkiller
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzevolve
+    Use xnet_controls, Only: nzevolve, tid
 
     Use actual_eos_module, Only: actual_eos_init
     Implicit None
@@ -56,7 +56,7 @@ Contains
     sratio = 0.0
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(ye,ytot,abar,zbar,z2bar,zibar,sratio)
 
     Return
@@ -143,7 +143,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -170,7 +170,7 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(ye,cv,etae,detaedt9) &
     !__dir_copyin(mask,t9,rho,y,xext,aext,zext)
 
@@ -181,7 +181,7 @@ Contains
 
     ! Call the eos
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,t9,rho,ye,abar,zbar,cv,etae,detaedt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -191,7 +191,7 @@ Contains
 
     If ( idiag >= 3 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(t9,rho,ye,cv,etae,detaedt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -201,7 +201,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(ye,cv,etae,detaedt9) &
     !__dir_delete(mask,t9,rho,y,xext,aext,zext)
 
@@ -253,7 +253,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: plasma
     Implicit None
@@ -283,7 +283,7 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !__dir_copyin(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
@@ -296,7 +296,7 @@ Contains
     Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,t9,rho,y,etae,detaedt9) &
     !__dir_present(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !__dir_present(ye,ytot,abar,zbar,z2bar,zibar,sratio)
@@ -312,7 +312,7 @@ Contains
     EndDo
     If ( idiag >= 3 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(t9,rho,ye,z2bar,zbar,sratio,ztilde,lambda0,gammae)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -324,7 +324,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !__dir_delete(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
@@ -382,7 +382,7 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -407,12 +407,12 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(ratio,dratiodeta) &
     !__dir_copyin(mask,eta)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(ratio,dratiodeta) &
     !__dir_present(mask,eta)
     Do izb = zb_lo, zb_hi
@@ -422,7 +422,7 @@ Contains
     EndDo
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(ratio,dratiodeta) &
     !__dir_delete(mask,eta)
 

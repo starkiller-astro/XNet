@@ -27,7 +27,7 @@ Contains
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
-      & szbatch, zb_lo, zb_hi
+      & szbatch, zb_lo, zb_hi, tid
     Use xnet_integrate, Only: timestep
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
@@ -50,12 +50,12 @@ Contains
     timer_tstep = timer_tstep - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(inr,mykts,lzstep)
 
     ! If the zone has previously converged or failed, do not iterate
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(its,inr,lzstep,mykts)
     Do izb = zb_lo, zb_hi
       If ( its(izb) /= 0 ) Then
@@ -79,7 +79,7 @@ Contains
       Call step_be(kstep,inr)
 
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot)
       Do izb = zb_lo, zb_hi
 
@@ -114,7 +114,7 @@ Contains
         lzstep(izb) = ( inr(izb) == 0 )
       EndDo
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(lzstep)
 
       ! Reset temperature and density for failed integrations
@@ -122,7 +122,7 @@ Contains
         & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
       If ( iheat > 0 ) Then
         !__dir_loop_outer(1) &
-        !__dir_async &
+        !__dir_async(tid) &
         !__dir_present(lzstep,t9t,t9)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
@@ -135,7 +135,7 @@ Contains
       ! as is done for the first timestep.
       If ( kts == ktsmx-1 ) Then
         !__dir_loop_outer(1) &
-        !__dir_async &
+        !__dir_async(tid) &
         !__dir_present(lzstep,tdel,tdelstart)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
@@ -149,7 +149,7 @@ Contains
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
         !__dir_update &
-        !__dir_wait &
+        !__dir_wait(tid) &
         !__dir_host(inr,tt,tdel)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
@@ -165,7 +165,7 @@ Contains
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
     !__dir_present(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
     Do izb = zb_lo, zb_hi
@@ -198,19 +198,19 @@ Contains
     ! Log TS success/failure
     If ( idiag >= 0 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(inr)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
           !__dir_update &
-          !__dir_wait &
+          !__dir_wait(tid) &
           !__dir_host(mykts(izb))
           Write(lun_diag,"(a,2i5,2i3)") &
             & 'BE TS Success',kstep,izone,mykts(izb),inr(izb)
         ElseIf ( inr(izb) == 0 ) Then
           !__dir_update &
-          !__dir_wait &
+          !__dir_wait(tid) &
           !__dir_host(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
           Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
             & 'BE TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),inr(izb),mykts(izb)
@@ -220,7 +220,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(inr,mykts,lzstep)
 
     stop_timer = xnet_wtime()
@@ -238,7 +238,7 @@ Contains
     Use xnet_abundances, Only: y, ydot, yt, xext
     Use xnet_conditions, Only: t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
-      & szbatch, zb_lo, zb_hi
+      & szbatch, zb_lo, zb_hi, tid
     Use xnet_integrate, Only: cross_sect, yderiv
     Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_nraph
@@ -268,12 +268,12 @@ Contains
     timer_nraph = timer_nraph - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
     !__dir_create(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
     !__dir_private(s1)
     Do izb = zb_lo, zb_hi
@@ -307,7 +307,7 @@ Contains
       EndIf
     EndDo
     !__dir_update &
-    !__dir_wait &
+    !__dir_wait(tid) &
     !__dir_host(iterate)
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
@@ -327,7 +327,7 @@ Contains
         EndIf
       EndDo
       !__dir_update &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_device(rebuild,eval_rates)
 
       ! Calculate the reaction rates and abundance time derivatives
@@ -338,7 +338,7 @@ Contains
 
       ! Calculate equation to zero
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
@@ -365,7 +365,7 @@ Contains
       EndDo
       If ( idiag >= 4 ) Then
         !__dir_update &
-        !__dir_wait &
+        !__dir_wait(tid) &
         !__dir_host(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
@@ -394,7 +394,7 @@ Contains
       ! increased precision of testc is truly increased accuracy.
       !-----------------------------------------------------------------------------------------
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
       !__dir_present(aa,inr,testm,testc,testc2,testn,toln) &
       !__dir_private(s1,s2,s3)
@@ -455,12 +455,12 @@ Contains
         EndIf
       EndDo
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(iterate)
 
       If ( idiag >= 3 ) Then
         !__dir_update &
-        !__dir_wait &
+        !__dir_wait(tid) &
         !__dir_host(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) >= 0 ) Then
@@ -488,7 +488,7 @@ Contains
 
     If ( idiag >= 2 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(inr,xtot,testn,toln)
       Do izb = zb_lo, zb_hi
         If ( inr(izb) >= 0 ) Then
@@ -503,7 +503,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
     !__dir_delete(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
 

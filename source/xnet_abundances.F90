@@ -96,7 +96,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, zz, zz2, zzi
     Use xnet_constants, Only: thbim1
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -124,13 +124,13 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(ye,ytot,abar,zbar,z2bar,zibar) &
     !__dir_copyin(mask,y,xext,aext,zext)
        
     ! Calculate abundance moments
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(ye,ytot,abar,zbar,z2bar,zibar) &
     !__dir_present(mask,y,xext,aext,zext) &
     !__dir_private(yext,ntot,atot,ztot,z2tot,zitot)
@@ -169,7 +169,7 @@ Contains
        
     If ( idiag >= 3 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(ye,ytot,abar,zbar,z2bar,zibar)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -180,7 +180,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(ye,ytot,abar,zbar,z2bar,zibar) &
     !__dir_delete(mask,y,xext,aext,zext)
 

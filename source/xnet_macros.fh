@@ -25,8 +25,8 @@
 #define __dir_declare           $acc declare
 #define __dir_routine_seq       $acc routine seq
 #define __dir_routine_vector    $acc routine vector
-#define __dir_async             $acc async
-#define __dir_wait              $acc wait
+#define __dir_async(N)          $acc async(N)
+#define __dir_wait(N)           $acc wait(N)
 #define __dir_atomic            $acc atomic
 #define __dir_end               $acc
 #elif defined(XNET_OMP_OL)
@@ -56,8 +56,8 @@
 #define __dir_declare           $omp declare target
 #define __dir_routine_seq       $omp declare target
 #define __dir_routine_vector    $omp declare target
-#define __dir_async             $omp nowait
-#define __dir_wait              $omp barrier
+#define __dir_async(N)          $omp nowait
+#define __dir_wait(N)           $omp barrier
 #define __dir_atomic            $omp atomic
 #define __dir_end               $omp if(.true.)
 #endif

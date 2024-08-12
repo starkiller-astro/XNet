@@ -388,11 +388,11 @@ Contains
     Call parallel_bcast(thermo_file)
 
     !__dir_update &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_device(iheat,iscrn)
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(lzactive,iweak,kmon,ktot)
 
     Return

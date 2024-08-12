@@ -106,7 +106,7 @@ Contains
     ! This routine calculates t9 and rho as a function of time, either via interpolation or from an
     ! analytic expression. (vector interface)
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: lun_diag, lun_stdout, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: lun_diag, lun_stdout, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -134,11 +134,11 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask,tf,nf,t9f,rhof,nh,th,t9h,rhoh)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -148,7 +148,7 @@ Contains
     EndDo
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(nf,t9f,rhof) &
     !__dir_delete(mask,tf,nh,th,t9h,rhoh)
 

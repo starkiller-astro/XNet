@@ -26,7 +26,7 @@ Contains
     Use xnet_conditions, Only: t, tt, tdel, tdel_next, tdel_old, t9, t9o, t9t, rho, &
       & rhot, t9dot, nt, ntt, ints, intso, tstop, tdelstart, nh, th, t9h, rhoh, t9rhofind
     Use xnet_controls, Only: changemx, changemxt, idiag, iheat, iscrn, iweak, lun_diag, yacc, &
-      & ymin, szbatch, zb_lo, zb_hi, lzactive
+      & ymin, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
     Implicit None
@@ -56,13 +56,13 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
     !__dir_copyin(mask)
 
     ! Retain old values of timestep and thermo and calculate remaining time
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,mask_init,tdel,tdel_old)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -73,13 +73,13 @@ Contains
       EndIf
     EndDo
     !__dir_update &
-    !__dir_wait &
+    !__dir_wait(tid) &
     !__dir_host(mask_init)
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,mask_init,t,tt,tstop,y,yo,ydot,t9,t9o,t9dot,ints,intso,nh) &
     !__dir_present(tdel,tdel_next,tdel_old,tdelstart,tdel_stop,tdel_dy,tdel_dt9) &
     !__dir_private(tdel_init,rtau_y,rtau_t9,changey,changet9)
@@ -176,7 +176,7 @@ Contains
 
     If ( idiag >= 2 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(tdel,tdel_old,tdel_stop,tdel_next,tdel_dy,tdel_dt9) &
       !__dir_host(ints,intso,y,t)
       Do izb = zb_lo, zb_hi
@@ -192,7 +192,7 @@ Contains
             Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
             intso(izb) = ints(izb)
             !__dir_update &
-            !__dir_async &
+            !__dir_async(tid) &
             !__dir_device(intso(izb))
           EndIf
         EndIf
@@ -205,7 +205,7 @@ Contains
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) .and. nh(izb) > 1 ) Then
@@ -252,7 +252,7 @@ Contains
       EndDo
       If ( idiag >= 2 ) Then
         !__dir_update &
-        !__dir_wait &
+        !__dir_wait(tid) &
         !__dir_host(dtherm,tdel,t9t,rhot)
         Do izb = zb_lo, zb_hi
           If ( mask(izb) .and. nh(izb) > 1 ) Then
@@ -269,7 +269,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
     !__dir_delete(mask)
 
@@ -280,7 +280,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the value of the iweak flag to control the treatment of strong reactions.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iweak0, iweak, lun_stdout, t9min, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -302,11 +302,11 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask,t9)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,t9,iweak)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -322,7 +322,7 @@ Contains
     EndDo
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask,t9)
 
     Return
@@ -334,7 +334,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_conditions, Only: t9t, rhot, yet, cv, etae, detaedt9
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
     Use xnet_eos, Only: eos_interface
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_eos
     Use xnet_types, Only: dp
@@ -358,7 +358,7 @@ Contains
     timer_eos = timer_eos - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask)
 
     Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
@@ -366,7 +366,7 @@ Contains
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
@@ -387,7 +387,7 @@ Contains
     Use xnet_abundances, Only: yt, ydot
     Use xnet_conditions, Only: cv, t9t, t9dot
     Use xnet_controls, Only: idiag, iheat, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
-      & lzactive
+      & lzactive, tid
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_deriv
     Use xnet_types, Only: dp
     Implicit None
@@ -411,13 +411,13 @@ Contains
     timer_deriv = timer_deriv - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
     !__dir_loop_outer(2) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,la,le,ydot,yt,b1,b2,b3,b4,mu1,mu2,mu3,mu4) &
     !__dir_present(a1,a2,a3,a4,csect1,csect2,csect3,csect4) &
     !__dir_present(n11,n21,n22,n31,n32,n33,n41,n42,n43,n44) &
@@ -487,7 +487,7 @@ Contains
     If ( iheat > 0 ) Then
 
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(mask,ydot,t9dot,cv,mex) &
       !__dir_private(sdot)
       Do izb = zb_lo, zb_hi
@@ -502,7 +502,7 @@ Contains
     EndIf
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -513,7 +513,7 @@ Contains
     ! Separate loop for diagnostics so compiler can properly vectorize
     If ( idiag >= 5 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(yt,t9t,ydot,t9dot,b1,b2,b3,b4)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -575,7 +575,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
@@ -593,7 +593,7 @@ Contains
     Use xnet_conditions, Only: tt, rhot, t9t, yet
     Use xnet_constants, Only: third, two3rd, four3rd, five3rd
     Use xnet_controls, Only: idiag, iheat, iscrn, iweak, ktot, lun_diag, nzbatchmx, szbatch, &
-      & zb_lo, zb_hi, lzactive
+      & zb_lo, zb_hi, lzactive, tid
     Use xnet_ffn, Only: ffn_rate, rffn, dlnrffndt9
     Use xnet_linalg, Only: MatrixMatrixMultiply, MatrixVectorMultiply
     Use xnet_nnu, Only: nnu_rate, nnuspec, rnnu
@@ -635,7 +635,7 @@ Contains
     nr4 = nreac(4)
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(t09,dt09,ene) &
     !__dir_copyin(mask)
 
@@ -661,7 +661,7 @@ Contains
 
     ! Calculate necessary thermodynamic moments
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,ene,t09,dt09,t9t,rhot,yet)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -725,7 +725,7 @@ Contains
       EndIf
     Else
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(rc1,rc2,rc3,rc4) &
       !__dir_present(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !__dir_present(mask,t09,dt09)
@@ -785,7 +785,7 @@ Contains
 
     ! Calculate cross sections
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(n1i,n2i,n3i,n4i,iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !__dir_present(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
     !__dir_present(csect1,csect2,csect3,csect4) &
@@ -950,7 +950,7 @@ Contains
 
     If ( idiag >= 6 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(csect1,csect2,csect3,csect4) &
       !__dir_host(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
       !__dir_host(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
@@ -997,7 +997,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(t09,dt09,ene) &
     !__dir_delete(mask)
 

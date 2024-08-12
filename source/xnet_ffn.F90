@@ -137,7 +137,7 @@ Contains
     ! This routine calculates the reaction rates for FFN weak rates
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: ln_2, ln_10, bok, m_e
-    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive, tid
     Use xnet_conditions, Only: etae
     Use xnet_types, Only: dp
     Use xnet_controls, Only: lun_diag, idiag
@@ -172,13 +172,13 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(rf,dlnrfdt9,lt1) &
     !__dir_copyin(mask,t9,ene)
 
     ! Pre-calculate phase space integrals and derivatives
     !__dir_loop(2) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,t9,has_logft,ffn_qval,phasei,dphaseidt9) &
     !__dir_private(cheme)
     Do izb = zb_lo, zb_hi
@@ -192,7 +192,7 @@ Contains
     EndDo
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,t9,lt1)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -207,7 +207,7 @@ Contains
     End Do
 
     !__dir_loop(2) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,t9,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
     !__dir_present(phasei,dphaseidt9) &
     !__dir_private(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
@@ -289,7 +289,7 @@ Contains
 
     If ( idiag >= 5 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(rf,dlnrfdt9,phasei,dphaseidt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -304,7 +304,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(rf,dlnrfdt9) &
     !__dir_delete(lt1) &
     !__dir_delete(mask,t9,ene)

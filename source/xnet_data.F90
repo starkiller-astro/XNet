@@ -122,7 +122,7 @@ Contains
     ! distribution.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: epmev, avn
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -149,11 +149,11 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask,y,enb,enm)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,y,enb,enm,zz,be) &
     !__dir_private(ztot,btot)
     Do izb = zb_lo, zb_hi
@@ -177,7 +177,7 @@ Contains
     EndDo
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(enb,enm) &
     !__dir_delete(mask,y)
 
@@ -188,7 +188,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -212,11 +212,11 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask,t9)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,t9,t9i,gg,g,dlngdt9) &
     !__dir_private(ii,rdt9)
     Do izb = zb_lo, zb_hi
@@ -282,7 +282,7 @@ Contains
     !EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask,t9)
 
     Return
@@ -403,7 +403,7 @@ Contains
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
-    Use xnet_controls, Only: iheat, nzevolve
+    Use xnet_controls, Only: iheat, nzevolve, tid
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
@@ -499,7 +499,7 @@ Contains
     Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(aa,zz,nn,be,mex,mm,ia,iz,in) &
     !__dir_copyin(zz2,zz53,zzi,zseq,zseq53,zseqi) &
     !__dir_copyin(it9i,t9i,g,angm) &
@@ -651,7 +651,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0, tid
     Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
       & phasei,dphaseidt9, ngrid, rffn, dlnrffndt9
     Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, ltnu, fluxnu, rnnu
@@ -930,7 +930,7 @@ Contains
     Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
     !__dir_copyin(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !__dir_copyin(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &

@@ -191,10 +191,10 @@ Contains
 
     ! Create a stream and associate with linear algebra libraries
 #if defined(XNET_OACC)
-    stream = acc_get_cuda_stream( INT( acc_async_noval, KIND=C_LONG_LONG ) )
+    !stream = acc_get_cuda_stream( INT( acc_async_noval, KIND=C_LONG_LONG ) )
+    acc_queue = tid
+    stream = acc_get_cuda_stream(acc_queue)
     Call acc_set_cuda_stream( INT( acc_async_sync, KIND=C_LONG_LONG ), stream )
-    !acc_queue = tid
-    !stream = acc_get_cuda_stream(acc_queue)
     !ierr = acc_set_cuda_stream(acc_queue, stream)
 #elif defined(XNET_CUDA)
     ierr = cudaStreamCreate( stream )

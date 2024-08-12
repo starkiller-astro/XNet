@@ -27,7 +27,7 @@ Contains
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart
     Use xnet_controls, Only: idiag, iheat, isolv, itsout, kstmx, kmon, ktot, lun_diag, lun_stdout, &
-      & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id
+      & lzactive, szbatch, nzbatchmx, nzevolve, zb_lo, zb_hi, zone_id, tid
     Use xnet_integrate, Only: timestep
     Use xnet_integrate_be, Only: solve_be
     Use xnet_integrate_bdf, Only: solve_bdf
@@ -76,7 +76,7 @@ Contains
     idiag0 = idiag
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(its,mykstep,lzsolve,lzoutput) &
     !__dir_create(enm,enb,enold,en0,delta_en,edot)
 
@@ -85,7 +85,7 @@ Contains
 
     ! Initialize trial time step abundances and conditions
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
     !__dir_present(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
     !__dir_present(enm,enb,enold,en0,delta_en,edot)
@@ -155,7 +155,7 @@ Contains
       ! If convergence is successful, output timestep results
       If ( idiag >= 1 ) Then
         !__dir_update &
-        !__dir_wait &
+        !__dir_wait(tid) &
         !__dir_host(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
@@ -176,7 +176,7 @@ Contains
       EndIf
 
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(enm,enold) &
       !__dir_present(its,t,tstop,mykstep,lzsolve,lzoutput)
       Do izb = zb_lo, zb_hi
@@ -205,7 +205,7 @@ Contains
       Call benuc(yt,enb,enm,mask_in = lzoutput)
 
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(its,enm,enold,en0,delta_en,edot,tdel)
       Do izb = zb_lo, zb_hi
         If ( its(izb) == 0 ) Then
@@ -215,7 +215,7 @@ Contains
       EndDo
 
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(lzoutput,lzsolve)
       Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
 
@@ -224,7 +224,7 @@ Contains
     EndDo
 
     !__dir_update &
-    !__dir_wait &
+    !__dir_wait(tid) &
     !__dir_host(its,mykstep,t,tdel)
 
     ! Test that the stop time is reached
@@ -255,11 +255,11 @@ Contains
     kstep = max(1, maxval(mykstep))
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(enm,enb,enold,en0,delta_en,edot) &
     !__dir_delete(its,mykstep,lzsolve,lzoutput)
 
-    !__dir_wait
+    !__dir_wait(tid)
 
     Call parallel_barrier()
 

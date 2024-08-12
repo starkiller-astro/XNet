@@ -49,7 +49,7 @@ Contains
     Use nuclear_data, Only: zz
     Use reaction_data, Only: nreac, n2i, n3i, n4i
     Use xnet_constants, Only: bip1, thbim1, five3rd
-    Use xnet_controls, Only: iheat, iscrn, nzevolve
+    Use xnet_controls, Only: iheat, iscrn, nzevolve, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -119,7 +119,7 @@ Contains
       gammae = 0.0
       dztildedt9 = 0.0
       !__dir_enter_data &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_copyin(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
       !__dir_copyin(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
       !__dir_copyin(ztilde,zinter,lambda0,gammae,dztildedt9)
@@ -143,7 +143,7 @@ Contains
     dh4dt9 = 0.0
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
 
     Return
@@ -169,7 +169,7 @@ Contains
     Use xnet_abundances, Only: yt, xext, aext, zext
     Use xnet_constants, Only: bi, bip1, cds, kbi, thbim2
     Use xnet_conditions, Only: rhot, t9t, etae, detaedt9
-    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, iscrn, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_eos, Only: eos_screen
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_prescrn, timer_scrn
     Use xnet_types, Only: dp
@@ -198,7 +198,7 @@ Contains
     timer_prescrn = timer_prescrn - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask)
 
     ! Call EOS to get plasma quantities
@@ -214,7 +214,7 @@ Contains
     timer_scrn = timer_scrn - start_timer
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(nreac,zseq,zseq53,zseqi) &
     !__dir_present(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
     !__dir_present(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
@@ -329,7 +329,7 @@ Contains
 
     If ( idiag >= 5 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !__dir_host(ztilde,zinter,lambda0,gammae,dztildedt9)
       Do izb = zb_lo, zb_hi
@@ -413,7 +413,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask)
 
     stop_timer = xnet_wtime()

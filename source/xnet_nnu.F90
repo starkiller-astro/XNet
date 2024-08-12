@@ -77,7 +77,7 @@ Contains
     ! From this, the neutrino species involved is determined.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
-    Use xnet_controls, Only: idiag, lun_diag
+    Use xnet_controls, Only: idiag, lun_diag, tid
     Implicit None
 
     ! Input variables
@@ -116,7 +116,7 @@ Contains
     EndIf
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(irl,nuspec)
 
     Return
@@ -185,7 +185,7 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -216,14 +216,14 @@ Contains
     If ( .not. any(mask) ) Return
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(rate) &
     !__dir_copyin(mask,time)
 
     ! Only interpolate if neutrino reactions are on
     If ( ineutrino == 0 ) Then
       !__dir_loop(3) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(mask,rate)
       Do izb = zb_lo, zb_hi
         Do j = 1, nnuspec
@@ -238,7 +238,7 @@ Contains
 
       ! Interpolate flux and neutrino temperature from time history
       !__dir_loop_outer(1) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(mask,time,ltnu,fluxnu,th,nh,tmevnu,fluxcms)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -249,7 +249,7 @@ Contains
 
       ! Compute neutrino cross sections
       !__dir_loop_outer(2) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(mask,sigmanu,ltnu,fluxnu,nuspec) &
       !__dir_private(it)
       Do izb = zb_lo, zb_hi
@@ -300,7 +300,7 @@ Contains
 
     If ( idiag >= 6 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(fluxnu,rate)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -314,7 +314,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(rate) &
     !__dir_delete(mask,time)
 

@@ -49,7 +49,7 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzevolve
+    Use xnet_controls, Only: iheat, nzevolve, tid
     Use xnet_gpu, Only: dev_ptr
     Implicit None
 
@@ -83,7 +83,7 @@ Contains
     info = 0
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(dydotdy,jac,rhs,indx,info,diag0,mult1)
 
     Allocate (hjac(nzevolve))
@@ -105,17 +105,18 @@ Contains
     EndDo
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(djac,drhs,dindx)
 
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
+    Use xnet_controls, Only: tid
     Implicit None
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
 
     Deallocate (diag0,mult1)
@@ -132,7 +133,7 @@ Contains
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -167,11 +168,11 @@ Contains
     EndIf
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask,diag,mult)
 
     !__dir_loop_outer(2) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(jac,dydotdy) &
     !__dir_present(mask,diag,mult)
     Do izb = zb_lo, zb_hi
@@ -190,7 +191,7 @@ Contains
 
     If ( idiag >= 5 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(diag,mult,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -213,7 +214,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask,diag,mult)
     
     Return
@@ -230,7 +231,8 @@ Contains
       & n10, n20, n30, n40
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
+      & lzactive, tid
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
@@ -255,12 +257,12 @@ Contains
     timer_jacob = timer_jacob - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyin(mask)
 
     ! Build the Jacobian
     !__dir_loop_outer(2) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_private(s1,s2,s3,s4) &
     !__dir_present(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
     !__dir_present(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
@@ -339,7 +341,7 @@ Contains
 
     If ( iheat > 0 ) Then
       !__dir_loop_outer(2) &
-      !__dir_async &
+      !__dir_async(tid) &
       !__dir_present(mask,dydotdy,cv,mex) &
       !__dir_private(sdot)
       Do izb = zb_lo, zb_hi
@@ -358,7 +360,7 @@ Contains
     EndIf
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -371,7 +373,7 @@ Contains
 
     If ( idiag >= 5 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(dydotdy)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -394,7 +396,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_delete(mask)
 
     stop_timer = xnet_wtime()
@@ -408,7 +410,7 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
@@ -441,12 +443,12 @@ Contains
     timer_solve = timer_solve - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(dy,dt9) &
     !__dir_copyin(mask,yrhs,t9rhs)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -478,7 +480,7 @@ Contains
 #endif
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -492,7 +494,7 @@ Contains
 
     If ( idiag >= 6 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -505,7 +507,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(dy,dt9) &
     !__dir_delete(mask,yrhs,t9rhs)
 
@@ -519,7 +521,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -561,7 +563,7 @@ Contains
 
     If ( idiag >= 6 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -584,7 +586,7 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
@@ -618,12 +620,12 @@ Contains
     timer_bksub = timer_bksub - start_timer
 
     !__dir_enter_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_create(dy,dt9) &
     !__dir_copyin(mask,yrhs,t9rhs)
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -656,7 +658,7 @@ Contains
 #endif
 
     !__dir_loop_outer(1) &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_present(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -670,7 +672,7 @@ Contains
 
     If ( idiag >= 6 ) Then
       !__dir_update &
-      !__dir_wait &
+      !__dir_wait(tid) &
       !__dir_host(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -683,7 +685,7 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_async &
+    !__dir_async(tid) &
     !__dir_copyout(dy,dt9) &
     !__dir_delete(mask,yrhs,t9rhs)
 
