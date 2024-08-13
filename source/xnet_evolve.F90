@@ -35,7 +35,6 @@ Contains
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_xnet
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
-    Use xnet_parallel, Only: parallel_barrier
     Implicit None
 
     ! Output variables
@@ -53,8 +52,6 @@ Contains
     Logical :: lzsolve(zb_lo:zb_hi), lzoutput(zb_lo:zb_hi)
     Character(5) :: nname_out(ny+1)
     Character(128) :: ab_fname, th_fname
-
-    Call parallel_barrier()
 
     start_timer = xnet_wtime()
     timer_xnet = timer_xnet - start_timer
@@ -260,8 +257,6 @@ Contains
     !__dir_delete(its,mykstep,lzsolve,lzoutput)
 
     !__dir_wait(tid)
-
-    Call parallel_barrier()
 
     stop_timer = xnet_wtime()
     timer_xnet = timer_xnet + stop_timer
