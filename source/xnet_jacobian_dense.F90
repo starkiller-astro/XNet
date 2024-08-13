@@ -604,7 +604,6 @@ Contains
 #else
     any_pivot = .true.
 #endif
-    Write(lun_diag,*) '  pivot=',any_pivot
     call LUDecompBatched_GPU &
       & ( msize, msize, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
       &   dindx(zb_lo), info(zb_lo), nzbatch, pivot = any_pivot )
