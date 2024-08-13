@@ -493,6 +493,8 @@ Contains
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           sdot = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_reduction(-,sdot)
           Do i0 = 1, ny
             sdot = sdot - mex(i0)*ydot(i0,izb) / cv(izb)
           EndDo
