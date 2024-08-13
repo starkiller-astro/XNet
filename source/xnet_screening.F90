@@ -205,7 +205,7 @@ Contains
     Call eos_screen(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi),etae(zb_lo:zb_hi), &
       & detaedt9(zb_lo:zb_hi),ztilde(zb_lo:zb_hi),zinter(zb_lo:zb_hi),lambda0(zb_lo:zb_hi), &
       & gammae(zb_lo:zb_hi),dztildedt9(zb_lo:zb_hi),xext(zb_lo:zb_hi),aext(zb_lo:zb_hi), &
-      & zext(zb_lo:zb_hi),mask_in = mask)
+      & zext(zb_lo:zb_hi),mask_in = mask_in)
 
     stop_timer = xnet_wtime()
     timer_prescrn = timer_prescrn + stop_timer

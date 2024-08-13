@@ -363,7 +363,7 @@ Contains
 
     Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
       & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     !__dir_exit_data &
     !__dir_async(tid) &
@@ -640,12 +640,12 @@ Contains
     !__dir_copyin(mask)
 
     ! Update thermodynamic state
-    Call update_eos(mask_in = mask)
+    Call update_eos(mask_in = mask_in)
 
     ! Calculate the screening terms
     If ( iscrn >= 1 ) Then
       ascrn = 1.0
-      Call screening(mask_in = mask)
+      Call screening(mask_in = mask_in)
     Else
       ascrn = 0.0
     EndIf
@@ -654,10 +654,10 @@ Contains
     timer_csect = timer_csect - start_timer
 
     ! Check for any changes to iweak
-    Call update_iweak(t9t(zb_lo:zb_hi),mask_in = mask)
+    Call update_iweak(t9t(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate partition functions for each nucleus at t9t
-    Call partf(t9t(zb_lo:zb_hi),mask_in = mask)
+    Call partf(t9t(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate necessary thermodynamic moments
     !__dir_loop_outer(1) &
@@ -688,10 +688,10 @@ Contains
 
     ! If there are any FFN reactions, calculate their rates
     If ( nffn > 0 ) Call ffn_rate(nffn,t9t(zb_lo:zb_hi),ene, &
-      & rffn(:,zb_lo:zb_hi),dlnrffndt9(:,zb_lo:zb_hi),mask_in = mask)
+      & rffn(:,zb_lo:zb_hi),dlnrffndt9(:,zb_lo:zb_hi),mask_in = mask_in)
 
     ! If there are any neutrino-nucleus reactions, calculate their rates
-    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask)
+    If ( nnnu > 0 ) Call nnu_rate(nnnu,tt(zb_lo:zb_hi),rnnu(:,:,zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate the REACLIB exponent polynomials and derivatives, adding screening terms
     If ( use_blas ) Then

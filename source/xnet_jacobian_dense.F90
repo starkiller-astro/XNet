@@ -412,7 +412,7 @@ Contains
     EndDo
 
     ! Apply the externally provided factors
-    Call jacobian_scale(diag_in,mult_in,mask_in = mask)
+    Call jacobian_scale(diag_in,mult_in,mask_in = mask_in)
 
     If ( idiag >= 5 ) Then
       !__dir_update &

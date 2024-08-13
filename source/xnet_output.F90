@@ -60,7 +60,7 @@ Contains
     ! Calculate reaction fluxes
     If ( itsout >= 1 .or. idiag >= 1 ) Then
       If ( kstep > 0 ) Then
-        Call flux(mask_in = mask)
+        Call flux(mask_in = mask_in)
       Else
         flx_int = 0.0
       EndIf

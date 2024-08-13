@@ -441,7 +441,7 @@ Contains
     Else
       mult = 1.0
     EndIf
-    Call jacobian_scale(diag,mult,mask_in = mask)
+    Call jacobian_scale(diag,mult,mask_in = mask_in)
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
@@ -497,8 +497,8 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    Call jacobian_decomp(kstep,mask_in = mask)
-    Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = mask)
+    Call jacobian_decomp(kstep,mask_in = mask_in)
+    Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = mask_in)
 
     If ( idiag >= 5 ) Then
       Do izb = zb_lo, zb_hi
