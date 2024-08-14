@@ -9,7 +9,23 @@
 #include "xnet_macros.fh"
 
 Module xnet_integrate_be
+  Use xnet_types, Only: dp
   Implicit None
+  Private
+
+  Integer , Allocatable :: inr(:)
+  Integer , Allocatable :: mykts(:)
+  Logical , Allocatable :: lzstep(:)
+
+  Real(dp), Allocatable, Target :: testc(:), testc2(:), testm(:)
+  Real(dp), Pointer     :: testn(:)
+  Real(dp), Allocatable :: toln(:)
+  Real(dp), Allocatable :: xtot(:), xtot_init(:), rdt(:), mult(:)
+  Real(dp), Allocatable :: yrhs(:,:), dy(:,:), reldy(:,:)
+  Real(dp), Allocatable :: t9rhs(:), dt9(:), relt9(:)
+  Logical , Allocatable :: iterate(:), eval_rates(:), rebuild(:)
+
+  Public :: solve_be, be_init
 
 Contains
 
@@ -42,16 +58,13 @@ Contains
     ! Local variables
     Integer, Parameter :: ktsmx = 10
     Integer :: kts, k, izb, izone
-    Integer :: inr(zb_lo:zb_hi)
-    Integer :: mykts(zb_lo:zb_hi)
-    Logical :: lzstep(zb_lo:zb_hi)
 
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
     !__dir_enter_data &
     !__dir_async(tid) &
-    !__dir_create(inr,mykts,lzstep)
+    !__dir_copyin(its)
 
     ! If the zone has previously converged or failed, do not iterate
     !__dir_loop_outer(1) &
@@ -221,7 +234,7 @@ Contains
 
     !__dir_exit_data &
     !__dir_async(tid) &
-    !__dir_delete(inr,mykts,lzstep)
+    !__dir_copyout(its)
 
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer
@@ -257,20 +270,13 @@ Contains
     Integer :: irdymx, idymx
     Integer :: i, k, kit, izb, izone
     Real(dp) :: s1, s2, s3, ytmp
-    Real(dp) :: testc(zb_lo:zb_hi), testc2(zb_lo:zb_hi), testm(zb_lo:zb_hi)
-    Real(dp) :: testn(zb_lo:zb_hi), toln(zb_lo:zb_hi)
-    Real(dp) :: xtot(zb_lo:zb_hi), xtot_init(zb_lo:zb_hi), rdt(zb_lo:zb_hi), mult(zb_lo:zb_hi)
-    Real(dp) :: yrhs(ny,zb_lo:zb_hi), dy(ny,zb_lo:zb_hi), reldy(ny,zb_lo:zb_hi)
-    Real(dp) :: t9rhs(zb_lo:zb_hi), dt9(zb_lo:zb_hi), relt9(zb_lo:zb_hi)
-    Logical :: iterate(zb_lo:zb_hi), eval_rates(zb_lo:zb_hi), rebuild(zb_lo:zb_hi)
 
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
     !__dir_enter_data &
     !__dir_async(tid) &
-    !__dir_create(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
-    !__dir_create(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+    !__dir_copyin(inr)
 
     !__dir_loop_outer(1) &
     !__dir_async(tid) &
@@ -299,11 +305,6 @@ Contains
         xtot_init(izb) = 0.0
         rdt(izb) = 0.0
         mult(izb) = 0.0
-      EndIf
-      If ( iconvc /= 0 ) Then
-        toln(izb) = tolc
-      Else
-        toln(izb) = tolm
       EndIf
     EndDo
     !__dir_update &
@@ -436,15 +437,6 @@ Contains
             relt9(izb) = 0.0
           EndIf
 
-          ! Ordinarily, test for true convergence
-          If ( iconvc /= 0 ) Then
-            testn(izb) = testc(izb)
-
-          ! Otherwise, use mass conservation for convergence condition
-          Else
-            testn(izb) = testm(izb)
-          EndIf
-
           ! If converged, exit NR loop
           If ( abs(testn(izb)) <= toln(izb) .and. relt9(izb) < tolt9 ) Then
             inr(izb) = kit
@@ -504,13 +496,84 @@ Contains
 
     !__dir_exit_data &
     !__dir_async(tid) &
-    !__dir_delete(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
-    !__dir_delete(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+    !__dir_copyout(inr)
 
     stop_timer = xnet_wtime()
     timer_nraph = timer_nraph + stop_timer
 
     Return
   End Subroutine step_be
+
+  Subroutine be_init
+    !-----------------------------------------------------------------------------------------------
+    ! This routine initializes the BE data structures
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_controls, Only: iconvc, tolc, tolm, nzevolve, tid
+    Implicit None
+
+    If ( .not. allocated(inr) ) Allocate (inr(nzevolve))
+    If ( .not. allocated(mykts) ) Allocate (mykts(nzevolve))
+    If ( .not. allocated(lzstep) ) Allocate (lzstep(nzevolve))
+    inr = 0
+    mykts = 0
+    lzstep = .false.
+
+    ! Set convergence condition and tolerances
+    If ( .not. allocated(testc) ) Allocate (testc(nzevolve))
+    If ( .not. allocated(testc2) ) Allocate (testc2(nzevolve))
+    If ( .not. allocated(testm) ) Allocate (testm(nzevolve))
+    If ( .not. allocated(testn) ) Allocate (testn(nzevolve))
+    If ( .not. allocated(toln) ) Allocate (toln(nzevolve))
+    testc = 0.0_dp
+    testc2 = 0.0_dp
+    testm = 0.0_dp
+    testn = 0.0_dp
+    If ( iconvc /= 0 ) Then
+      testn => testc
+      toln = tolc
+    Else
+      testn => testm
+      toln = tolm
+    EndIf
+
+    If ( .not. allocated(xtot) ) Allocate (xtot(nzevolve))
+    If ( .not. allocated(xtot_init) ) Allocate (xtot_init(nzevolve))
+    xtot = 0.0_dp
+    xtot_init = 0.0_dp
+
+    If ( .not. allocated(rdt) ) Allocate (rdt(nzevolve))
+    If ( .not. allocated(mult) ) Allocate (mult(nzevolve))
+    rdt = 0.0_dp
+    mult = 0.0_dp
+
+    If ( .not. allocated(yrhs) ) Allocate (yrhs(ny,nzevolve))
+    If ( .not. allocated(dy) ) Allocate (dy(ny,nzevolve))
+    If ( .not. allocated(reldy) ) Allocate (reldy(ny,nzevolve))
+    yrhs = 0.0_dp
+    dy = 0.0_dp
+    reldy = 0.0_dp
+
+    If ( .not. allocated(t9rhs) ) Allocate (t9rhs(nzevolve))
+    If ( .not. allocated(dt9) ) Allocate (dt9(nzevolve))
+    If ( .not. allocated(relt9) ) Allocate (relt9(nzevolve))
+    t9rhs = 0.0_dp
+    dt9 = 0.0_dp
+    relt9 = 0.0_dp
+
+    If ( .not. allocated(iterate) ) Allocate (iterate(nzevolve))
+    If ( .not. allocated(eval_rates) ) Allocate (eval_rates(nzevolve))
+    If ( .not. allocated(rebuild) ) Allocate (rebuild(nzevolve))
+    iterate = .false.
+    eval_rates = .false.
+    rebuild = .false.
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(inr,mykts,lzstep) &
+    !__dir_copyin(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
+    !__dir_copyin(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+
+  End Subroutine be_init
 
 End Module xnet_integrate_be
