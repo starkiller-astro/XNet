@@ -12,7 +12,7 @@ module openaccf
     acc_device_nvidia, acc_device_host, acc_device_default, acc_async_sync, acc_async_noval
   implicit none
 
-  integer(c_int) :: acc_queue
+  integer(c_long_long) :: acc_queue
   !$omp threadprivate(acc_queue)
 
   !enum, bind(c) !:: acc_device_t

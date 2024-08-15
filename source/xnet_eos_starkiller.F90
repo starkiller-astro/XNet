@@ -1,14 +1,15 @@
 !***************************************************************************************************
-! eos_helm.f90 10/18/17
-! Interface to HELMHOLTZ EoS.
+! eos_starkiller.f90 10/18/17
+! Interface to starkiller
 ! This file contains routines which calculate EoS quantites needed to calculate screening
 ! corrections for reaction rates.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_eos
   Use xnet_types, Only: dp
   Implicit None
-  include 'vector_eos.dek'
   Real(dp), Allocatable :: ye(:), ytot(:), abar(:), zbar(:), z2bar(:), zibar(:), sratio(:)
 
   Interface eos_interface
@@ -30,12 +31,14 @@ Contains
 
   Subroutine eos_initialize
     !-----------------------------------------------------------------------------------------------
-    ! This routine updates the Equation of State for changes in temperature and density.
+    ! This routine initializes starkiller
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: nzevolve
+    Use xnet_controls, Only: nzevolve, tid
+
+    Use actual_eos_module, Only: actual_eos_init
     Implicit None
 
-    Call read_helm_table
+    Call actual_eos_init()
 
     Allocate (ye(nzevolve))
     Allocate (ytot(nzevolve))
@@ -52,6 +55,10 @@ Contains
     zibar = 0.0
     sratio = 0.0
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+
     Return
   End Subroutine eos_initialize
 
@@ -59,9 +66,13 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine interfaces with and calls the underlying EoS.
     !-----------------------------------------------------------------------------------------------
+    !__dir_routine_seq
     Use xnet_constants, Only: amu
     Use xnet_controls, Only: iheat, iscrn
     Use xnet_types, Only: dp
+
+    Use actual_eos_module, Only: xnet_actual_eos
+    Use eos_type_module, Only: eos_input_rt, eos_t
     Implicit None
 
     ! Input variables
@@ -70,26 +81,28 @@ Contains
     ! Ouput variables
     Real(dp), Intent(out) :: cv, etae, detaedt9
 
+    ! Local variables
+    Type(eos_t) :: eos_state
+
     cv = 0.0
     etae = 0.0
     detaedt9 = 0.0
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
       ! Load input variables for the eos
-      jlo_eos = 1
-      jhi_eos = 1
-      den_row(1) = rho
-      temp_row(1) = t9*1e9
-      abar_row(1) = abar
-      zbar_row(1) = ye*abar
+      eos_state%rho = rho
+      eos_state%T = t9*1e9
+      eos_state%y_e = ye
+      eos_state%abar = abar
+      eos_state%zbar = zbar
 
       ! Call the eos
-      Call helmeos
+      Call xnet_actual_eos(eos_input_rt,eos_state)
 
       ! Convert units from ergs/g to MeV/nucleon and K to GK
-      cv = cv_row(1) * amu * 1e9
-      etae = etaele_row(1)
-      detaedt9 = detat_row(1) * 1e9
+      cv = eos_state%cv * amu * 1e9
+      etae = eos_state%eta
+      detaedt9 = eos_state%detadt * 1e9
     EndIf
 
   End Subroutine eosx
@@ -130,7 +143,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -156,12 +169,20 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_create(ye,cv,etae,detaedt9) &
+    !__dir_copyin(mask,t9,rho,y,xext,aext,zext)
+
     ! Calculate Ye
     Call y_moment(y,ye,ytot(zb_lo:zb_hi), &
       & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Call the eos
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(mask,t9,rho,ye,abar,zbar,cv,etae,detaedt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Call eosx(t9(izb),rho(izb),ye(izb),abar(izb),zbar(izb),cv(izb),etae(izb),detaedt9(izb))
@@ -169,12 +190,20 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(t9,rho,ye,cv,etae,detaedt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Write(lun_diag,"(a,6es23.15)") 'EOS',t9(izb),rho(izb),ye(izb),cv(izb),etae(izb),detaedt9(izb)
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(ye,cv,etae,detaedt9) &
+    !__dir_delete(mask,t9,rho,y,xext,aext,zext)
 
     Return
   End Subroutine eos_interface_vector
@@ -224,7 +253,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
     Use xnet_abundances, Only: y_moment
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: plasma
     Implicit None
@@ -253,14 +282,24 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_create(ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !__dir_copyin(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
+
     ! Calculate Ye
     Call y_moment(y,ye(zb_lo:zb_hi),ytot(zb_lo:zb_hi), &
       & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
-    Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask)
+    Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
 
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(mask,t9,rho,y,etae,detaedt9) &
+    !__dir_present(ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !__dir_present(ye,ytot,abar,zbar,z2bar,zibar,sratio)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ztilde(izb) = sqrt(z2bar(izb) + sratio(izb)*zbar(izb)) ! DGC, Eq. 4
@@ -272,6 +311,9 @@ Contains
       EndIf
     EndDo
     If ( idiag >= 3 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(t9,rho,ye,z2bar,zbar,sratio,ztilde,lambda0,gammae)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Write(lun_diag,"(a14,9es23.15)") 'EOS Screen', &
@@ -280,6 +322,11 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !__dir_delete(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
     Return
   End Subroutine eos_screen_vector
@@ -293,6 +340,7 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
+    !__dir_routine_seq
     Use fd, Only: fdm1h, fd1h, fdm3h
     Use xnet_controls, Only: iheat
     Use xnet_types, Only: dp
@@ -334,7 +382,7 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -358,11 +406,25 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_create(ratio,dratiodeta) &
+    !__dir_copyin(mask,eta)
+
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(ratio,dratiodeta) &
+    !__dir_present(mask,eta)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Call salpeter_ratio_scalar(eta(izb),ratio(izb),dratiodeta(izb))
       EndIf
     EndDo
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(ratio,dratiodeta) &
+    !__dir_delete(mask,eta)
 
     Return
   End Subroutine salpeter_ratio_vector

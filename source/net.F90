@@ -11,6 +11,8 @@
 ! services from within the hydro.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Program net
   !-------------------------------------------------------------------------------------------------
   ! This is the driver for running XNet
@@ -34,6 +36,7 @@ Program net
   Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
   Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_integrate_bdf, Only: bdf_init
+  Use xnet_integrate_be, Only: be_init
   Use xnet_jacobian, Only: read_jacobian_data
   Use xnet_match, Only: mflx, nflx, read_match_data
   Use xnet_nnu, Only: nnuspec, tmevnu, fluxcms
@@ -131,6 +134,7 @@ Program net
   ! Initialize EoS for screening or self-heating
   Call eos_initialize
 
+  If ( isolv == 1 ) Call be_init
   If ( isolv == 3 ) Call bdf_init
 
   ! Convert output_nuc names into indices
@@ -186,6 +190,16 @@ Program net
 
   ! Allocate zone description arrays
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
+
+  !__dir_enter_data &
+  !__dir_async(tid) &
+  !__dir_copyin(y,yo,yt,ydot,ystart,xext,aext,zext) &
+  !__dir_copyin(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
+  !__dir_copyin(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
+  !__dir_copyin(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
+  !__dir_copyin(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+
+  !__dir_wait(tid)
 
   stop_timer = xnet_wtime()
   timer_setup = timer_setup + stop_timer
@@ -297,6 +311,13 @@ Program net
       EndDo
     EndIf
 
+    !__dir_update &
+    !__dir_async(tid) &
+    !__dir_device(xext,aext,zext) &
+    !__dir_device(lzactive,tdel,t,t9,rho,ye,y,nt) &
+    !__dir_device(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
+    !__dir_device(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+
     stop_timer = xnet_wtime()
     timer_setup = timer_setup + stop_timer
 
@@ -304,9 +325,12 @@ Program net
     Call full_net(kstep)
 
     ! Test how well sums of fluxes match abundances changes
-    Do izb = zb_lo, zb_hi
-      If ( lzactive(izb) ) Then
-        If ( idiag >= 3 ) Then
+    If ( idiag >= 3 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(y)
+      Do izb = zb_lo, zb_hi
+        If ( lzactive(izb) ) Then
           dyf = 0.0
           Do k = 1, mflx
             dyf(nflx(1:4,k)) = dyf(nflx(1:4,k)) + flx_int(k,izb)
@@ -317,8 +341,12 @@ Program net
           Write(lun_diag,"(a)") 'Species Flux Sum + Y Final - Y Initial = Flux Diff'
           Write(lun_diag,"(a5,4es11.3)") (nname(k),dyf(k),y(k,izb),ystart(k,izb),flx_diff(k),k=1,ny)
         EndIf
+      EndDo
+    EndIf
 
-        ! Close zone output files
+    ! Close zone output files
+    Do izb = zb_lo, zb_hi
+      If ( lzactive(izb) ) Then
         If (itsout >= 2 ) Close(lun_ev(izb))
         If (itsout >= 1 ) Close(lun_ts(izb))
       EndIf
@@ -329,6 +357,16 @@ Program net
   ! Close diagnostic output file
   If ( idiag >= 0 ) Close(lun_diag)
   !$omp end parallel
+
+  !__dir_exit_data &
+  !__dir_async(tid) &
+  !__dir_delete(y,yo,yt,ydot,ystart,xext,aext,zext) &
+  !__dir_delete(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
+  !__dir_delete(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
+  !__dir_delete(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
+  !__dir_delete(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+
+  !__dir_wait(tid)
 
   Call gpu_finalize()
 

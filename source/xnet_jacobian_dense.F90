@@ -11,6 +11,10 @@
 
 #include "xnet_macros.fh"
 
+#if !defined(USE_NOPIVOT)
+#define USE_NOPIVOT 0
+#endif
+
 Module xnet_jacobian
   !-------------------------------------------------------------------------------------------------
   ! The Jacobian matrix for the solver.
@@ -42,8 +46,8 @@ Module xnet_jacobian
   Real(dp), Allocatable, Target :: diag0(:)
   Real(dp), Allocatable, Target :: mult1(:)
 
-  !__dir_declare &
-  !__dir_mod_create(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
+  Real(dp), Parameter :: pivot_thresh = 1.0e-4
+  Logical, Allocatable :: pivot(:)
 
 Contains
 
@@ -52,7 +56,7 @@ Contains
     ! Initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: iheat, nzevolve
+    Use xnet_controls, Only: iheat, nzevolve, tid
     Use xnet_gpu, Only: dev_ptr
     Implicit None
 
@@ -71,8 +75,10 @@ Contains
 
     Allocate (diag0(nzevolve))
     Allocate (mult1(nzevolve))
+    Allocate (pivot(nzevolve))
     diag0 = 0.0
     mult1 = 1.0
+    pivot = .false.
 
     Allocate (dydotdy(msize,msize,nzevolve))
     Allocate (jac(msize,msize,nzevolve))
@@ -84,6 +90,10 @@ Contains
     rhs = 0.0
     indx = 0
     info = 0
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(dydotdy,jac,rhs,indx,info,diag0,mult1,pivot)
 
     Allocate (hjac(nzevolve))
     Allocate (hrhs(nzevolve))
@@ -103,14 +113,22 @@ Contains
       dindx(izb) = dev_ptr( indx(1,izb) )
     EndDo
 
-    !__dir_update_gpu(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1)
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(djac,drhs,dindx)
 
     Return
   End Subroutine read_jacobian_data
 
   Subroutine jacobian_finalize
+    Use xnet_controls, Only: tid
     Implicit None
-    Deallocate (diag0,mult1)
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_delete(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
+
+    Deallocate (diag0,mult1,pivot)
     Deallocate (dydotdy,jac,rhs,indx,info)
     Deallocate (hjac,hrhs,hindx)
     Deallocate (djac,drhs,dindx)
@@ -124,7 +142,7 @@ Contains
     ! adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, nname
-    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -158,21 +176,66 @@ Contains
       mult(zb_lo:) => mult1(zb_lo:zb_hi)
     EndIf
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(mask,diag,mult)
+
+    !__dir_loop_outer(2) &
+    !__dir_async(tid) &
+    !__dir_present(jac,dydotdy,pivot) &
+    !__dir_present(mask,diag,mult) &
+    !__dir_private(rsum)
     Do izb = zb_lo, zb_hi
       Do j1 = 1, msize
         If ( mask(izb) ) Then
+          rsum = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_reduction(+,rsum)
           Do i0 = 1, msize
             jac(i0,j1,izb) = mult(izb) * dydotdy(j1,i0,izb)
             If ( i0 == j1 ) Then
               jac(i0,j1,izb) = jac(i0,j1,izb) + diag(izb)
             Else
+              rsum = rsum + abs(jac(i0,j1,izb))
             EndIf
           EndDo
+          pivot(izb) = ( rsum*pivot_thresh > abs(jac(j1,j1,izb)) )
         EndIf
       EndDo
     EndDo
+    !__dir_update &
+    !__dir_async(tid) &
+    !__dir_host(pivot)
+
+    If ( idiag >= 3 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(pivot,jac)
+      Do izb = zb_lo, zb_hi
+        If ( mask(izb) ) Then
+          izone = izb + szbatch - zb_lo
+          If ( pivot(izb) ) Then
+            Do j = 1, msize
+              rsum = 0.0
+              Do i = 1, msize
+                If ( i /= j ) Then
+                  rsum = rsum + abs(jac(j,j,izb))
+                EndIf
+              EndDo
+              i = maxloc(abs(jac(:,j,izb)),dim=1)
+              If ( i /= j ) Then
+                Write(lun_diag,"(a,2i5,3es24.16)") 'JAC_DIAG',i,j,jac(j,j,izb),jac(i,j,izb),rsum
+              EndIf
+            EndDo
+          EndIf
+        EndIf
+      EndDo
+    EndIf
 
     If ( idiag >= 5 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(diag,mult,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -192,6 +255,10 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_delete(mask,diag,mult)
     
     Return
   End Subroutine jacobian_scale
@@ -207,7 +274,8 @@ Contains
       & n10, n20, n30, n40
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: cv
-    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: iheat, idiag, ktot, lun_diag, nzbatchmx, szbatch, zb_lo, zb_hi, &
+      & lzactive, tid
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_jacob
     Use xnet_types, Only: dp
     Implicit None
@@ -231,46 +299,80 @@ Contains
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(mask)
+
     ! Build the Jacobian
+    !__dir_loop_outer(2) &
+    !__dir_async(tid) &
+    !__dir_private(s1,s2,s3,s4) &
+    !__dir_present(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
+    !__dir_present(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
+    !__dir_present(mu1,mu2,mu3,mu4,a1,a2,a3,a4) &
+    !__dir_present(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
     Do izb = zb_lo, zb_hi
       Do i0 = 1, ny
         If ( mask(izb) ) Then
+          !__dir_loop_inner(1)
           Do j1 = 1, msize
             dydotdy(j1,i0,izb) = 0.0
           EndDo
+          !__dir_loop_inner(1)
           Do j1 = la(1,i0), le(1,i0)
+            !__dir_atomic
             dydotdy(n11(j1),i0,izb) = dydotdy(n11(j1),i0,izb) + b1(j1,izb)
           EndDo
+          !__dir_loop_inner(1)
           Do j1 = la(2,i0), le(2,i0)
+            !__dir_atomic
             dydotdy(n21(j1),i0,izb) = dydotdy(n21(j1),i0,izb) + b2(j1,izb) * yt(n22(j1),izb)
+            !__dir_atomic
             dydotdy(n22(j1),i0,izb) = dydotdy(n22(j1),i0,izb) + b2(j1,izb) * yt(n21(j1),izb)
           EndDo
+          !__dir_loop_inner(1)
           Do j1 = la(3,i0), le(3,i0)
+            !__dir_atomic
             dydotdy(n31(j1),i0,izb) = dydotdy(n31(j1),i0,izb) + b3(j1,izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
+            !__dir_atomic
             dydotdy(n32(j1),i0,izb) = dydotdy(n32(j1),i0,izb) + b3(j1,izb) * yt(n33(j1),izb) * yt(n31(j1),izb)
+            !__dir_atomic
             dydotdy(n33(j1),i0,izb) = dydotdy(n33(j1),i0,izb) + b3(j1,izb) * yt(n31(j1),izb) * yt(n32(j1),izb)
           EndDo
+          !__dir_loop_inner(1)
           Do j1 = la(4,i0), le(4,i0)
+            !__dir_atomic
             dydotdy(n41(j1),i0,izb) = dydotdy(n41(j1),i0,izb) + b4(j1,izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
+            !__dir_atomic
             dydotdy(n42(j1),i0,izb) = dydotdy(n42(j1),i0,izb) + b4(j1,izb) * yt(n43(j1),izb) * yt(n44(j1),izb) * yt(n41(j1),izb)
+            !__dir_atomic
             dydotdy(n43(j1),i0,izb) = dydotdy(n43(j1),i0,izb) + b4(j1,izb) * yt(n44(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb)
+            !__dir_atomic
             dydotdy(n44(j1),i0,izb) = dydotdy(n44(j1),i0,izb) + b4(j1,izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb)
           EndDo
 
           If ( iheat > 0 ) Then
             s1 = 0.0
+            !__dir_loop_inner(1) &
+            !__dir_reduction(+,s1)
             Do j1 = la(1,i0), le(1,i0)
               s1 = s1 + a1(j1) * dcsect1dt9(mu1(j1),izb) * yt(n11(j1),izb)
             EndDo
             s2 = 0.0
+            !__dir_loop_inner(1) &
+            !__dir_reduction(+,s2)
             Do j1 = la(2,i0), le(2,i0)
               s2 = s2 + a2(j1) * dcsect2dt9(mu2(j1),izb) * yt(n21(j1),izb) * yt(n22(j1),izb)
             EndDo
             s3 = 0.0
+            !__dir_loop_inner(1) &
+            !__dir_reduction(+,s3)
             Do j1 = la(3,i0), le(3,i0)
               s3 = s3 + a3(j1) * dcsect3dt9(mu3(j1),izb) * yt(n31(j1),izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
             EndDo
             s4 = 0.0
+            !__dir_loop_inner(1) &
+            !__dir_reduction(+,s4)
             Do j1 = la(4,i0), le(4,i0)
               s4 = s4 + a4(j1) * dcsect4dt9(mu4(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
             EndDo
@@ -281,10 +383,16 @@ Contains
     EndDo
 
     If ( iheat > 0 ) Then
+      !__dir_loop_outer(2) &
+      !__dir_async(tid) &
+      !__dir_present(mask,dydotdy,cv,mex) &
+      !__dir_private(sdot)
       Do izb = zb_lo, zb_hi
         Do j1 = 1, msize
           If ( mask(izb) ) Then
             sdot = 0.0
+            !__dir_loop_inner(1) &
+            !__dir_reduction(-,sdot)
             Do i0 = 1, ny
               sdot = sdot - mex(i0)*dydotdy(j1,i0,izb) / cv(izb)
             EndDo
@@ -294,6 +402,9 @@ Contains
       EndDo
     EndIf
 
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ktot(3,izb) = ktot(3,izb) + 1
@@ -301,9 +412,12 @@ Contains
     EndDo
 
     ! Apply the externally provided factors
-    Call jacobian_scale(diag_in,mult_in,mask_in = mask)
+    Call jacobian_scale(diag_in,mult_in,mask_in = mask_in)
 
     If ( idiag >= 5 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(dydotdy)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -324,6 +438,10 @@ Contains
       EndDo
     EndIf
 
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_delete(mask)
+
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
 
@@ -335,9 +453,8 @@ Contains
     ! This routine solves the system of equations composed of the Jacobian and RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_linalg, Only: LinearSolveBatched_GPU, LinearSolve_CPU
-    Use xnet_gpu, Only: stream, stream_sync
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve
     Use xnet_types, Only: dp
     Implicit None
@@ -356,6 +473,7 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izone, istat
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -369,13 +487,13 @@ Contains
     timer_solve = timer_solve - start_timer
 
     !__dir_enter_data &
-    !__dir_copyin(mask)
-
-    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi))
+    !__dir_async(tid) &
+    !__dir_create(dy,dt9) &
+    !__dir_copyin(mask,yrhs,t9rhs)
 
     !__dir_loop_outer(1) &
-    !__dir_present(mask,rhs) &
-    !__dir_copyin(yrhs,t9rhs)
+    !__dir_async(tid) &
+    !__dir_present(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -393,10 +511,14 @@ Contains
 
     ! Solve the linear system
 #if defined(XNET_GPU)
+#if USE_NOPIVOT
+    any_pivot = any(pivot(zb_lo:zb_hi))
+#else
+    any_pivot = .true.
+#endif
     call LinearSolveBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
-    call stream_sync( stream )
+      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -407,8 +529,8 @@ Contains
 #endif
 
     !__dir_loop_outer(1) &
-    !__dir_present(mask,rhs) &
-    !__dir_copyout(dy,dt9)
+    !__dir_async(tid) &
+    !__dir_present(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -420,6 +542,9 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -431,7 +556,9 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_delete(mask)
+    !__dir_async(tid) &
+    !__dir_copyout(dy,dt9) &
+    !__dir_delete(mask,yrhs,t9rhs)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -443,8 +570,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
-    Use xnet_gpu, Only: stream, stream_sync
+    Use xnet_controls, Only: idiag, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_linalg, Only: LUDecompBatched_GPU, LUDecomp_CPU
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Implicit None
@@ -457,6 +583,7 @@ Contains
 
     ! Local variables
     Integer :: i, j, izb, izone, istat
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -470,14 +597,16 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_decmp = timer_decmp - start_timer
 
-    !__dir_update_gpu(jac(:,:,zb_lo:zb_hi))
-
     ! Calculate the LU decomposition
 #if defined(XNET_GPU)
+#if USE_NOPIVOT
+    any_pivot = any(pivot(zb_lo:zb_hi))
+#else
+    any_pivot = .true.
+#endif
     call LUDecompBatched_GPU &
       & ( msize, msize, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), info(zb_lo), nzbatch )
-    call stream_sync( stream )
+      &   dindx(zb_lo), info(zb_lo), nzbatch, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -488,6 +617,9 @@ Contains
 #endif
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -509,9 +641,8 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatch, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_linalg, Only: LUBksubBatched_GPU, LUBksub_CPU
-    Use xnet_gpu, Only: stream, stream_sync
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
     Implicit None
@@ -530,6 +661,7 @@ Contains
 
     ! Local variables
     Integer :: i, izb, izone
+    Logical :: any_pivot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -544,11 +676,13 @@ Contains
     timer_bksub = timer_bksub - start_timer
 
     !__dir_enter_data &
-    !__dir_copyin(mask)
+    !__dir_async(tid) &
+    !__dir_create(dy,dt9) &
+    !__dir_copyin(mask,yrhs,t9rhs)
 
     !__dir_loop_outer(1) &
-    !__dir_present(mask,rhs) &
-    !__dir_copyin(yrhs,t9rhs)
+    !__dir_async(tid) &
+    !__dir_present(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -566,10 +700,15 @@ Contains
 
     ! Solve the LU-decomposed triangular system via back-substitution
 #if defined(XNET_GPU)
+    ! TODO: pack djac pointers into djacp array with only non-converged points
+#if USE_NOPIVOT
+    any_pivot = any(pivot(zb_lo:zb_hi))
+#else
+    any_pivot = .true.
+#endif
     call LUBksubBatched_GPU &
       & ( 'N', msize, 1, jac(1,1,zb_lo), djac(zb_lo), msize, indx(1,zb_lo), &
-      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch )
-    call stream_sync( stream )
+      &   dindx(zb_lo), rhs(1,zb_lo), drhs(zb_lo), msize, info(zb_lo), nzbatch, pivot = any_pivot )
 #else
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -580,8 +719,8 @@ Contains
 #endif
 
     !__dir_loop_outer(1) &
-    !__dir_present(mask,rhs) &
-    !__dir_copyout(dy,dt9)
+    !__dir_async(tid) &
+    !__dir_present(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         !__dir_loop_inner(1)
@@ -593,6 +732,9 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -604,7 +746,9 @@ Contains
     EndIf
 
     !__dir_exit_data &
-    !__dir_delete(mask)
+    !__dir_async(tid) &
+    !__dir_copyout(dy,dt9) &
+    !__dir_delete(mask,yrhs,t9rhs)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer

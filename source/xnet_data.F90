@@ -4,6 +4,8 @@
 ! data and allocate the arrays.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module nuclear_data
   !-------------------------------------------------------------------------------------------------
   ! This module contains the essential data for each included species. Their array sizes are set in
@@ -35,12 +37,17 @@ Module nuclear_data
   ! non-nuclei. The array sizes are set in read_nuclear_data.
   !-------------------------------------------------------------------------------------------------
   Integer, Parameter    :: ng = 24      ! Number of grid points for partition function data
-  Integer               :: it9i(ng)     ! Raw partition function temperature grid from file
-  Real(dp)              :: t9i(ng)      ! Temperature grid for partition function data
+  Integer, Allocatable  :: it9i(:)      ! Raw partition function temperature grid from file
+  Real(dp), Allocatable :: t9i(:)       ! Temperature grid for partition function data
   Real(dp), Allocatable :: g(:,:)       ! Partition function data
   Real(dp), Allocatable :: gg(:,:)      ! Interpolated partition function
   Real(dp), Allocatable :: angm(:)      ! Angular momentum
   Real(dp), Allocatable :: dlngdt9(:,:) ! d(ln(partition functions))/dT9
+
+  Interface benuc
+    Module Procedure benuc_scalar
+    Module Procedure benuc_vector
+  End Interface benuc
 
 Contains
 
@@ -74,7 +81,7 @@ Contains
     Return
   End Subroutine index_from_name
 
-  Subroutine benuc(y,enb,enm)
+  Subroutine benuc_scalar(y,enb,enm)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the binding energy and mass excess energy [ergs/g] of the abundance
     ! distribution.
@@ -92,9 +99,14 @@ Contains
 
     ! Local variables
     Real(dp) :: ztot ! Total proton number
+    Integer :: k
 
-    ztot = sum(y * zz)
-    enb  = sum(y * be)
+    ztot = 0.0
+    enb  = 0.0
+    Do k = 1, ny
+      ztot = ztot + y(k) * zz(k)
+      enb  = enb  + y(k) * be(k)
+    EndDo
     enm  = mex_p*ztot + mex_n*(1.0-ztot) - enb
 
     ! Change units from MeV/nucleon to erg/g
@@ -102,13 +114,81 @@ Contains
     enm = epmev * avn * enm
 
     Return
-  End Subroutine benuc
+  End Subroutine benuc_scalar
+
+  Subroutine benuc_vector(y,enb,enm,mask_in)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculates the binding energy and mass excess energy [ergs/g] of the abundance
+    ! distribution.
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_constants, Only: epmev, avn
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
+
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: enb(zb_lo:zb_hi) ! Binding energy [ergs g^{-1}]
+    Real(dp), Intent(inout) :: enm(zb_lo:zb_hi) ! Mass excess [ergs g^{-1}]
+
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
+    ! Local variables
+    Real(dp) :: ztot, btot
+    Integer :: k, izb
+    Logical, Pointer :: mask(:)
+
+    If ( present(mask_in) ) Then
+      mask(zb_lo:) => mask_in
+    Else
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+    EndIf
+    If ( .not. any(mask) ) Return
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(mask,y,enb,enm)
+
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(mask,y,enb,enm,zz,be) &
+    !__dir_private(ztot,btot)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+
+        ztot = 0.0
+        btot = 0.0
+        !__dir_loop_inner(1) &
+        !__dir_reduction(+,ztot,btot)
+        Do k = 1, ny
+          ztot = ztot + y(k,izb) * zz(k)
+          btot = btot + y(k,izb) * be(k)
+        EndDo
+        enb(izb) = btot
+        enm(izb) = mex_p*ztot + mex_n*(1.0-ztot) - btot
+
+        ! Change units from MeV/nucleon to erg/g
+        enb(izb) = epmev * avn * enb(izb)
+        enm(izb) = epmev * avn * enm(izb)
+      EndIf
+    EndDo
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(enb,enm) &
+    !__dir_delete(mask,y)
+
+    Return
+  End Subroutine benuc_vector
 
   Subroutine partf(t9,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -131,8 +211,18 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(mask,t9)
+
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(mask,t9,t9i,gg,g,dlngdt9) &
+    !__dir_private(ii,rdt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+
+        !__dir_loop_serial(1)
         Do i = 1, ng
           If ( t9(izb) <= t9i(i) ) Exit
         EndDo
@@ -142,15 +232,18 @@ Contains
         gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
         Select Case (ii)
         Case (1)
+          !__dir_loop_inner(1)
           Do k = 1, ny
             gg(k,izb) = g(1,k)
           EndDo
         Case (ng+1)
+          !__dir_loop_inner(1)
           Do k = 1, ny
             gg(k,izb) = g(ng,k)
           EndDo
         Case Default
           rdt9 = (t9(izb)-t9i(ii-1)) / (t9i(ii)-t9i(ii-1))
+          !__dir_loop_inner(1)
           Do k = 1, ny
             gg(k,izb) = safe_exp( rdt9*log(g(ii,k)) + (1.0-rdt9)*log(g(ii-1,k)) )
           EndDo
@@ -160,14 +253,17 @@ Contains
           dlngdt9(0,izb) = 0.0
           Select Case (ii)
           Case (1)
+            !__dir_loop_inner(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(2,k)/g(1,k)) / (t9i(2)-t9i(1))
             EndDo
           Case (ng+1)
+            !__dir_loop_inner(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(ng,k)/g(ng-1,k)) / (t9i(ng)-t9i(ng-1))
             EndDo
           Case Default
+            !__dir_loop_inner(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(ii,k)/g(ii-1,k)) / (t9i(ii)-t9i(ii-1))
             EndDo
@@ -184,6 +280,10 @@ Contains
     !    EndIf
     !  EndDo
     !EndIf
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_delete(mask,t9)
 
     Return
   End Subroutine partf
@@ -252,6 +352,8 @@ Contains
     If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
 
     ! Read in the partition function iteration grid, and fix endpoints
+    If ( .not. allocated(it9i) ) Allocate (it9i(ng))
+    If ( .not. allocated(t9i) )  Allocate (t9i(ng))
     Read(lun_winv,"(24i3)",iostat=ierr) (it9i(j), j=1,ng)
     If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
 
@@ -301,7 +403,7 @@ Contains
     ! the set of nuclear data is read in, it is assigned to the proper nuclei.
     !-----------------------------------------------------------------------------------------------
     Use xnet_constants, Only: avn, bip1, m_e, m_n, m_p, m_u, five3rd, thbim1
-    Use xnet_controls, Only: iheat, nzevolve
+    Use xnet_controls, Only: iheat, nzevolve, tid
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Implicit None
@@ -338,8 +440,10 @@ Contains
     If ( .not. allocated(nname) ) Allocate (nname(0:ny))
     Allocate (aa(ny),zz(ny),nn(ny),be(ny),mex(ny),mm(ny),ia(ny),iz(ny),in(ny))
     Allocate (zz2(ny),zz53(ny),zzi(ny))
+    Allocate (it9i(ng),t9i(ng))
     Allocate (g(ng,ny),angm(0:ny))
     If ( parallel_IOProcessor() ) Call read_netwinv(data_dir)
+    Call parallel_bcast(it9i)
     Call parallel_bcast(t9i)
     Call parallel_bcast(nname)
     Call parallel_bcast(aa)
@@ -393,6 +497,13 @@ Contains
     !mm(:) = zz(:)*(m_p+m_e) + nn(:)*m_n - be(:)*epmev/(clt*clt)
 
     Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(aa,zz,nn,be,mex,mm,ia,iz,in) &
+    !__dir_copyin(zz2,zz53,zzi,zseq,zseq53,zseqi) &
+    !__dir_copyin(it9i,t9i,g,angm) &
+    !__dir_create(gg,dlngdt9)
 
     Return
   End Subroutine read_nuclear_data
@@ -540,10 +651,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, izmax, nname, zz
     Use xnet_constants, Only: five3rd
-    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0
+    Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0, tid
     Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
-      & ngrid, rffn, dlnrffndt9
-    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, rnnu
+      & phasei,dphaseidt9, ngrid, rffn, dlnrffndt9
+    Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, ltnu, fluxnu, rnnu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
     Use xnet_util, Only: xnet_terminate
@@ -591,51 +702,64 @@ Contains
         ffnsum = 0.0
         ffnenu = 0.0
         has_logft = 0
-        If ( abs(iweak0) == 2 ) Then
-          ! Additional data for logft rates
-          Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
-          Allocate (ffn_qval(nffn))
-          ffn_ec = 0.0
-          ffn_beta = 0.0
-          ffn_qval = 0.0
-        EndIf
+
+        ! Additional data for logft rates
+        Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
+        Allocate (ffn_qval(nffn))
+        Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
+        ffn_ec = 0.0
+        ffn_beta = 0.0
+        ffn_qval = 0.0
+        phasei = 0.0
+        dphaseidt9 = 0.0
       EndIf
       Call parallel_bcast(ffnsum)
       Call parallel_bcast(ffnenu)
       Call parallel_bcast(has_logft)
-      If ( abs(iweak0) == 2 ) Then
-        ! Additional data for logft rates
-        Call parallel_bcast(ffn_ec)
-        Call parallel_bcast(ffn_beta)
-        Call parallel_bcast(ffn_qval)
-      EndIf
+
+      ! Additional data for logft rates
+      Call parallel_bcast(ffn_ec)
+      Call parallel_bcast(ffn_beta)
+      Call parallel_bcast(ffn_qval)
+      Call parallel_bcast(phasei)
+      Call parallel_bcast(dphaseidt9)
     Else
       Allocate(ffnsum(1,ngrid),ffnenu(1,ngrid))
       Allocate (has_logft(1))
       ffnsum = 0.0
       ffnenu = 0.0
       has_logft = 0
+
       ! Additional arrays for logft rates
-      If ( abs(iweak0) == 2 ) Then
-         Allocate (ffn_ec(1,ngrid),ffn_beta(1,ngrid))
-         Allocate (ffn_qval(1))
-         ffn_ec = 0.0
-         ffn_beta = 0.0
-         ffn_qval = 0.0
-      Endif
-    Endif
+      Allocate (ffn_ec(1,ngrid),ffn_beta(1,ngrid))
+      Allocate (ffn_qval(1))
+      Allocate (phasei(1,nzevolve),dphaseidt9(1,nzevolve))
+      ffn_ec = 0.0
+      ffn_beta = 0.0
+      ffn_qval = 0.0
+      phasei = 0.0
+      dphaseidt9 = 0.0
+    EndIf
 
     ! If there are NNU rates, read in the NNU data and set NNU array sizes
     If ( nnnu > 0 ) Then
       If ( parallel_IOProcessor() ) Then
         Call read_nnu_data(nnnu,data_dir)
       Else
+        Allocate (ltnu(nnuspec,nzevolve))
+        Allocate (fluxnu(nnuspec,nzevolve))
         Allocate (sigmanu(nnnu,ntnu))
+        ltnu = 0.0
+        fluxnu = 0.0
         sigmanu = 0.0
       EndIf
       Call parallel_bcast(sigmanu)
     Else
+      Allocate (ltnu(nnuspec,nzevolve))
+      Allocate (fluxnu(nnuspec,nzevolve))
       Allocate (sigmanu(1,ntnu))
+      ltnu = 0.0
+      fluxnu = 0.0
       sigmanu = 0.0
     EndIf
 
@@ -804,6 +928,19 @@ Contains
     Allocate (rffn(max(1,nffn),nzevolve))
     Allocate (dlnrffndt9(max(1,nffn),nzevolve))
     Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
+    !__dir_copyin(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
+    !__dir_copyin(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
+    !__dir_copyin(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
+    !__dir_copyin(iffn,ffnsum,ffnenu) &
+    !__dir_copyin(has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
+    !__dir_copyin(innu,sigmanu,ltnu,fluxnu) &
+    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !__dir_create(rffn,dlnrffndt9,rnnu)
 
     Return
   End Subroutine read_reaction_data

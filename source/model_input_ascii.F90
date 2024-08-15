@@ -260,7 +260,7 @@ Module model_input_ascii
       Write(lun_stderr,"(2a)") 'Failed to open input file: ',trim(inab_file)
     Else
 
-      Read(lun_ab,*) abund_desc
+      Read(lun_ab,"(a)") abund_desc
       Do
         char_tmp = '     '
         real_tmp = 0.0

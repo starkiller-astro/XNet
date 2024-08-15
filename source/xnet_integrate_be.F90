@@ -6,8 +6,26 @@
 ! reaction network.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_integrate_be
+  Use xnet_types, Only: dp
   Implicit None
+  Private
+
+  Integer , Allocatable :: inr(:)
+  Integer , Allocatable :: mykts(:)
+  Logical , Allocatable :: lzstep(:)
+
+  Real(dp), Allocatable, Target :: testc(:), testc2(:), testm(:)
+  Real(dp), Pointer     :: testn(:)
+  Real(dp), Allocatable :: toln(:)
+  Real(dp), Allocatable :: xtot(:), xtot_init(:), rdt(:), mult(:)
+  Real(dp), Allocatable :: yrhs(:,:), dy(:,:), reldy(:,:)
+  Real(dp), Allocatable :: t9rhs(:), dt9(:), relt9(:)
+  Logical , Allocatable :: iterate(:), eval_rates(:), rebuild(:)
+
+  Public :: solve_be, be_init
 
 Contains
 
@@ -25,7 +43,7 @@ Contains
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_next, tdelstart, t9, t9o, t9t, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, t9rhofind
     Use xnet_controls, Only: idiag, iheat, kitmx, kmon, ktot, lun_diag, lun_stdout, tdel_maxmult, &
-      & szbatch, zb_lo, zb_hi
+      & szbatch, zb_lo, zb_hi, tid
     Use xnet_integrate, Only: timestep
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_tstep
     Implicit None
@@ -40,14 +58,18 @@ Contains
     ! Local variables
     Integer, Parameter :: ktsmx = 10
     Integer :: kts, k, izb, izone
-    Integer :: inr(zb_lo:zb_hi)
-    Integer :: mykts(zb_lo:zb_hi)
-    Logical :: lzstep(zb_lo:zb_hi)
 
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(its)
+
     ! If the zone has previously converged or failed, do not iterate
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(its,inr,lzstep,mykts)
     Do izb = zb_lo, zb_hi
       If ( its(izb) /= 0 ) Then
         inr(izb) = -1
@@ -69,6 +91,9 @@ Contains
       ! Attempt Backward Euler integration over desired timestep
       Call step_be(kstep,inr)
 
+      !__dir_loop_outer(1) &
+      !__dir_async(tid) &
+      !__dir_present(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot)
       Do izb = zb_lo, zb_hi
 
         ! If integration fails, reset abundances, reduce timestep and retry.
@@ -78,6 +103,7 @@ Contains
           yet(izb) = ye(izb)
           mykts(izb) = kts+1
 
+          !__dir_loop_inner(1)
           Do k = 1, ny
             yt(k,izb) = y(k,izb)
           EndDo
@@ -100,11 +126,17 @@ Contains
         EndIf
         lzstep(izb) = ( inr(izb) == 0 )
       EndDo
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(lzstep)
 
       ! Reset temperature and density for failed integrations
       Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
         & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
       If ( iheat > 0 ) Then
+        !__dir_loop_outer(1) &
+        !__dir_async(tid) &
+        !__dir_present(lzstep,t9t,t9)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
             t9t(izb) = t9(izb)
@@ -115,6 +147,9 @@ Contains
       ! For the last attempt, re-calculate timestep based on derivatives
       ! as is done for the first timestep.
       If ( kts == ktsmx-1 ) Then
+        !__dir_loop_outer(1) &
+        !__dir_async(tid) &
+        !__dir_present(lzstep,tdel,tdelstart)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
             tdel(izb) = 0.0
@@ -126,6 +161,9 @@ Contains
 
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
+        !__dir_update &
+        !__dir_wait(tid) &
+        !__dir_host(inr,tt,tdel)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
             izone = izb + szbatch - zb_lo
@@ -139,6 +177,10 @@ Contains
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
+    !__dir_present(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
     Do izb = zb_lo, zb_hi
       If ( inr(izb) >= 0 ) Then
         kmon(1,izb) = mykts(izb)
@@ -155,6 +197,7 @@ Contains
           rho(izb) = rhot(izb)
           yeo(izb) = ye(izb)
           ye(izb) = yet(izb)
+          !__dir_loop_inner(1)
           Do k = 1, ny
             yo(k,izb) = y(k,izb)
             y(k,izb) = yt(k,izb)
@@ -167,18 +210,31 @@ Contains
 
     ! Log TS success/failure
     If ( idiag >= 0 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(inr)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
+          !__dir_update &
+          !__dir_wait(tid) &
+          !__dir_host(mykts(izb))
           Write(lun_diag,"(a,2i5,2i3)") &
             & 'BE TS Success',kstep,izone,mykts(izb),inr(izb)
         ElseIf ( inr(izb) == 0 ) Then
+          !__dir_update &
+          !__dir_wait(tid) &
+          !__dir_host(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
           Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
             & 'BE TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),inr(izb),mykts(izb)
           Write(lun_stdout,*) 'Timestep retrys fail after ',mykts(izb),' attempts'
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(its)
 
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer
@@ -193,9 +249,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, aa, nname
     Use xnet_abundances, Only: y, ydot, yt, xext
-    Use xnet_conditions, Only: cv, rhot, t9, t9dot, t9t, tdel, nh
+    Use xnet_conditions, Only: t9, t9dot, t9t, tdel, nh
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
-      & szbatch, zb_lo, zb_hi
+      & szbatch, zb_lo, zb_hi, tid
     Use xnet_integrate, Only: cross_sect, yderiv
     Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_nraph
@@ -214,17 +270,18 @@ Contains
     Integer :: irdymx, idymx
     Integer :: i, k, kit, izb, izone
     Real(dp) :: s1, s2, s3, ytmp
-    Real(dp) :: testc(zb_lo:zb_hi), testc2(zb_lo:zb_hi), testm(zb_lo:zb_hi)
-    Real(dp) :: testn(zb_lo:zb_hi), toln(zb_lo:zb_hi)
-    Real(dp) :: xtot(zb_lo:zb_hi), xtot_init(zb_lo:zb_hi), rdt(zb_lo:zb_hi), mult(zb_lo:zb_hi)
-    Real(dp) :: yrhs(ny,zb_lo:zb_hi), dy(ny,zb_lo:zb_hi), reldy(ny,zb_lo:zb_hi)
-    Real(dp) :: t9rhs(zb_lo:zb_hi), dt9(zb_lo:zb_hi), relt9(zb_lo:zb_hi)
-    Logical :: iterate(zb_lo:zb_hi), eval_rates(zb_lo:zb_hi), rebuild(zb_lo:zb_hi)
 
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
-    ! Calculate initial total mass fraction
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(inr)
+
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
+    !__dir_private(s1)
     Do izb = zb_lo, zb_hi
       If ( inr(izb) == 0 ) Then
 
@@ -233,6 +290,8 @@ Contains
 
         ! Calculate initial total mass fraction
         s1 = 0.0
+        !__dir_loop_inner(1) &
+        !__dir_reduction(+,s1)
         Do k = 1, ny
           s1 = s1 + aa(k)*y(k,izb)
         EndDo
@@ -247,12 +306,10 @@ Contains
         rdt(izb) = 0.0
         mult(izb) = 0.0
       EndIf
-      If ( iconvc /= 0 ) Then
-        toln(izb) = tolc
-      Else
-        toln(izb) = tolm
-      EndIf
     EndDo
+    !__dir_update &
+    !__dir_wait(tid) &
+    !__dir_host(iterate)
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
     Do kit = 1, kitmx
@@ -270,6 +327,9 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
+      !__dir_update &
+      !__dir_async(tid) &
+      !__dir_device(rebuild,eval_rates)
 
       ! Calculate the reaction rates and abundance time derivatives
       Call cross_sect(mask_in = eval_rates)
@@ -278,20 +338,26 @@ Contains
       Call jacobian_decomp(kstep,mask_in = rebuild)
 
       ! Calculate equation to zero
+      !__dir_loop_outer(1) &
+      !__dir_async(tid) &
+      !__dir_present(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           If ( kit > 1 ) Then
+            !__dir_loop_inner(1)
             Do k = 1, ny
               yrhs(k,izb) = (y(k,izb)-yt(k,izb))*rdt(izb) + ydot(k,izb)
             EndDo
             If ( iheat > 0 ) t9rhs(izb) = (t9(izb)-t9t(izb))*rdt(izb) + t9dot(izb)
           Else
+            !__dir_loop_inner(1)
             Do k = 1, ny
               yrhs(k,izb) = ydot(k,izb)
             EndDo
             If ( iheat > 0 ) t9rhs(izb) = t9dot(izb)
           EndIf
         Else
+          !__dir_loop_inner(1)
           Do k = 1, ny
             yrhs(k,izb) = 0.0
           EndDo
@@ -299,6 +365,9 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
+        !__dir_update &
+        !__dir_wait(tid) &
+        !__dir_host(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
             izone = izb + szbatch - zb_lo
@@ -325,11 +394,19 @@ Contains
       ! Considering the uncertainties of the reaction rates, it is doubtful that the
       ! increased precision of testc is truly increased accuracy.
       !-----------------------------------------------------------------------------------------
+      !__dir_loop_outer(1) &
+      !__dir_async(tid) &
+      !__dir_present(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
+      !__dir_present(aa,inr,testm,testc,testc2,testn,toln) &
+      !__dir_private(s1,s2,s3)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           s1 = 0.0
           s2 = 0.0
           s3 = 0.0
+          !__dir_loop_inner(1) &
+          !__dir_private(ytmp) &
+          !__dir_reduction(+,s1,s2,s3)
           Do k = 1, ny
             ytmp = yt(k,izb) + dy(k,izb)
             If ( ytmp < ymin ) Then
@@ -360,15 +437,6 @@ Contains
             relt9(izb) = 0.0
           EndIf
 
-          ! Ordinarily, test for true convergence
-          If ( iconvc /= 0 ) Then
-            testn(izb) = testc(izb)
-
-          ! Otherwise, use mass conservation for convergence condition
-          Else
-            testn(izb) = testm(izb)
-          EndIf
-
           ! If converged, exit NR loop
           If ( abs(testn(izb)) <= toln(izb) .and. relt9(izb) < tolt9 ) Then
             inr(izb) = kit
@@ -378,8 +446,14 @@ Contains
           EndIf
         EndIf
       EndDo
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(iterate)
 
       If ( idiag >= 3 ) Then
+        !__dir_update &
+        !__dir_wait(tid) &
+        !__dir_host(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) >= 0 ) Then
             izone = izb + szbatch - zb_lo
@@ -405,6 +479,9 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(inr,xtot,testn,toln)
       Do izb = zb_lo, zb_hi
         If ( inr(izb) >= 0 ) Then
           izone = izb + szbatch - zb_lo
@@ -417,11 +494,86 @@ Contains
       EndDo
     EndIf
 
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(inr)
 
     stop_timer = xnet_wtime()
     timer_nraph = timer_nraph + stop_timer
 
     Return
   End Subroutine step_be
+
+  Subroutine be_init
+    !-----------------------------------------------------------------------------------------------
+    ! This routine initializes the BE data structures
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_controls, Only: iconvc, tolc, tolm, nzevolve, tid
+    Implicit None
+
+    If ( .not. allocated(inr) ) Allocate (inr(nzevolve))
+    If ( .not. allocated(mykts) ) Allocate (mykts(nzevolve))
+    If ( .not. allocated(lzstep) ) Allocate (lzstep(nzevolve))
+    inr = 0
+    mykts = 0
+    lzstep = .false.
+
+    ! Set convergence condition and tolerances
+    If ( .not. allocated(testc) ) Allocate (testc(nzevolve))
+    If ( .not. allocated(testc2) ) Allocate (testc2(nzevolve))
+    If ( .not. allocated(testm) ) Allocate (testm(nzevolve))
+    If ( .not. allocated(testn) ) Allocate (testn(nzevolve))
+    If ( .not. allocated(toln) ) Allocate (toln(nzevolve))
+    testc = 0.0_dp
+    testc2 = 0.0_dp
+    testm = 0.0_dp
+    testn = 0.0_dp
+    If ( iconvc /= 0 ) Then
+      testn => testc
+      toln = tolc
+    Else
+      testn => testm
+      toln = tolm
+    EndIf
+
+    If ( .not. allocated(xtot) ) Allocate (xtot(nzevolve))
+    If ( .not. allocated(xtot_init) ) Allocate (xtot_init(nzevolve))
+    xtot = 0.0_dp
+    xtot_init = 0.0_dp
+
+    If ( .not. allocated(rdt) ) Allocate (rdt(nzevolve))
+    If ( .not. allocated(mult) ) Allocate (mult(nzevolve))
+    rdt = 0.0_dp
+    mult = 0.0_dp
+
+    If ( .not. allocated(yrhs) ) Allocate (yrhs(ny,nzevolve))
+    If ( .not. allocated(dy) ) Allocate (dy(ny,nzevolve))
+    If ( .not. allocated(reldy) ) Allocate (reldy(ny,nzevolve))
+    yrhs = 0.0_dp
+    dy = 0.0_dp
+    reldy = 0.0_dp
+
+    If ( .not. allocated(t9rhs) ) Allocate (t9rhs(nzevolve))
+    If ( .not. allocated(dt9) ) Allocate (dt9(nzevolve))
+    If ( .not. allocated(relt9) ) Allocate (relt9(nzevolve))
+    t9rhs = 0.0_dp
+    dt9 = 0.0_dp
+    relt9 = 0.0_dp
+
+    If ( .not. allocated(iterate) ) Allocate (iterate(nzevolve))
+    If ( .not. allocated(eval_rates) ) Allocate (eval_rates(nzevolve))
+    If ( .not. allocated(rebuild) ) Allocate (rebuild(nzevolve))
+    iterate = .false.
+    eval_rates = .false.
+    rebuild = .false.
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(inr,mykts,lzstep) &
+    !__dir_copyin(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
+    !__dir_copyin(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+
+  End Subroutine be_init
 
 End Module xnet_integrate_be

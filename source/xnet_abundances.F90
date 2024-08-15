@@ -3,6 +3,8 @@
 ! This file contains modules and subroutines associated with matter composition.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_abundances
   !-------------------------------------------------------------------------------------------------
   ! This module contains the abundances of the nuclear species, at the previous time (yo), current
@@ -92,8 +94,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This is the interface for the vector version.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive
+    Use nuclear_data, Only: ny, aa, zz, zz2, zzi
+    Use xnet_constants, Only: thbim1
+    Use xnet_controls, Only: idiag, lun_diag, zb_lo, zb_hi, lzactive, tid
     Use xnet_types, Only: dp
     Implicit None
 
@@ -109,8 +112,8 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: izb
-    Real(dp) :: yext
+    Integer :: izb, k
+    Real(dp) :: yext, ntot, atot, ztot, z2tot, zitot
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -119,17 +122,55 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_create(ye,ytot,abar,zbar,z2bar,zibar) &
+    !__dir_copyin(mask,y,xext,aext,zext)
        
     ! Calculate abundance moments
+    !__dir_loop_outer(1) &
+    !__dir_async(tid) &
+    !__dir_present(ye,ytot,abar,zbar,z2bar,zibar) &
+    !__dir_present(mask,y,xext,aext,zext) &
+    !__dir_private(yext,ntot,atot,ztot,z2tot,zitot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         yext = xext(izb) / aext(izb)
-        Call y_moment_internal(y(:,izb),ye(izb),ytot(izb), &
-          & abar(izb),zbar(izb),z2bar(izb),zibar(izb),xext(izb),yext,zext(izb))
+
+        ntot  = 0.0
+        atot  = 0.0
+        ztot  = 0.0
+        z2tot = 0.0
+        zitot = 0.0
+        !__dir_loop_inner(1) &
+        !__dir_reduction(+,ntot,atot,ztot,z2tot,zitot)
+        Do k = 1, ny
+          ntot  = ntot  + y(k,izb)
+          atot  = atot  + y(k,izb) * aa(k)
+          ztot  = ztot  + y(k,izb) * zz(k)
+          z2tot = z2tot + y(k,izb) * zz2(k)
+          zitot = zitot + y(k,izb) * zzi(k)
+        EndDo
+        ntot  = ntot  + yext
+        atot  = atot  + xext(izb)
+        ztot  = ztot  + yext * zext(izb)
+        z2tot = z2tot + yext * zext(izb) * zext(izb)
+        zitot = zitot + yext * zext(izb)**thbim1
+
+        ye(izb)    = ztot  / atot
+        ytot(izb)  = ntot
+        abar(izb)  = atot  / ntot
+        zbar(izb)  = ztot  / ntot
+        z2bar(izb) = z2tot / ntot
+        zibar(izb) = zitot / ntot
       EndIf
     EndDo
        
     If ( idiag >= 3 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(ye,ytot,abar,zbar,z2bar,zibar)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Write(lun_diag,"(a4,6es23.15)") 'YMom', &
@@ -137,6 +178,11 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(ye,ytot,abar,zbar,z2bar,zibar) &
+    !__dir_delete(mask,y,xext,aext,zext)
 
     Return
   End Subroutine y_moment_vector

@@ -26,7 +26,8 @@ Module xnet_gpu
     cublasCreate_v2, &
     cublasDestroy_v2, &
     cublasGetStream_v2, &
-    cublasSetStream_v2
+    cublasSetStream_v2, &
+    cublasSetSmCountTarget
   Use cusolverf, Only: &
     cusolver_handle, &
     cusolverDnCreate, &
@@ -191,10 +192,10 @@ Contains
 
     ! Create a stream and associate with linear algebra libraries
 #if defined(XNET_OACC)
-    stream = acc_get_cuda_stream( INT( acc_async_noval, KIND=C_LONG_LONG ) )
+    !stream = acc_get_cuda_stream( INT( acc_async_noval, KIND=C_LONG_LONG ) )
+    acc_queue = tid
+    stream = acc_get_cuda_stream(acc_queue)
     Call acc_set_cuda_stream( INT( acc_async_sync, KIND=C_LONG_LONG ), stream )
-    !acc_queue = tid
-    !stream = acc_get_cuda_stream(acc_queue)
     !ierr = acc_set_cuda_stream(acc_queue, stream)
 #elif defined(XNET_CUDA)
     ierr = cudaStreamCreate( stream )
@@ -206,6 +207,7 @@ Contains
     ierr = cublasSetStream_v2( cublas_handle, stream )
     !ierr = cusparseSetStream( cusparse_handle, stream )
     ierr = cusolverDnSetStream( cusolver_handle, stream )
+    !ierr = cublasSetSmCountTarget( cublas_handle, 54 )
 #elif defined(XNET_HIP)
     Call hipblasCheck( hipblasSetStream( hipblas_handle, stream ) )
     !Call hipsparseCheck( hipsparseSetStream( hipsparse_handle, stream ) )

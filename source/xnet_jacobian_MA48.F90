@@ -1,31 +1,35 @@
 !***************************************************************************************************
-! jacobian_PARDISO.f90 10/18/17
-! Sparse Jacobian interface for PARDISO
+! jacobian_MA48.f90 10/18/17
+! Sparse Jacobian interface for MA48
 !
 ! The routines in this file are used to replace the standard dense Jacobian and associated solver
-! with the PARDISO sparse solver package.
+! with the HSL MA48 sparse solver package.
 !
 ! The bulk of the computational cost of the network (60-95%) is the solving of the matrix equation.
 ! Careful selection of the matrix solver is therefore very important to fast computation. For
 ! networks from a few dozen up to a couple hundred species, hand tuned dense solvers such as those
 ! supplied by the hardware manufacturer (often LAPACK) or third-parties like NAG, IMSL, etc. are
-! fastest. However for larger matrices, sparse solvers are faster. In our experience, PARDISO is
-! prefered sparse solver of XNet, because it is generally the fastest and most bulletproof sparse
-! package available, with fairly wide distribution as part of the Intel MKL.
+! fastest. However for larger matrices, sparse solvers are faster. MA48 is a solver from HSL, which
+! is available under an academic license. We find it to be faster than PARDISO for matrices of size
+! 100 < ny < 1000, but slower at larger sizes, but the availablilty of the MA48 source makes it
+! valuable for some applications.
+!
+! Reference:
+! HSL(2013). A collection of Fortran codes for large scale scientific computation.
+!   http://www.hsl.rl.ac.uk
 !***************************************************************************************************
 
 Module xnet_jacobian
   !-------------------------------------------------------------------------------------------------
-  ! Contains data for use in the sparse solver using Compressed-Row Storage (CRS)
+  ! Contains data for use in the sparse solver.
   !-------------------------------------------------------------------------------------------------
-  Use xnet_types, Only: dp, i8
+  Use xnet_types, Only: dp
   Implicit None
 
   ! Jacobian data arrays
   Real(dp), Allocatable :: dydotdy(:,:) ! dYdot/dY part of jac
   Real(dp), Allocatable :: tvals(:,:)   ! Jacobian matrix
   Real(dp), Allocatable :: sident(:)    ! Identity matrix
-  Integer, Allocatable  :: perm(:)      ! Permutation vector
   Integer, Allocatable  :: ridx(:)      ! Row indices of non-zeroes
   Integer, Allocatable  :: cidx(:)      ! Column indices of non-zeroes
   Integer, Allocatable  :: pb(:)        ! Pointer to first non-zero for each column
@@ -38,89 +42,35 @@ Module xnet_jacobian
   Integer, Allocatable  :: ns41(:), ns42(:), ns43(:), ns44(:)
   Integer               :: l1s, l2s, l3s, l4s ! Sizes of ns arrays
 
-  ! PARDISO Attributes
-  Integer, Parameter :: mtype = 11 ! PARDISO matrix type code (11 = real and nonsymmetric)
-  Integer, Parameter :: nrhs = 1   ! Number of right-hand sides
-  Integer, Parameter :: solver = 0 ! Solver method (0 = sparse direct)
+  ! MA48 internal working arrays and solver controls
+  Real(dp), Allocatable :: vals(:,:), wB(:), wC(:)
+  Integer, Allocatable  :: irn(:,:), jcn(:,:)
+  Integer, Allocatable  :: keep(:,:), iwA(:), iwB(:), iwC(:)
+  Integer, Allocatable :: jobA(:), jobB(:), jobC(:)
+  Integer :: lia
+  Integer :: icntl(20), info(20)
+  Real(dp) :: cntl(10), rinfo(10), maxerr
+  !$omp threadprivate(vals,lia,jcn,irn,wB,wC,iwA,iwB,iwC,keep,info,rinfo,cntl,icntl)
+  Namelist /ma48_controls/ icntl, cntl, maxerr
 
-  ! Solver controls
-  Integer(i8) :: pt(64)            ! PARDISO internal data address pointers
-  Integer     :: iparm(64)         ! PARDISO solver parameters
-  Real(dp)    :: dparm(64)         ! PARDISO solver parameters for iterative solver
-  Integer     :: phase             ! PARDISO execution mode
-  Integer     :: msglvl            ! Verbosity of PARDISO diagnostics
-  Integer     :: maxfct            ! Maximal number of factors with identical nonzero sparsity structure to keep in memory
-  !$omp threadprivate(pt,iparm,dparm,phase)
-  Namelist /pardiso_controls/ iparm, dparm
+  ! Temporary copies for reallocating
+  Real(dp), Allocatable ::  vals0(:,:)
+  Integer, Allocatable :: irn0(:,:), jcn0(:,:)
+  Integer :: lia0
+  !$omp threadprivate(vals0,jcn0,irn0,lia0)
 
-  Interface xnet_pardiso
-    Module Procedure mkl_pardiso
-  End Interface xnet_pardiso
-
-  Interface xnet_pardisoinit
-    Module Procedure mkl_pardisoinit
-  End Interface xnet_pardisoinit
+  ! Some other solver parameters
+  Logical, Parameter :: trans = .false. ! Flag for solving the transposed system
+  Integer, Parameter :: kbksubmx = 3, kdecompmx = 5 ! Max loop counts
 
 Contains
-
-  Subroutine mkl_pardisoinit(error)
-    Implicit None
-    Integer, Intent(out) :: error
-    Interface
-      Subroutine pardisoinit(pt,mtype,iparm)
-        Use xnet_types, Only: i8
-        Implicit None
-        Integer(i8), Intent(inout) :: pt(*)
-        Integer, Intent(in) :: mtype
-        Integer, Intent(inout) :: iparm(*)
-      End Subroutine pardisoinit
-    End Interface
-    Call pardisoinit(pt,mtype,iparm)
-    iparm(3) = 1 ! Set # of OpenMP threads for PARDISO to use
-    Return
-  End Subroutine mkl_pardisoinit
-
-  Subroutine mkl_pardiso(mnum,a,b,x,error)
-    Use xnet_types, Only: dp
-    Implicit None
-    Integer, Intent(in) :: mnum
-    Real(dp), Intent(in) :: a(:)
-    Real(dp), Intent(inout) :: b(:)
-    Real(dp), Intent(out) :: x(:)
-    Integer, Intent(out) :: error
-    Interface
-      Subroutine pardiso(pt,maxfct,mnum,mtype,phase,n,a,ia,ja,perm,nrhs,iparm,msglvl,b,x,error)
-        Use xnet_types, Only: dp, i8
-        Implicit None
-        Integer(i8), Intent(inout) :: pt(*)
-        Integer, Intent(in) :: maxfct
-        Integer, Intent(in) :: mnum
-        Integer, Intent(in) :: mtype
-        Integer, Intent(in) :: phase
-        Integer, Intent(in) :: n
-        Real(dp), Intent(in) :: a(*)
-        Integer, Intent(in) :: ia(*)
-        Integer, Intent(in) :: ja(*)
-        Integer, Intent(inout) :: perm(*)
-        Integer, Intent(in) :: nrhs
-        Integer, Intent(inout) :: iparm(*)
-        Integer, Intent(in) :: msglvl
-        Real(dp), Intent(inout) :: b(*)
-        Real(dp), Intent(out) :: x(*)
-        Integer, Intent(out) :: error
-      End Subroutine pardiso
-    End Interface
-    Call pardiso(pt,maxfct,mnum,mtype,phase,msize,a,pb,cidx,perm,nrhs,iparm,msglvl,b,x,error)
-    Return
-  End Subroutine mkl_pardiso
 
   Subroutine read_jacobian_data(data_dir)
     !-----------------------------------------------------------------------------------------------
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use reaction_data, Only: la, le, n11, n21, n22, n31, n32, n33, n41, n42, n43, n44
-    Use xnet_controls, Only: idiag, iheat, lun_diag, nzbatchmx, nzevolve, zb_lo, zb_hi
+    Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Implicit None
 
@@ -128,10 +78,7 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer, Allocatable :: ridxo(:), cidxo(:), pbo(:)
-    Integer :: i, i0, i1, la1, le1, la2, le2, la3, le3, la4, le4, j1, l1, l2, l3, l4
-    Integer :: rstart, rstarto, rend, rendo
-    Integer :: ierr, lun_sparse, lun_solver
+    Integer :: i, ierr, lun_sparse, lun_solver
 
     If ( parallel_IOProcessor() ) Then
       Open(newunit=lun_sparse, file=trim(data_dir)//"/sparse_ind", status='old', form='unformatted')
@@ -151,43 +98,17 @@ Contains
     ! Allocate, read, and broadcast CRS arrays
     Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
     If ( parallel_IOProcessor() ) Then
+      Read(lun_sparse) ridx(1:lval), cidx(1:lval), pb(1:ny+1)
       If ( iheat > 0 ) Then
-        Allocate (ridxo(lval),cidxo(lval),pbo(ny+1))
-        Read(lun_sparse) ridxo, cidxo, pbo
-
         ! Add indices for self-heating
-        pb(1) = pbo(1)
-        Do i0 = 1, ny
-
-          ! Shift row pointers to adjust for additional column
-          pb(i0+1) = pbo(i0+1) + i0
-          rstarto = pbo(i0)
-          rendo = pbo(i0+1) - 1
-          rstart  = pb(i0)
-          rend  = pb(i0+1) - 1
-
-          ! Extra column indices
-          cidx(rstart:rend-1) = cidxo(rstarto:rendo)
-          cidx(rend) = ny+1
-          ridx(rstart:rend-1) = ridxo(rstarto:rendo)
-          ridx(rend) = i0
+        Do i = 1, ny
+          cidx(i+lval) = ny + 1     ! Extra column (dYdot/dT9)
+          ridx(i+lval) = i
+          cidx(i+lval+ny) = i       ! Extra row (dT9dot/dY)
+          ridx(i+lval+ny) = ny + 1
         EndDo
-        Deallocate(ridxo,cidxo,pbo)
-
-        ! Extra row indices
-        pb(msize+1) = nnz + 1
-        rstart = pb(msize)
-        rend = pb(msize+1) - 1
-        Do i0 = 1, ny
-          cidx(rstart+i0-1) = i0
-          ridx(rstart+i0-1) = ny+1
-        EndDo
-
-        ! dT9dot/dT9 term
-        cidx(nnz) = ny + 1
+        cidx(nnz) = ny + 1          ! dT9dot/dT9 term
         ridx(nnz) = ny + 1
-      Else
-        Read(lun_sparse) ridx, cidx, pb
       EndIf
       Read(lun_sparse) l1s, l2s, l3s, l4s
     EndIf
@@ -204,56 +125,15 @@ Contains
     Allocate (ns21(l2s),ns22(l2s))
     Allocate (ns31(l3s),ns32(l3s),ns33(l3s))
     Allocate (ns41(l4s),ns42(l4s),ns43(l4s),ns44(l4s))
-
-    ! Rebuild arrays mapping reaction rates to locations in CRS Jacobian
     If ( parallel_IOProcessor() ) Then
-      If ( iheat > 0 ) Then
-        ns11 = 0 ; ns21 = 0 ; ns22 = 0 ; ns31 = 0 ; ns32 = 0 ; ns33 = 0
-        ns41 = 0 ; ns42 = 0 ; ns43 = 0 ; ns44 = 0
-        Do i0 = 1, ny
-          la1 = la(1,i0) ; la2 = la(2,i0) ; la3 = la(3,i0) ; la4 = la(4,i0)
-          le1 = le(1,i0) ; le2 = le(2,i0) ; le3 = le(3,i0) ; le4 = le(4,i0)
-          Do j1 = la1, le1
-            l1 = n11(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns11(j1) = i1
-            EndDo
-          EndDo
-          Do j1 = la2, le2
-            l1 = n21(j1) ; l2 = n22(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns21(j1) = i1
-              If ( cidx(i1) == l2 .and. ridx(i1) == i0 ) ns22(j1) = i1
-            EndDo
-          EndDo
-          Do j1 = la3, le3
-            l1 = n31(j1) ; l2 = n32(j1) ; l3 = n33(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns31(j1) = i1
-              If ( cidx(i1) == l2 .and. ridx(i1) == i0 ) ns32(j1) = i1
-              If ( cidx(i1) == l3 .and. ridx(i1) == i0 ) ns33(j1) = i1
-            EndDo
-          EndDo
-          Do j1 = la4, le4
-            l1 = n41(j1) ; l2 = n42(j1) ; l3 = n43(j1) ; l4 = n44(j1)
-            Do i1 = 1, nnz
-              If ( cidx(i1) == l1 .and. ridx(i1) == i0 ) ns41(j1) = i1
-              If ( cidx(i1) == l2 .and. ridx(i1) == i0 ) ns42(j1) = i1
-              If ( cidx(i1) == l3 .and. ridx(i1) == i0 ) ns43(j1) = i1
-              If ( cidx(i1) == l4 .and. ridx(i1) == i0 ) ns44(j1) = i1
-            EndDo
-          EndDo
-        EndDo
-      Else
-        Read(lun_sparse) ns11, ns21, ns22
-        Read(lun_sparse) ns31
-        Read(lun_sparse) ns32
-        Read(lun_sparse) ns33
-        Read(lun_sparse) ns41
-        Read(lun_sparse) ns42
-        Read(lun_sparse) ns43
-        Read(lun_sparse) ns44
-      EndIf
+      Read(lun_sparse) ns11, ns21, ns22
+      Read(lun_sparse) ns31
+      Read(lun_sparse) ns32
+      Read(lun_sparse) ns33
+      Read(lun_sparse) ns41
+      Read(lun_sparse) ns42
+      Read(lun_sparse) ns43
+      Read(lun_sparse) ns44
       Close(lun_sparse)
     EndIf
     Call parallel_bcast(ns11)
@@ -267,46 +147,82 @@ Contains
     Call parallel_bcast(ns43)
     Call parallel_bcast(ns44)
 
-    ! Build a CRS format version of the identity matrix
+    ! Build a compressed row format version of the identity matrix
     Where ( ridx == cidx )
       sident = 1.0
     ElseWhere
       sident = 0.0
     EndWhere
 
-    ! Read and broadcast user-defined PARDISO controls
+    ! Read and broadcast user-defined MA48 controls
     If ( parallel_IOProcessor() ) Then
 
-      call xnet_pardisoinit(ierr)
+      ! Set the value for the maximum allowed error in the call to MA48CD
+      maxerr = 1.0d-11
+
+      ! Set default values for MA48 control parameters
+      Call MA48ID(cntl,icntl)
+
+      ! Set level of MA48 verbosity (default=2)
+      If ( idiag >= 5 ) Then
+        icntl(3) = 3
+      EndIf
+
+      ! Set block column size (default=32)
+      If ( msize < 32 ) Then
+        icntl(5) = msize
+      ElseIf ( msize < 512 ) Then
+        icntl(5) = 32
+      ElseIf ( msize < 2048 ) Then
+        icntl(5) = 128
+      Else
+        icntl(5) = 256
+      EndIf
+
+      ! Unit numbers for MA48 error/diagnostic output will be set to XNet diagnostic file by default,
+      ! but we put in random values here so we can later check for user-defined input
+      icntl(1) = -99
+      icntl(2) = -99
 
       ! Override defaults with user-defined inputs
       Open(newunit=lun_solver, file="sparse_controls.nml", action='read', status='old', iostat=ierr)
       If ( ierr == 0 ) Then
-        Read(lun_solver,nml=pardiso_controls)
+        Read(lun_solver,nml=ma48_controls)
         Close(lun_solver)
       EndIf
     EndIf
-    Call parallel_bcast(iparm)
-    Call parallel_bcast(dparm)
-
-    ! Set level of PARDISO verbosity
-    If ( idiag >= 5 ) Then
-      msglvl = 1
-    Else
-      msglvl = 0
-    EndIf
-
-    ! Set number of factorizations for PARDISO to store with identical sparsity structure
-    maxfct = nzbatchmx
+    Call parallel_bcast(icntl)
+    Call parallel_bcast(cntl)
+    Call parallel_bcast(maxerr)
 
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))
+    Allocate (jobA(nzevolve))
+    Allocate (jobB(nzevolve))
+    Allocate (jobC(nzevolve))
 
-    !$omp parallel default(shared) copyin(pt,iparm,dparm)
+    !$omp parallel default(shared) copyin(cntl,icntl)
+
+    ! These are variables to be used by the MA48 solver
+    lia = 8*nnz
+    Allocate (vals(lia,zb_lo:zb_hi),jcn(lia,zb_lo:zb_hi),irn(lia,zb_lo:zb_hi))
+    Allocate (wB(msize),wC(4*msize))
+    Allocate (iwA(9*msize),iwB(4*msize),iwC(msize))
+    If (icntl(8) == 0) Then
+      Allocate (keep(6*msize + 4*msize/icntl(6) + 7 - max(msize/icntl(6),1),zb_lo:zb_hi))
+    Else
+      Allocate (keep(6*msize + 4*msize/icntl(6) + 7,zb_lo:zb_hi))
+    EndIf
 
     ! Initialize work arrays
-    Allocate (perm(msize))
-    perm = 0
-
+    vals = 0.0
+    wB = 0.0
+    wC = 0.0
+    jcn = 0
+    irn = 0
+    iwA = 0
+    iwB = 0
+    iwC = 0
+    keep = 0
     !$omp end parallel
 
     Return
@@ -340,7 +256,7 @@ Contains
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        tvals(:,izb) = mult(izb) * dydotdy(:,izb) + diag(izb) * sident(:)
+        tvals(:,izb) = mult(izb) * dydotdy(:,izb) + diag(izb) * sident
       EndIf
     EndDo
     
@@ -349,8 +265,8 @@ Contains
 
   Subroutine jacobian_build(diag_in,mult_in,mask_in)
     !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the reaction Jacobian matrix, dYdot/dY, and augments by multiplying all
-    ! elements by mult and adding diag to the diagonal elements.
+    ! This routine calculates the reaction Jacobian matrix, dYdot/dY, and augments by multiplying
+    ! all elements by mult and adding diag to the diagonal elements.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny, mex
     Use reaction_data, Only: a1, a2, a3, a4, b1, b2, b3, b4, la, le, mu1, mu2, mu3, mu4, n11, n21, &
@@ -373,7 +289,7 @@ Contains
     Integer :: is11, is21, is22, is31, is32, is33, is41, is42, is43, is44
     Real(dp) :: s1, s2, s3, s4, r1, r2, r3, r4
     Real(dp) :: y11, y21, y22, y31, y32, y33, y41, y42, y43, y44
-    Real(dp) :: dt9dotdy(msize), dr1dt9, dr2dt9, dr3dt9, dr4dt9
+    Real(dp) :: dt9dotdy(ny), dr1dt9, dr2dt9, dr3dt9, dr4dt9
     Real(dp) :: diag(zb_lo:zb_hi), mult(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
@@ -496,17 +412,20 @@ Contains
               y44 = yt(i44,izb)
               s4 = s4 + dr4dt9 * y41 * y42 * y43 * y44
             EndDo
-            dydotdy(pb(i0+1)-1,izb) = s1 + s2 + s3 + s4
+            dydotdy(lval+i0,izb) = s1 + s2 + s3 + s4
           EndDo
 
           dt9dotdy = 0.0
-          Do i0 = 1, ny
-            Do j1 = pb(i0), pb(i0+1)-1
-              dt9dotdy(cidx(j1)) = dt9dotdy(cidx(j1)) + mex(i0)*dydotdy(j1,izb)
-            EndDo
+          Do j1 = 1, lval
+            dt9dotdy(cidx(j1)) = dt9dotdy(cidx(j1)) + mex(ridx(j1))*dydotdy(j1,izb)
           EndDo
-          dydotdy(pb(ny+1):nnz,izb) = -dt9dotdy(:) / cv(izb)
+          dydotdy(lval+ny+1:lval+2*ny,izb) = -dt9dotdy / cv(izb)
 
+          s1 = 0.0
+          Do i0 = 1, ny
+            s1 = s1 + mex(i0)*dydotdy(lval+i0,izb)
+          EndDo
+          dydotdy(nnz,izb) = -s1 / cv(izb)
         EndIf
       EndDo
     EndIf
@@ -522,7 +441,7 @@ Contains
     Else
       mult = 1.0
     EndIf
-    Call jacobian_scale(diag,mult,mask_in = mask)
+    Call jacobian_scale(diag,mult,mask_in = mask_in)
 
     If ( idiag >= 6 ) Then
       Do izb = zb_lo, zb_hi
@@ -560,12 +479,12 @@ Contains
     Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
     Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
 
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
     ! Output variables
     Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
     Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
-
-    ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
     Integer :: i, izb, izone
@@ -578,8 +497,8 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    Call jacobian_decomp(kstep,mask_in = mask)
-    Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = mask)
+    Call jacobian_decomp(kstep,mask_in = mask_in)
+    Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = mask_in)
 
     If ( idiag >= 5 ) Then
       Do izb = zb_lo, zb_hi
@@ -599,9 +518,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine performs the LU matrix decomposition for the Jacobian.
     !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: kitmx, kmon, lun_stdout, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: lun_diag, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_decmp
     Use xnet_types, Only: dp
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -611,8 +531,7 @@ Contains
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
 
     ! Local variables
-    Integer :: i, izb, izone, err
-    Real(dp) :: rhs(msize), dx(msize)
+    Integer :: i, izb, izone, j, kdecomp, jdecomp
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -630,13 +549,190 @@ Contains
       If ( mask(izb) ) Then
 
         ! Check if this is the first step, or if matrix needs to be reanalyzed
-        If ( kstep == 1 .or. kmon(2,izb) > kitmx ) Then
-          phase = 12
+        If ( kstep == 1 .or. jobB(izb) == 1 ) Then
+
+          ! Try to restrict pivoting to the diagonal
+          jobA(izb) = 3
+
+          ! Perform symbolic analysis
+          Do kdecomp = 1, kdecompmx
+            jcn(1:nnz,izb) = cidx
+            irn(1:nnz,izb) = ridx
+            vals(1:nnz,izb) = tvals(:,izb)
+            info = 0
+            rinfo = 0.0
+            Call MA48AD(msize,msize,nnz,jobA(izb),lia,vals(:,izb),irn(:,izb),jcn(:,izb), &
+              & keep(:,izb),cntl,icntl,iwA,info,rinfo)
+            If ( info(1) == 0 .and. info(4) <= lia .and. info(2) <= 10 ) Then
+              jobB(izb) = 1 ! If analysis is successful, proceed to factorization
+              Exit
+            ElseIf ( kdecomp == kdecompmx ) Then
+              Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48AD. kdecomp=',kdecomp,', info(1)=',info(1)
+              Call xnet_terminate('Error during MA48AD',info(1))
+            Else
+              Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48AD. kdecomp=',kdecomp,', info(1)=',info(1)
+
+              ! Address any error codes
+              If ( info(1) >= 4 .and. jobA(izb) == 3 ) Then
+                Write(lun_diag,"(1x,a,i3,a,i7)") 'Not possible to choose all pivots from diagonal'
+                jobA(izb) = 1
+              ElseIf ( info(1) == -3 .or. info(4) > lia ) Then
+                Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',max(info(3),info(4))
+                lia0 = lia
+                lia = int(1.2*max(info(3),info(4)))
+
+                Allocate (jcn0(lia,zb_lo:zb_hi))
+                jcn0(1:lia0,:) = jcn
+                Call move_alloc(jcn0,jcn)
+                jcn(:,izb) = 0
+
+                Allocate (irn0(lia,zb_lo:zb_hi))
+                irn0(1:lia0,:) = irn
+                Call move_alloc(irn0,irn)
+                irn(:,izb) = 0
+
+                Allocate (vals0(lia,zb_lo:zb_hi))
+                vals0(1:lia0,:) = vals
+                Call move_alloc(vals0,vals)
+                vals(:,izb) = 0.0
+              ElseIf ( info(2) > 10 ) Then
+                Write(lun_diag,"(1x,a,i3,a,i7)") 'Reallocating MA48 arrays: info(2)=',info(2),', info(4)=',max(info(3),info(4))
+                lia0 = lia
+                lia = int(2.0*max(info(3),info(4)))
+
+                Allocate (jcn0(lia,zb_lo:zb_hi))
+                jcn0(1:lia0,:) = jcn
+                Call move_alloc(jcn0,jcn)
+                jcn(:,izb) = 0
+
+                Allocate (irn0(lia,zb_lo:zb_hi))
+                irn0(1:lia0,:) = irn
+                Call move_alloc(irn0,irn)
+                irn(:,izb) = 0
+
+                Allocate (vals0(lia,zb_lo:zb_hi))
+                vals0(1:lia0,:) = vals
+                Call move_alloc(vals0,vals)
+                vals(:,izb) = 0.0
+              EndIf
+            EndIf
+          EndDo
         Else
-          phase = 22
+          vals(1:nnz,izb) = tvals(:,izb)
         EndIf
-        Call xnet_pardiso(izb,tvals(:,izb),rhs,dx,err)
-        If ( err /= 0 ) Write(lun_stdout,*) 'PARDISO error ',err,' phase=',phase
+
+        ! Perform numerical decomposition using previously determined symbolic decomposition
+        Do kdecomp = 1, kdecompmx
+          info = 0
+          rinfo = 0.0
+          Call MA48BD(msize,msize,nnz,jobB(izb),lia,vals(:,izb),irn(:,izb),jcn(:,izb), &
+            & keep(:,izb),cntl,icntl,wB,iwB,info,rinfo)
+          If ( info(1) == 0 .and. info(4) <= lia .and. info(6) == 0 ) Then
+            If ( icntl(8) == 0 ) Then
+              jobB(izb) = 2 ! Unless using special case of icntl(8)/=0, use the "fast" MA48BD call
+            Else
+              jobB(izb) = 3 ! For the case of icntl(8)/=0, use the "intermediate" MA48BD all
+            EndIf
+            If ( kstep /= 0 ) jobC(izb) = 1
+            Exit
+          ElseIf ( kdecomp == kdecompmx ) Then
+            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48BD. kdecomp=',kdecomp,', info(1)=',info(1)
+            Call xnet_terminate('Error during MA48BD',info(1))
+          Else
+            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48BD. kdecomp=',kdecomp,', info(1)=',info(1)
+
+            ! Perform check to see if an error occured in MA48BD.
+            ! Most likely a singularity error caused by incorrect symbolic matrix, so run MA48AD again.
+            ! Also, make sure that workspaces are large enough.
+            If ( info(1) == -3 .or. info(4) > lia ) Then
+              Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',info(4)
+              lia0 = lia
+              lia = int(1.2*max(info(3),info(4)))
+
+              Allocate (jcn0(lia,zb_lo:zb_hi))
+              jcn0(1:lia0,:) = jcn
+              Call move_alloc(jcn0,jcn)
+              jcn(:,izb) = 0
+
+              Allocate (irn0(lia,zb_lo:zb_hi))
+              irn0(1:lia0,:) = irn
+              Call move_alloc(irn0,irn)
+              irn(:,izb) = 0
+
+              Allocate (vals0(lia,zb_lo:zb_hi))
+              vals0(1:lia0,:) = vals
+              Call move_alloc(vals0,vals)
+              vals(:,izb) = 0.0
+            EndIf
+
+            ! Try to restrict pivoting to the diagonal
+            jobA(izb) = 3
+
+            ! Perform symbolic analysis
+            Do jdecomp = 1, kdecompmx
+              jcn(1:nnz,izb) = cidx
+              irn(1:nnz,izb) = ridx
+              vals(1:nnz,izb) = tvals(:,izb)
+              info = 0
+              rinfo = 0.0
+              Call MA48AD(msize,msize,nnz,jobA(izb),lia,vals(:,izb),irn(:,izb),jcn(:,izb), &
+                & keep(:,izb),cntl,icntl,iwA,info,rinfo)
+              If ( info(1) == 0 .and. info(4) <= lia .and. info(2) <= 10 ) Then
+                jobB(izb) = 1 ! If analysis is successful, proceed to factorization
+                Exit
+              ElseIf ( jdecomp == kdecompmx ) Then
+                Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48AD. jdecomp=',jdecomp,', info(1)=',info(1)
+                Call xnet_terminate('Error during MA48AD',info(1))
+              Else
+                Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48AD. jdecomp=',jdecomp,', info(1)=',info(1)
+
+                ! Address any error codes
+                If ( info(1) >= 4 .and. jobA(izb) == 3 ) Then
+                  Write(lun_diag,"(1x,a,i3,a,i7)") 'Not possible to choose all pivots from diagonal'
+                  jobA(izb) = 1
+                ElseIf ( info(1) == -3 .or. info(4) > lia ) Then
+                  Write(lun_diag,"(1x,a,i7,a,i7)") 'Reallocating MA48 arrays: lia=',lia,' < info(4)=',max(info(3),info(4))
+                  lia0 = lia
+                  lia = int(1.2*max(info(3),info(4)))
+
+                  Allocate (jcn0(lia,zb_lo:zb_hi))
+                  jcn0(1:lia0,:) = jcn
+                  Call move_alloc(jcn0,jcn)
+                  jcn(:,izb) = 0
+
+                  Allocate (irn0(lia,zb_lo:zb_hi))
+                  irn0(1:lia0,:) = irn
+                  Call move_alloc(irn0,irn)
+                  irn(:,izb) = 0
+
+                  Allocate (vals0(lia,zb_lo:zb_hi))
+                  vals0(1:lia0,:) = vals
+                  Call move_alloc(vals0,vals)
+                  vals(:,izb) = 0.0
+                ElseIf(info(2) > 10) Then
+                  Write(lun_diag,"(1x,a,i3,a,i7)") 'Reallocating MA48 arrays: info(2)=',info(2),', info(4)=',max(info(3),info(4))
+                  lia0 = lia
+                  lia = int(2.0*max(info(3),info(4)))
+
+                  Allocate (jcn0(lia,zb_lo:zb_hi))
+                  jcn0(1:lia0,:) = jcn
+                  Call move_alloc(jcn0,jcn)
+                  jcn(:,izb) = 0
+
+                  Allocate (irn0(lia,zb_lo:zb_hi))
+                  irn0(1:lia0,:) = irn
+                  Call move_alloc(irn0,irn)
+                  irn(:,izb) = 0
+
+                  Allocate (vals0(lia,zb_lo:zb_hi))
+                  vals0(1:lia0,:) = vals
+                  Call move_alloc(vals0,vals)
+                  vals(:,izb) = 0.0
+                EndIf
+              EndIf
+            EndDo
+          EndIf
+        EndDo
       EndIf
     EndDo
 
@@ -652,9 +748,10 @@ Contains
     ! This routine performs back-substitution for a LU matrix and the RHS vector.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
-    Use xnet_controls, Only: idiag, iheat, lun_diag, lun_stdout, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, iheat, kitmx, kmon, lun_diag, szbatch, zb_lo, zb_hi, lzactive
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_solve, timer_bksub
     Use xnet_types, Only: dp
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
@@ -662,16 +759,18 @@ Contains
     Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
     Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
 
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
     ! Output variables
     Real(dp), Intent(out) :: dy(ny,zb_lo:zb_hi)
     Real(dp), Intent(out) :: dt9(zb_lo:zb_hi)
 
-    ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
-
     ! Local variables
     Real(dp) :: rhs(msize), dx(msize)
-    Integer :: i, izb, izone, err
+    Real(dp) :: relerr(3)
+    Integer :: i, izb, izone, kbksub
+    Logical :: mask_1zone(zb_lo:zb_hi)
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -685,16 +784,47 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    ! Solve linear system using existing factorization
-    phase = 33
+    mask_1zone = .false.
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        rhs(1:ny) = yrhs(:,izb)
-        If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
-        Call xnet_pardiso(izb,tvals(:,izb),rhs,dx,err)
-        If ( err /= 0 ) Write(lun_stdout,*) 'PARDISO error ',err,' phase=',phase
-        dy(:,izb) = dx(1:ny)
-        If ( iheat > 0 ) dt9(izb) = dx(ny+1)
+
+        ! Perform back substitution
+        If ( kmon(2,izb) > kitmx ) Then
+          jobC(izb) = 2 ! Previous NR iteration failed, so estimate error for possible recalculation of data structures
+        Else
+          jobC(izb) = 1 ! Do not estimate error
+        EndIf
+
+        ! Solve linear system using existing factorization
+        Do kbksub = 1, kbksubmx
+
+          rhs(1:ny) = yrhs(:,izb)
+          If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
+
+          relerr = 0.0
+          info = 0
+          Call MA48CD(msize,msize,trans,jobC(izb),lia,vals(:,izb),irn(:,izb),keep(:,izb), &
+            & cntl,icntl,rhs,dx,relerr,wC,iwC,info)
+          If ( info(1) == 0 .and. ( jobC(izb) == 1 .or. maxval(relerr) <= maxerr .or. kbksub == kbksubmx ) ) Then
+            dy(:,izb) = dx(1:ny)
+            If ( iheat > 0 ) dt9(izb) = dx(ny+1)
+            Exit
+          ElseIf ( kbksub == kbksubmx .and. info(1) /= 0 ) Then
+            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Error during MA48CD. kbksub=',kbksub,', info(1)=',info(1)
+            Call xnet_terminate('Error during MA48CD',info(1))
+          Else
+            Write(lun_diag,"(1x,a,i5,a,i2,a,i2)") 'kstep=',kstep,', Warning during MA48CD. kbksub=',kbksub,', info(1)=',info(1)
+
+            ! If the relative error becomes sufficiently large, redo analysis and factorization
+            If ( jobC(izb) > 1 .and. maxval(relerr) > maxerr ) Then
+              Write(lun_diag,"(1x,a,3es12.5,a)") 'Warning: relerr=',(relerr(i),i=1,3),' > maxerr'
+              jobB(izb) = 1
+              mask_1zone(izb) = .true.
+              Call jacobian_decomp(0,mask_in = mask_1zone)
+              mask_1zone(izb) = .false.
+            EndIf
+          EndIf
+        EndDo
       EndIf
     EndDo
 

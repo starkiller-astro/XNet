@@ -1,6 +1,6 @@
 !***************************************************************************************************
-! eos_starkiller.f90 10/18/17
-! Interface to starkiller
+! eos_helm.f90 10/18/17
+! Interface to HELMHOLTZ EoS.
 ! This file contains routines which calculate EoS quantites needed to calculate screening
 ! corrections for reaction rates.
 !***************************************************************************************************
@@ -8,6 +8,7 @@
 Module xnet_eos
   Use xnet_types, Only: dp
   Implicit None
+  include 'vector_eos.dek'
   Real(dp), Allocatable :: ye(:), ytot(:), abar(:), zbar(:), z2bar(:), zibar(:), sratio(:)
 
   Interface eos_interface
@@ -29,14 +30,12 @@ Contains
 
   Subroutine eos_initialize
     !-----------------------------------------------------------------------------------------------
-    ! This routine initializes starkiller
+    ! This routine updates the Equation of State for changes in temperature and density.
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: nzevolve
-
-    Use actual_eos_module, Only: actual_eos_init
     Implicit None
 
-    Call actual_eos_init()
+    Call read_helm_table
 
     Allocate (ye(nzevolve))
     Allocate (ytot(nzevolve))
@@ -63,9 +62,6 @@ Contains
     Use xnet_constants, Only: amu
     Use xnet_controls, Only: iheat, iscrn
     Use xnet_types, Only: dp
-
-    Use actual_eos_module, Only: xnet_actual_eos
-    Use eos_type_module, Only: eos_input_rt, eos_t
     Implicit None
 
     ! Input variables
@@ -74,28 +70,26 @@ Contains
     ! Ouput variables
     Real(dp), Intent(out) :: cv, etae, detaedt9
 
-    ! Local variables
-    Type(eos_t) :: eos_state
-
     cv = 0.0
     etae = 0.0
     detaedt9 = 0.0
     If ( iscrn > 0 .or. iheat > 0 ) Then
 
       ! Load input variables for the eos
-      eos_state%rho = rho
-      eos_state%T = t9*1e9
-      eos_state%y_e = ye
-      eos_state%abar = abar
-      eos_state%zbar = zbar
+      jlo_eos = 1
+      jhi_eos = 1
+      den_row(1) = rho
+      temp_row(1) = t9*1e9
+      abar_row(1) = abar
+      zbar_row(1) = ye*abar
 
       ! Call the eos
-      Call xnet_actual_eos(eos_input_rt,eos_state)
+      Call helmeos
 
       ! Convert units from ergs/g to MeV/nucleon and K to GK
-      cv = eos_state%cv * amu * 1e9
-      etae = eos_state%eta
-      detaedt9 = eos_state%detadt * 1e9
+      cv = cv_row(1) * amu * 1e9
+      etae = etaele_row(1)
+      detaedt9 = detat_row(1) * 1e9
     EndIf
 
   End Subroutine eosx
@@ -165,7 +159,7 @@ Contains
     ! Calculate Ye
     Call y_moment(y,ye,ytot(zb_lo:zb_hi), &
       & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Call the eos
     Do izb = zb_lo, zb_hi
@@ -262,10 +256,10 @@ Contains
     ! Calculate Ye
     Call y_moment(y,ye(zb_lo:zb_hi),ytot(zb_lo:zb_hi), &
       & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
-    Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask)
+    Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then

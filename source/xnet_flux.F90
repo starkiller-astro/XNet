@@ -3,6 +3,8 @@
 ! This file containes the data structures and routines for calculating net fluxes.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_flux
   !-------------------------------------------------------------------------------------------------
   ! This module contains the data for calculating the net flux of each matched reaction pair.
@@ -71,7 +73,7 @@ Contains
     Use reaction_data, Only: csect1, csect2, csect3, csect4, n1i, n2i, n3i, n4i, nreac
     Use xnet_abundances, Only: yt
     Use xnet_conditions, Only: tdel
-    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, zb_lo, zb_hi, lzactive
+    Use xnet_controls, Only: idiag, lun_diag, ymin, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_match, Only: ifl1, ifl2, ifl3, ifl4, iwflx, mflx, nflx
     Use xnet_types, Only: dp
     Implicit None
@@ -90,6 +92,10 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+
+    !__dir_update &
+    !__dir_wait(tid) &
+    !__dir_host(csect1,csect2,csect3,csect4,yt,tdel)
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then

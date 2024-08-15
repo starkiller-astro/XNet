@@ -152,34 +152,44 @@ xnse: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_const
 #
 # Rules for compiling individual files.
 #
-xnet_parallel.o: xnet_parallel.f90
+xnet_parallel.o: xnet_parallel.F90
 	$(FC_MPI) $(FFLAGS) $(F90FLAGS) -c $< -o $@
-xnet_eos_helm.o: xnet_eos_helm.f90
+xnet_eos_helm.o: xnet_eos_helm.F90
 	$(FC) $(FFLAGS) $(F90FLAGS) -I$(HELMHOLTZ_PATH) -c $< -o $@
-xnet_nse.o: xnet_nse.f90
+xnet_nse.o: xnet_nse.F90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $@
-xnet_integrate.o: xnet_integrate.f90
+xnet_integrate.o: xnet_integrate.F90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $@
-xnet_integrate_bdf.o: xnet_integrate_bdf.f90
+xnet_integrate_bdf.o: xnet_integrate_bdf.F90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $@
-xnet_jacobian_$(SOLVER).o: xnet_jacobian_$(SOLVER).f90
+xnet_jacobian_$(SOLVER).o: xnet_jacobian_$(SOLVER).F90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $@
 
 
-$(LAPACK_OBJ_F90): %.o: %.f90
+$(LAPACK_OBJ_f90): %.o: %.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $(notdir $@)
-$(LAPACK_OBJ_F): %.o: %.f
+$(LAPACK_OBJ_F90): %.o: %.F90
+	$(FC) $(FFLAGS) $(F90FLAGS) $(LAPACK_INC) -c $< -o $(notdir $@)
+$(LAPACK_OBJ_f): %.o: %.f
+	$(FC) $(FFLAGS) $(F77FLAGS) $(LAPACK_INC) -c $< -o $(notdir $@)
+$(LAPACK_OBJ_F): %.o: %.F
 	$(FC) $(FFLAGS) $(F77FLAGS) $(LAPACK_INC) -c $< -o $(notdir $@)
 
-$(SOLVER_OBJ_F90): %.o: %.f90
+$(SOLVER_OBJ_f90): %.o: %.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $(notdir $@)
-$(SOLVER_OBJ_F): %.o: %.f
+$(SOLVER_OBJ_F90): %.o: %.F90
+	$(FC) $(FFLAGS) $(F90FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $(notdir $@)
+$(SOLVER_OBJ_f): %.o: %.f
+	$(FC) $(FFLAGS) $(F77FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $(notdir $@)
+$(SOLVER_OBJ_F): %.o: %.F
 	$(FC) $(FFLAGS) $(F77FLAGS) $(SOLVER_INC) $(LAPACK_INC) -c $< -o $(notdir $@)
 
 %.o: %.F90
 	$(FC) $(FFLAGS) $(F90FLAGS) -c $< -o $@
 %.o: %.f90
 	$(FC) $(FFLAGS) $(F90FLAGS) -c $< -o $@
+%.o: %.F
+	$(FC) $(FFLAGS) $(F77FLAGS) -c $< -o $@
 %.o: %.f
 	$(FC) $(FFLAGS) $(F77FLAGS) -c $< -o $@
 %.o: %.c
@@ -213,7 +223,7 @@ xnet_integrate.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_cont
 xnet_integrate_bd.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_bdf.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
 xnet_integrate_be.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_integrate.o xnet_timers.o xnet_types.o $(JAC_OBJ)
-xnet_linalg.o: xnet_constants.o xnet_gpu.o xnet_types.o $(LAPACK_OBJ) $(GPU_OBJ)
+xnet_linalg.o: xnet_constants.o xnet_controls.o xnet_gpu.o xnet_types.o $(LAPACK_OBJ) $(GPU_OBJ)
 xnet_nnu.o: xnet_conditions.o xnet_controls.o xnet_types.o xnet_util.o
 xnet_nse.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(LAPACK_OBJ)
 xnet_output.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_flux.o xnet_match.o xnet_parallel.o xnet_timers.o xnet_types.o

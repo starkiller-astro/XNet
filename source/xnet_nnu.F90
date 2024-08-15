@@ -8,6 +8,8 @@
 ! Credit: Carla Froehlich
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_nnu
   !-------------------------------------------------------------------------------------------------
   ! This module contains the data and routines to calculate neutrino-induced reactions.
@@ -75,7 +77,7 @@ Contains
     ! From this, the neutrino species involved is determined.
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
-    Use xnet_controls, Only: idiag, lun_diag
+    Use xnet_controls, Only: idiag, lun_diag, tid
     Implicit None
 
     ! Input variables
@@ -113,10 +115,15 @@ Contains
       Write(lun_diag,"(3i6)") (i,irl(i),nuspec(i),i=1,nnnu)
     EndIf
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_copyin(irl,nuspec)
+
     Return
   End Subroutine nnu_match
 
   Subroutine nnu_flux(tf,nf,ltnuf,fluxf,ts,ns,tnus,fluxs)
+    !__dir_routine_seq
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -178,7 +185,7 @@ Contains
     ! from neutrino luminosities.
     !-----------------------------------------------------------------------------------------------
     Use xnet_conditions, Only: nh, th
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, ineutrino, idiag, lun_diag, szbatch, tid
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -208,20 +215,31 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_create(rate) &
+    !__dir_copyin(mask,time)
+
     ! Only interpolate if neutrino reactions are on
     If ( ineutrino == 0 ) Then
+      !__dir_loop(3) &
+      !__dir_async(tid) &
+      !__dir_present(mask,rate)
       Do izb = zb_lo, zb_hi
-        If ( mask(izb) ) Then
-          Do j = 1, nnuspec
-            Do k = 1, nnnu
+        Do j = 1, nnuspec
+          Do k = 1, nnnu
+            If ( mask(izb) ) Then
               rate(k,j,izb) = 0.0
-            EndDo
+            EndIf
           EndDo
-        EndIf
+        EndDo
       EndDo
     Else
 
       ! Interpolate flux and neutrino temperature from time history
+      !__dir_loop_outer(1) &
+      !__dir_async(tid) &
+      !__dir_present(mask,time,ltnu,fluxnu,th,nh,tmevnu,fluxcms)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Call nnu_flux(time(izb),n,ltnu(:,izb),fluxnu(:,izb), &
@@ -230,6 +248,10 @@ Contains
       EndDo
 
       ! Compute neutrino cross sections
+      !__dir_loop_outer(2) &
+      !__dir_async(tid) &
+      !__dir_present(mask,sigmanu,ltnu,fluxnu,nuspec) &
+      !__dir_private(it)
       Do izb = zb_lo, zb_hi
         Do j = 1, nnuspec
           If ( mask(izb) ) Then
@@ -239,6 +261,8 @@ Contains
             EndDo
             it = i
 
+            !__dir_loop_inner(1) &
+            !__dir_private(ltnu1,ltnu2,lsigmanu1,lsigmanu2,rdltnu,rcsnu,xrate)
             Do k = 1, nnnu
 
               ! Log interpolation
@@ -275,6 +299,9 @@ Contains
     EndIf
 
     If ( idiag >= 6 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(fluxnu,rate)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -285,6 +312,11 @@ Contains
         EndIf
       EndDo
     EndIf
+
+    !__dir_exit_data &
+    !__dir_async(tid) &
+    !__dir_copyout(rate) &
+    !__dir_delete(mask,time)
 
     Return
   End Subroutine nnu_rate

@@ -3,6 +3,8 @@
 ! This file contains modules and subroutines to control the execution of XNet.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_controls
   !-------------------------------------------------------------------------------------------------
   ! This module contains the values of the flags and limits which control the behavior of the
@@ -97,6 +99,9 @@ Module xnet_controls
     Module Procedure write_controls_line_i
     Module Procedure write_controls_line_r
   End Interface write_controls_line
+
+  !__dir_declare &
+  !__dir_to(iheat,iscrn)
 
 Contains
 
@@ -382,6 +387,14 @@ Contains
     Call parallel_bcast(inab_file)
     Call parallel_bcast(thermo_file)
 
+    !__dir_update &
+    !__dir_async(tid) &
+    !__dir_device(iheat,iscrn)
+
+    !__dir_enter_data &
+    !__dir_async(tid) &
+    !__dir_create(lzactive,iweak,kmon,ktot)
+
     Return
   End Subroutine read_controls
 
@@ -456,8 +469,8 @@ Contains
       Write(lun_out,"(a)") trim(adjustl(data_dir))
       Write(lun_out,"(a)") '# Initial Abundance and Thermodynamic Trajectory Files'
       Do izone = 1, nzone
-        Write(lun_out,"(a)") thermo_file(izone)
         Write(lun_out,"(a)") inab_file(izone)
+        Write(lun_out,"(a)") thermo_file(izone)
       EndDo
 
     EndIf

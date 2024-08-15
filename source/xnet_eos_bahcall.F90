@@ -199,7 +199,7 @@ Contains
     ! Calculate Ye
     Call y_moment(y,ye,ytot(zb_lo:zb_hi), &
       & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Call the eos
     Do izb = zb_lo, zb_hi
@@ -304,10 +304,10 @@ Contains
     ! Calculate Ye
     Call y_moment(y,ye(zb_lo:zb_hi),ytot(zb_lo:zb_hi), &
       & abar(zb_lo:zb_hi),zbar(zb_lo:zb_hi),z2bar(zb_lo:zb_hi),zibar(zb_lo:zb_hi), &
-      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask)
+      & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
-    Call salpeter_ratio(efermkt,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask)
+    Call salpeter_ratio(efermkt,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then

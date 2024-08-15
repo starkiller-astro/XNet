@@ -4,6 +4,8 @@
 ! timestep, and the final_output routine, which controls the output at the end of the evolution.
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_output
   !-------------------------------------------------------------------------------------------------
   ! This module contains data and routines used for output.
@@ -26,7 +28,7 @@ Contains
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: rho, t, t9, tdel
     Use xnet_controls, Only: nnucout, nnucout_string, idiag, inucout, itsout, kmon, lun_diag, &
-      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive
+      & lun_ev, lun_stdout, lun_ts, szbatch, zb_lo, zb_hi, lzactive, tid
     Use xnet_flux, Only: flx, flx_int, flux
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_output
@@ -58,13 +60,16 @@ Contains
     ! Calculate reaction fluxes
     If ( itsout >= 1 .or. idiag >= 1 ) Then
       If ( kstep > 0 ) Then
-        Call flux(mask_in = mask)
+        Call flux(mask_in = mask_in)
       Else
         flx_int = 0.0
       EndIf
     EndIf
 
     If ( itsout >= 1 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(t,t9,rho,tdel,edot,y,kmon)
       Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,2es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -107,7 +112,7 @@ Contains
     Use xnet_abundances, Only: y
     Use xnet_conditions, Only: t, t9, rho, ye, tstop
     Use xnet_controls, Only: changemx, iconvc, isolv, kitmx, kstmx, ktot, lun_diag, tolc, tolm, yacc, &
-      & szbatch, zb_lo, zb_hi, lzactive, idiag
+      & szbatch, zb_lo, zb_hi, lzactive, idiag, tid
     Use xnet_flux, Only: flx_int
     Use xnet_match, Only: iwflx, mflx, nflx
     Use xnet_parallel, Only: parallel_IOProcessor
@@ -151,6 +156,9 @@ Contains
 
     ! Write final abundances to diagnostic output (in ASCII)
     If ( idiag >= 0 ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(t,t9,rho,ye,y)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -166,6 +174,9 @@ Contains
 
     ! Write performance counters and timers to diagnostic output (or to stdout if idiag = -1)
     If ( idiag >= 0 .or. ( idiag >= -1 .and. parallel_IOProcessor() ) ) Then
+      !__dir_update &
+      !__dir_wait(tid) &
+      !__dir_host(ktot)
       Write(lun_diag,"(a10,a5,5a10)") 'Counters: ','Zone','TS','NR','Jacobian','Deriv','CrossSect'
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then

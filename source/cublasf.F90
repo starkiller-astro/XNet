@@ -497,6 +497,14 @@ module cublasf
       integer(c_int), value :: lddc
     end function cublasDdgmm
 
+    integer(c_int) function &
+        & cublasSetSmCountTarget(handle, smCountTarget) &
+        & bind(c, name="cublasSetSmCountTarget")
+      use, intrinsic :: iso_c_binding
+      type(c_ptr), value :: handle
+      integer(c_int), value :: smCountTarget
+    end function cublasSetSmCountTarget
+
   end interface
 
 end module cublasf
