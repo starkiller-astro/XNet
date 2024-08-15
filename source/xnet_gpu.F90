@@ -26,7 +26,8 @@ Module xnet_gpu
     cublasCreate_v2, &
     cublasDestroy_v2, &
     cublasGetStream_v2, &
-    cublasSetStream_v2
+    cublasSetStream_v2, &
+    cublasSetSmCountTarget
   Use cusolverf, Only: &
     cusolver_handle, &
     cusolverDnCreate, &
@@ -206,6 +207,7 @@ Contains
     ierr = cublasSetStream_v2( cublas_handle, stream )
     !ierr = cusparseSetStream( cusparse_handle, stream )
     ierr = cusolverDnSetStream( cusolver_handle, stream )
+    !ierr = cublasSetSmCountTarget( cublas_handle, 54 )
 #elif defined(XNET_HIP)
     Call hipblasCheck( hipblasSetStream( hipblas_handle, stream ) )
     !Call hipsparseCheck( hipsparseSetStream( hipsparse_handle, stream ) )
