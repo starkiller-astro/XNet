@@ -36,6 +36,7 @@ Program net
   Use xnet_flux, Only: flx_int, ifl_orig, ifl_term, flux_init
   Use xnet_gpu, Only: gpu_init, gpu_finalize
   Use xnet_integrate_bdf, Only: bdf_init
+  Use xnet_integrate_be, Only: be_init
   Use xnet_jacobian, Only: read_jacobian_data
   Use xnet_match, Only: mflx, nflx, read_match_data
   Use xnet_nnu, Only: nnuspec, tmevnu, fluxcms
@@ -133,6 +134,7 @@ Program net
   ! Initialize EoS for screening or self-heating
   Call eos_initialize
 
+  If ( isolv == 1 ) Call be_init
   If ( isolv == 3 ) Call bdf_init
 
   ! Convert output_nuc names into indices
