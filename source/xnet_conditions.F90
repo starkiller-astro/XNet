@@ -54,7 +54,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
     Use xnet_types, Only: dp
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
 
     ! Input variables
@@ -133,13 +133,13 @@ Contains
     End If
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask,tf,nf,t9f,rhof,nh,th,t9h,rhoh)
+    !XDIR XENTER_DATA &
+    !XDIR XASYNC(tid) &
+    !XDIR XCOPYIN(mask,tf,nf,t9f,rhof,nh,th,t9h,rhoh)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh)
+    !XDIR XLOOP_OUTER(1) &
+    !XDIR XASYNC(tid) &
+    !XDIR XPRESENT(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Call t9rhofind_scalar(kstep,tf(izb),nf(izb),t9f(izb),rhof(izb), &
@@ -147,10 +147,10 @@ Contains
       EndIf
     EndDo
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(nf,t9f,rhof) &
-    !__dir_delete(mask,tf,nh,th,t9h,rhoh)
+    !XDIR XEXIT_DATA &
+    !XDIR XASYNC(tid) &
+    !XDIR XCOPYOUT(nf,t9f,rhof) &
+    !XDIR XDELETE(mask,tf,nh,th,t9h,rhoh)
 
     Return
   End Subroutine t9rhofind_vector

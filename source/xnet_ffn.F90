@@ -171,16 +171,16 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(rf,dlnrfdt9,lt1) &
-    !__dir_copyin(mask,t9,ene)
+    !XDIR XENTER_DATA &
+    !XDIR XASYNC(tid) &
+    !XDIR XCREATE(rf,dlnrfdt9,lt1) &
+    !XDIR XCOPYIN(mask,t9,ene)
 
     ! Pre-calculate phase space integrals and derivatives
-    !__dir_loop(2) &
-    !__dir_async(tid) &
-    !__dir_present(mask,t9,has_logft,ffn_qval,phasei,dphaseidt9) &
-    !__dir_private(cheme)
+    !XDIR XLOOP(2) &
+    !XDIR XASYNC(tid) &
+    !XDIR XPRESENT(mask,t9,has_logft,ffn_qval,phasei,dphaseidt9) &
+    !XDIR XPRIVATE(cheme)
     Do izb = zb_lo, zb_hi
       Do k = 1, nffn
         If ( mask(izb) .and. has_logft(k) > 0 ) Then
@@ -191,14 +191,14 @@ Contains
       EndDo
     EndDo
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,t9,lt1)
+    !XDIR XLOOP_OUTER(1) &
+    !XDIR XASYNC(tid) &
+    !XDIR XPRESENT(mask,t9,lt1)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Find the temperature grid point
-        !__dir_loop_serial(1)
+        !XDIR XLOOP_SERIAL(1)
         Do i = 1, nt9grid
           If ( t9(izb) <= t9grid(i) ) Exit
         EndDo
@@ -206,12 +206,12 @@ Contains
       End If
     End Do
 
-    !__dir_loop(2) &
-    !__dir_async(tid) &
-    !__dir_present(mask,t9,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
-    !__dir_present(phasei,dphaseidt9) &
-    !__dir_private(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
-    !__dir_private(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt)
+    !XDIR XLOOP(2) &
+    !XDIR XASYNC(tid) &
+    !XDIR XPRESENT(mask,t9,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
+    !XDIR XPRESENT(phasei,dphaseidt9) &
+    !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
+    !XDIR XPRIVATE(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt)
     Do izb = zb_lo, zb_hi
       Do k = 1, nffn
         If ( mask(izb) ) Then
@@ -288,9 +288,9 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(rf,dlnrfdt9,phasei,dphaseidt9)
+      !XDIR XUPDATE &
+      !XDIR XWAIT(tid) &
+      !XDIR XHOST(rf,dlnrfdt9,phasei,dphaseidt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Do k = 1, nffn
@@ -303,11 +303,11 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(rf,dlnrfdt9) &
-    !__dir_delete(lt1) &
-    !__dir_delete(mask,t9,ene)
+    !XDIR XEXIT_DATA &
+    !XDIR XASYNC(tid) &
+    !XDIR XCOPYOUT(rf,dlnrfdt9) &
+    !XDIR XDELETE(lt1) &
+    !XDIR XDELETE(mask,t9,ene)
 
     Return
   End Subroutine ffn_rate
@@ -320,7 +320,7 @@ Contains
     Use xnet_constants, Only: m_e, bok
     Use xnet_types, Only: dp
     Use fd, Only: fd0h, fd2h, fd4h, fd6h, fd8h
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
 
     ! Input variables

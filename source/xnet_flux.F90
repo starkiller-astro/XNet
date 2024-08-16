@@ -93,9 +93,9 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_update &
-    !__dir_wait(tid) &
-    !__dir_host(csect1,csect2,csect3,csect4,yt,tdel)
+    !XDIR XUPDATE &
+    !XDIR XWAIT(tid) &
+    !XDIR XHOST(csect1,csect2,csect3,csect4,yt,tdel)
 
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then

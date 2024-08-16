@@ -56,7 +56,7 @@ Contains
     ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
     !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: dp
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
 
     ! Input variables
@@ -75,7 +75,7 @@ Contains
     ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
     !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: dp
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
 
     ! Input variables
@@ -311,7 +311,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculate various plasma quantities
     !-----------------------------------------------------------------------------------------------
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Use xnet_constants, Only: avn, bok, e2, pi, third, thbim2, twm2bi
     Use xnet_types, Only: dp
     Implicit None

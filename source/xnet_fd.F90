@@ -16,7 +16,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=-3/2
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) x,ex,t,w,s,fd,factor
     Parameter (factor=-2.d0)    ! = 1/(k+1)
@@ -171,7 +171,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=-1/2
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) x,ex,t,w,s,fd,factor
     Parameter (factor=2.d0)    ! = 1/(k+1)
@@ -317,7 +317,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=0
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) y,x,ex,t,w,s,fd
     x=-abs(y)
@@ -367,7 +367,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=1/2
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.)
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) x,ex,t,w,s,fd,factor
     Parameter (factor=2.d0/3.d0)    ! = 1/(k+1)
@@ -513,7 +513,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=1
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) y,x,ex,t,w,s,fd
     x=-abs(y)
@@ -565,7 +565,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=2
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) y,x,ex,t,w,s,fd
     x=-abs(y)
@@ -615,7 +615,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=3
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) y,x,ex,t,w,s,fd,y2
     x=-abs(y)
@@ -665,7 +665,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=4
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) y,x,ex,t,w,s,fd,y2
     x=-abs(y)
@@ -715,7 +715,7 @@ Contains
     ! Double precision rational minimax approximation of Fermi-Dirac integral of order k=5
     ! Reference: Fukushima, T. (2014, submitted to App. Math. Comp.) 
     ! Author: Fukushima, T. <Toshio.Fukushima@nao.ac.jp>
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Implicit None
     Real(dp) y,x,ex,t,s,fd,y2
     x=-abs(y)

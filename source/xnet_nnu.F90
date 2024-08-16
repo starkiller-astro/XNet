@@ -115,15 +115,15 @@ Contains
       Write(lun_diag,"(3i6)") (i,irl(i),nuspec(i),i=1,nnnu)
     EndIf
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(irl,nuspec)
+    !XDIR XENTER_DATA &
+    !XDIR XASYNC(tid) &
+    !XDIR XCOPYIN(irl,nuspec)
 
     Return
   End Subroutine nnu_match
 
   Subroutine nnu_flux(tf,nf,ltnuf,fluxf,ts,ns,tnus,fluxs)
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
@@ -215,16 +215,16 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(rate) &
-    !__dir_copyin(mask,time)
+    !XDIR XENTER_DATA &
+    !XDIR XASYNC(tid) &
+    !XDIR XCREATE(rate) &
+    !XDIR XCOPYIN(mask,time)
 
     ! Only interpolate if neutrino reactions are on
     If ( ineutrino == 0 ) Then
-      !__dir_loop(3) &
-      !__dir_async(tid) &
-      !__dir_present(mask,rate)
+      !XDIR XLOOP(3) &
+      !XDIR XASYNC(tid) &
+      !XDIR XPRESENT(mask,rate)
       Do izb = zb_lo, zb_hi
         Do j = 1, nnuspec
           Do k = 1, nnnu
@@ -237,9 +237,9 @@ Contains
     Else
 
       ! Interpolate flux and neutrino temperature from time history
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(mask,time,ltnu,fluxnu,th,nh,tmevnu,fluxcms)
+      !XDIR XLOOP_OUTER(1) &
+      !XDIR XASYNC(tid) &
+      !XDIR XPRESENT(mask,time,ltnu,fluxnu,th,nh,tmevnu,fluxcms)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Call nnu_flux(time(izb),n,ltnu(:,izb),fluxnu(:,izb), &
@@ -248,10 +248,10 @@ Contains
       EndDo
 
       ! Compute neutrino cross sections
-      !__dir_loop_outer(2) &
-      !__dir_async(tid) &
-      !__dir_present(mask,sigmanu,ltnu,fluxnu,nuspec) &
-      !__dir_private(it)
+      !XDIR XLOOP_OUTER(2) &
+      !XDIR XASYNC(tid) &
+      !XDIR XPRESENT(mask,sigmanu,ltnu,fluxnu,nuspec) &
+      !XDIR XPRIVATE(it)
       Do izb = zb_lo, zb_hi
         Do j = 1, nnuspec
           If ( mask(izb) ) Then
@@ -261,8 +261,8 @@ Contains
             EndDo
             it = i
 
-            !__dir_loop_inner(1) &
-            !__dir_private(ltnu1,ltnu2,lsigmanu1,lsigmanu2,rdltnu,rcsnu,xrate)
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XPRIVATE(ltnu1,ltnu2,lsigmanu1,lsigmanu2,rdltnu,rcsnu,xrate)
             Do k = 1, nnnu
 
               ! Log interpolation
@@ -299,9 +299,9 @@ Contains
     EndIf
 
     If ( idiag >= 6 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(fluxnu,rate)
+      !XDIR XUPDATE &
+      !XDIR XWAIT(tid) &
+      !XDIR XHOST(fluxnu,rate)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -313,10 +313,10 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(rate) &
-    !__dir_delete(mask,time)
+    !XDIR XEXIT_DATA &
+    !XDIR XASYNC(tid) &
+    !XDIR XCOPYOUT(rate) &
+    !XDIR XDELETE(mask,time)
 
     Return
   End Subroutine nnu_rate

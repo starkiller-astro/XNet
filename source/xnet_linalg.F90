@@ -915,7 +915,7 @@ Contains
 
 
   Subroutine VectorNorm2_Kernel( n, x, incx, xnorm )
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
 
     Integer                         :: n, incx
     Real(dp), Dimension(*), Target  :: x
@@ -1215,7 +1215,7 @@ Contains
 
 
   Subroutine EigenvaluesSymmetric3( A, Lambda )
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
 
     Real(dp), Intent(in)  :: A(3,3)
     Real(dp), Intent(out) :: Lambda(3)
@@ -1721,9 +1721,9 @@ Contains
         db(i) = dev_ptr( pb(1,osb) )
         dipiv(i) = dev_ptr( pipiv(osa) )
       End Do
-      !__dir_enter_data &
-      !__dir_async(tid) &
-      !__dir_copyin(da,db,dipiv)
+      !XDIR XENTER_DATA &
+      !XDIR XASYNC(tid) &
+      !XDIR XCOPYIN(da,db,dipiv)
 
       Call LinearSolveBatched_GPU &
         &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
@@ -1731,9 +1731,9 @@ Contains
       Call stream_sync( stream )
 #endif
 
-      !__dir_exit_data &
-      !__dir_async(tid) &
-      !__dir_delete(da,db,dipiv)
+      !XDIR XEXIT_DATA &
+      !XDIR XASYNC(tid) &
+      !XDIR XDELETE(da,db,dipiv)
 
     Else
 
