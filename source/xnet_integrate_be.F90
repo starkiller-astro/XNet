@@ -62,13 +62,11 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(its)
 
     ! If the zone has previously converged or failed, do not iterate
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(its,inr,lzstep,mykts)
     Do izb = zb_lo, zb_hi
       If ( its(izb) /= 0 ) Then
@@ -91,8 +89,7 @@ Contains
       ! Attempt Backward Euler integration over desired timestep
       Call step_be(kstep,inr)
 
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot)
       Do izb = zb_lo, zb_hi
 
@@ -126,16 +123,14 @@ Contains
         EndIf
         lzstep(izb) = ( inr(izb) == 0 )
       EndDo
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(lzstep)
 
       ! Reset temperature and density for failed integrations
       Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
         & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
       If ( iheat > 0 ) Then
-        !XDIR XLOOP_OUTER(1) &
-        !XDIR XASYNC(tid) &
+        !XDIR XLOOP_OUTER(1) XASYNC(tid) &
         !XDIR XPRESENT(lzstep,t9t,t9)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
@@ -147,8 +142,7 @@ Contains
       ! For the last attempt, re-calculate timestep based on derivatives
       ! as is done for the first timestep.
       If ( kts == ktsmx-1 ) Then
-        !XDIR XLOOP_OUTER(1) &
-        !XDIR XASYNC(tid) &
+        !XDIR XLOOP_OUTER(1) XASYNC(tid) &
         !XDIR XPRESENT(lzstep,tdel,tdelstart)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
@@ -161,8 +155,7 @@ Contains
 
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
-        !XDIR XUPDATE &
-        !XDIR XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(tid) &
         !XDIR XHOST(inr,tt,tdel)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
@@ -177,8 +170,7 @@ Contains
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
     Do izb = zb_lo, zb_hi
@@ -210,20 +202,17 @@ Contains
 
     ! Log TS success/failure
     If ( idiag >= 0 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(inr)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
-          !XDIR XUPDATE &
-          !XDIR XWAIT(tid) &
+          !XDIR XUPDATE XWAIT(tid) &
           !XDIR XHOST(mykts(izb))
           Write(lun_diag,"(a,2i5,2i3)") &
             & 'BE TS Success',kstep,izone,mykts(izb),inr(izb)
         ElseIf ( inr(izb) == 0 ) Then
-          !XDIR XUPDATE &
-          !XDIR XWAIT(tid) &
+          !XDIR XUPDATE XWAIT(tid) &
           !XDIR XHOST(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
           Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
             & 'BE TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),inr(izb),mykts(izb)
@@ -232,8 +221,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(its)
 
     stop_timer = xnet_wtime()
@@ -274,12 +262,10 @@ Contains
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(inr)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
     !XDIR XPRIVATE(s1)
     Do izb = zb_lo, zb_hi
@@ -307,8 +293,7 @@ Contains
         mult(izb) = 0.0
       EndIf
     EndDo
-    !XDIR XUPDATE &
-    !XDIR XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(tid) &
     !XDIR XHOST(iterate)
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
@@ -327,8 +312,7 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
-      !XDIR XUPDATE &
-      !XDIR XASYNC(tid) &
+      !XDIR XUPDATE XASYNC(tid) &
       !XDIR XDEVICE(rebuild,eval_rates)
 
       ! Calculate the reaction rates and abundance time derivatives
@@ -338,8 +322,7 @@ Contains
       Call jacobian_decomp(kstep,mask_in = rebuild)
 
       ! Calculate equation to zero
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
@@ -365,8 +348,7 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
-        !XDIR XUPDATE &
-        !XDIR XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(tid) &
         !XDIR XHOST(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
@@ -394,8 +376,7 @@ Contains
       ! Considering the uncertainties of the reaction rates, it is doubtful that the
       ! increased precision of testc is truly increased accuracy.
       !-----------------------------------------------------------------------------------------
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
       !XDIR XPRESENT(aa,inr,testm,testc,testc2,testn,toln) &
       !XDIR XPRIVATE(s1,s2,s3)
@@ -446,13 +427,11 @@ Contains
           EndIf
         EndIf
       EndDo
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(iterate)
 
       If ( idiag >= 3 ) Then
-        !XDIR XUPDATE &
-        !XDIR XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(tid) &
         !XDIR XHOST(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) >= 0 ) Then
@@ -479,8 +458,7 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(inr,xtot,testn,toln)
       Do izb = zb_lo, zb_hi
         If ( inr(izb) >= 0 ) Then
@@ -494,8 +472,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(inr)
 
     stop_timer = xnet_wtime()
@@ -568,8 +545,7 @@ Contains
     eval_rates = .false.
     rebuild = .false.
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(inr,mykts,lzstep) &
     !XDIR XCOPYIN(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
     !XDIR XCOPYIN(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)

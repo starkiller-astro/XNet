@@ -133,12 +133,10 @@ Contains
     End If
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask,tf,nf,t9f,rhof,nh,th,t9h,rhoh)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,tf,nf,t9f,rhof,th,nh,t9h,rhoh)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -147,8 +145,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(nf,t9f,rhof) &
     !XDIR XDELETE(mask,tf,nh,th,t9h,rhoh)
 

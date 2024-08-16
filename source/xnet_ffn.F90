@@ -171,14 +171,12 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(rf,dlnrfdt9,lt1) &
     !XDIR XCOPYIN(mask,t9,ene)
 
     ! Pre-calculate phase space integrals and derivatives
-    !XDIR XLOOP(2) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP(2) XASYNC(tid) &
     !XDIR XPRESENT(mask,t9,has_logft,ffn_qval,phasei,dphaseidt9) &
     !XDIR XPRIVATE(cheme)
     Do izb = zb_lo, zb_hi
@@ -191,8 +189,7 @@ Contains
       EndDo
     EndDo
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,t9,lt1)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -206,8 +203,7 @@ Contains
       End If
     End Do
 
-    !XDIR XLOOP(2) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP(2) XASYNC(tid) &
     !XDIR XPRESENT(mask,t9,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
     !XDIR XPRESENT(phasei,dphaseidt9) &
     !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
@@ -288,8 +284,7 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(rf,dlnrfdt9,phasei,dphaseidt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -303,8 +298,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(rf,dlnrfdt9) &
     !XDIR XDELETE(lt1) &
     !XDIR XDELETE(mask,t9,ene)

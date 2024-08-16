@@ -118,8 +118,7 @@ Contains
       lambda0 = 0.0
       gammae = 0.0
       dztildedt9 = 0.0
-      !XDIR XENTER_DATA &
-      !XDIR XASYNC(tid) &
+      !XDIR XENTER_DATA XASYNC(tid) &
       !XDIR XCOPYIN(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
       !XDIR XCOPYIN(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
       !XDIR XCOPYIN(ztilde,zinter,lambda0,gammae,dztildedt9)
@@ -142,8 +141,7 @@ Contains
     dh3dt9 = 0.0
     dh4dt9 = 0.0
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
 
     Return
@@ -197,8 +195,7 @@ Contains
     start_timer = xnet_wtime()
     timer_prescrn = timer_prescrn - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask)
 
     ! Call EOS to get plasma quantities
@@ -213,8 +210,7 @@ Contains
     start_timer = xnet_wtime()
     timer_scrn = timer_scrn - start_timer
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(nreac,zseq,zseq53,zseqi) &
     !XDIR XPRESENT(iz21,iz22,iz31,iz32,iz33,iz41,iz42,iz43,iz44) &
     !XDIR XPRESENT(iz2c,iz3c,iz4c,zeta2w,zeta3w,zeta4w,zeta2i,zeta3i,zeta4i) &
@@ -328,8 +324,7 @@ Contains
     EndDo
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !XDIR XHOST(ztilde,zinter,lambda0,gammae,dztildedt9)
       Do izb = zb_lo, zb_hi
@@ -412,8 +407,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()

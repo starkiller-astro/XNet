@@ -93,8 +93,7 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XUPDATE &
-    !XDIR XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(tid) &
     !XDIR XHOST(csect1,csect2,csect3,csect4,yt,tdel)
 
     Do izb = zb_lo, zb_hi

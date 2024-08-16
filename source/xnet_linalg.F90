@@ -1721,8 +1721,7 @@ Contains
         db(i) = dev_ptr( pb(1,osb) )
         dipiv(i) = dev_ptr( pipiv(osa) )
       End Do
-      !XDIR XENTER_DATA &
-      !XDIR XASYNC(tid) &
+      !XDIR XENTER_DATA XASYNC(tid) &
       !XDIR XCOPYIN(da,db,dipiv)
 
       Call LinearSolveBatched_GPU &
@@ -1731,8 +1730,7 @@ Contains
       Call stream_sync( stream )
 #endif
 
-      !XDIR XEXIT_DATA &
-      !XDIR XASYNC(tid) &
+      !XDIR XEXIT_DATA XASYNC(tid) &
       !XDIR XDELETE(da,db,dipiv)
 
     Else

@@ -148,12 +148,10 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask,y,enb,enm)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,y,enb,enm,zz,be) &
     !XDIR XPRIVATE(ztot,btot)
     Do izb = zb_lo, zb_hi
@@ -176,8 +174,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(enb,enm) &
     !XDIR XDELETE(mask,y)
 
@@ -211,12 +208,10 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask,t9)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,t9,t9i,gg,g,dlngdt9) &
     !XDIR XPRIVATE(ii,rdt9)
     Do izb = zb_lo, zb_hi
@@ -281,8 +276,7 @@ Contains
     !  EndDo
     !EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask,t9)
 
     Return
@@ -498,8 +492,7 @@ Contains
 
     Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(aa,zz,nn,be,mex,mm,ia,iz,in) &
     !XDIR XCOPYIN(zz2,zz53,zzi,zseq,zseq53,zseqi) &
     !XDIR XCOPYIN(it9i,t9i,g,angm) &
@@ -929,8 +922,7 @@ Contains
     Allocate (dlnrffndt9(max(1,nffn),nzevolve))
     Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
     !XDIR XCOPYIN(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XCOPYIN(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &

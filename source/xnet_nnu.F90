@@ -115,8 +115,7 @@ Contains
       Write(lun_diag,"(3i6)") (i,irl(i),nuspec(i),i=1,nnnu)
     EndIf
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(irl,nuspec)
 
     Return
@@ -215,15 +214,13 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(rate) &
     !XDIR XCOPYIN(mask,time)
 
     ! Only interpolate if neutrino reactions are on
     If ( ineutrino == 0 ) Then
-      !XDIR XLOOP(3) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP(3) XASYNC(tid) &
       !XDIR XPRESENT(mask,rate)
       Do izb = zb_lo, zb_hi
         Do j = 1, nnuspec
@@ -237,8 +234,7 @@ Contains
     Else
 
       ! Interpolate flux and neutrino temperature from time history
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(mask,time,ltnu,fluxnu,th,nh,tmevnu,fluxcms)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -248,8 +244,7 @@ Contains
       EndDo
 
       ! Compute neutrino cross sections
-      !XDIR XLOOP_OUTER(2) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(2) XASYNC(tid) &
       !XDIR XPRESENT(mask,sigmanu,ltnu,fluxnu,nuspec) &
       !XDIR XPRIVATE(it)
       Do izb = zb_lo, zb_hi
@@ -299,8 +294,7 @@ Contains
     EndIf
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(fluxnu,rate)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -313,8 +307,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(rate) &
     !XDIR XDELETE(mask,time)
 

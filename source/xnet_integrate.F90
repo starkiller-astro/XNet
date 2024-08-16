@@ -55,14 +55,12 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
     !XDIR XCOPYIN(mask)
 
     ! Retain old values of timestep and thermo and calculate remaining time
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,mask_init,tdel,tdel_old)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -72,14 +70,12 @@ Contains
         mask_init(izb) = .false.
       EndIf
     EndDo
-    !XDIR XUPDATE &
-    !XDIR XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(tid) &
     !XDIR XHOST(mask_init)
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,mask_init,t,tt,tstop,y,yo,ydot,t9,t9o,t9dot,ints,intso,nh) &
     !XDIR XPRESENT(tdel,tdel_next,tdel_old,tdelstart,tdel_stop,tdel_dy,tdel_dt9) &
     !XDIR XPRIVATE(tdel_init,rtau_y,rtau_t9,changey,changet9)
@@ -175,8 +171,7 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(tdel,tdel_old,tdel_stop,tdel_next,tdel_dy,tdel_dt9) &
       !XDIR XHOST(ints,intso,y,t)
       Do izb = zb_lo, zb_hi
@@ -191,8 +186,7 @@ Contains
           If ( ints(izb) /= intso(izb) ) Then
             Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
             intso(izb) = ints(izb)
-            !XDIR XUPDATE &
-            !XDIR XASYNC(tid) &
+            !XDIR XUPDATE XASYNC(tid) &
             !XDIR XDEVICE(intso(izb))
           EndIf
         EndIf
@@ -204,8 +198,7 @@ Contains
 
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) .and. nh(izb) > 1 ) Then
@@ -251,8 +244,7 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 2 ) Then
-        !XDIR XUPDATE &
-        !XDIR XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(tid) &
         !XDIR XHOST(dtherm,tdel,t9t,rhot)
         Do izb = zb_lo, zb_hi
           If ( mask(izb) .and. nh(izb) > 1 ) Then
@@ -268,8 +260,7 @@ Contains
       EndIf
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
     !XDIR XDELETE(mask)
 
@@ -301,12 +292,10 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask,t9)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,t9,iweak)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -321,8 +310,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask,t9)
 
     Return
@@ -357,16 +345,14 @@ Contains
     start_timer = xnet_wtime()
     timer_eos = timer_eos - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask)
 
     Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
       & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
@@ -410,14 +396,12 @@ Contains
     start_timer = xnet_wtime()
     timer_deriv = timer_deriv - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
-    !XDIR XLOOP_OUTER(2) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
     !XDIR XPRESENT(mask,la,le,ydot,yt,b1,b2,b3,b4,mu1,mu2,mu3,mu4) &
     !XDIR XPRESENT(a1,a2,a3,a4,csect1,csect2,csect3,csect4) &
     !XDIR XPRESENT(n11,n21,n22,n31,n32,n33,n41,n42,n43,n44) &
@@ -486,8 +470,7 @@ Contains
 
     If ( iheat > 0 ) Then
 
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(mask,ydot,t9dot,cv,mex) &
       !XDIR XPRIVATE(sdot)
       Do izb = zb_lo, zb_hi
@@ -503,8 +486,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -514,8 +496,7 @@ Contains
 
     ! Separate loop for diagnostics so compiler can properly vectorize
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(yt,t9t,ydot,t9dot,b1,b2,b3,b4)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -576,8 +557,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
@@ -636,8 +616,7 @@ Contains
     nr3 = nreac(3)
     nr4 = nreac(4)
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(t09,dt09,ene) &
     !XDIR XCOPYIN(mask)
 
@@ -662,8 +641,7 @@ Contains
     Call partf(t9t(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate necessary thermodynamic moments
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,ene,t09,dt09,t9t,rhot,yet)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -726,8 +704,7 @@ Contains
         EndDo
       EndIf
     Else
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(rc1,rc2,rc3,rc4) &
       !XDIR XPRESENT(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
       !XDIR XPRESENT(mask,t09,dt09)
@@ -786,8 +763,7 @@ Contains
     EndIf
 
     ! Calculate cross sections
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(n1i,n2i,n3i,n4i,iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XPRESENT(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
     !XDIR XPRESENT(csect1,csect2,csect3,csect4) &
@@ -951,8 +927,7 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(csect1,csect2,csect3,csect4) &
       !XDIR XHOST(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
       !XDIR XHOST(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
@@ -998,8 +973,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(t09,dt09,ene) &
     !XDIR XDELETE(mask)
 

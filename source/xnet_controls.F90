@@ -386,12 +386,10 @@ Contains
     Call parallel_bcast(inab_file)
     Call parallel_bcast(thermo_file)
 
-    !XDIR XUPDATE &
-    !XDIR XASYNC(tid) &
+    !XDIR XUPDATE XASYNC(tid) &
     !XDIR XDEVICE(iheat,iscrn)
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(lzactive,iweak,kmon,ktot)
 
     Return

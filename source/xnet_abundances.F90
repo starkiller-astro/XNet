@@ -123,14 +123,12 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(ye,ytot,abar,zbar,z2bar,zibar) &
     !XDIR XCOPYIN(mask,y,xext,aext,zext)
        
     ! Calculate abundance moments
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar) &
     !XDIR XPRESENT(mask,y,xext,aext,zext) &
     !XDIR XPRIVATE(yext,ntot,atot,ztot,z2tot,zitot)
@@ -168,8 +166,7 @@ Contains
     EndDo
        
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(ye,ytot,abar,zbar,z2bar,zibar)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -179,8 +176,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(ye,ytot,abar,zbar,z2bar,zibar) &
     !XDIR XDELETE(mask,y,xext,aext,zext)
 

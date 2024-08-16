@@ -191,8 +191,7 @@ Program net
   ! Allocate zone description arrays
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
 
-  !XDIR XENTER_DATA &
-  !XDIR XASYNC(tid) &
+  !XDIR XENTER_DATA XASYNC(tid) &
   !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext) &
   !XDIR XCOPYIN(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XCOPYIN(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
@@ -311,8 +310,7 @@ Program net
       EndDo
     EndIf
 
-    !XDIR XUPDATE &
-    !XDIR XASYNC(tid) &
+    !XDIR XUPDATE XASYNC(tid) &
     !XDIR XDEVICE(xext,aext,zext) &
     !XDIR XDEVICE(lzactive,tdel,t,t9,rho,ye,y,nt) &
     !XDIR XDEVICE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart,ystart) &
@@ -326,8 +324,7 @@ Program net
 
     ! Test how well sums of fluxes match abundances changes
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(y)
       Do izb = zb_lo, zb_hi
         If ( lzactive(izb) ) Then
@@ -358,8 +355,7 @@ Program net
   If ( idiag >= 0 ) Close(lun_diag)
   !$omp end parallel
 
-  !XDIR XEXIT_DATA &
-  !XDIR XASYNC(tid) &
+  !XDIR XEXIT_DATA XASYNC(tid) &
   !XDIR XDELETE(y,yo,yt,ydot,ystart,xext,aext,zext) &
   !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &

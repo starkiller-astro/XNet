@@ -72,8 +72,7 @@ Contains
     ! Set reaction controls not read in from control
     idiag0 = idiag
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(its,mykstep,lzsolve,lzoutput) &
     !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot)
 
@@ -81,8 +80,7 @@ Contains
     Call benuc(y,enb,enm)
 
     ! Initialize trial time step abundances and conditions
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
     !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
     !XDIR XPRESENT(enm,enb,enold,en0,delta_en,edot)
@@ -151,8 +149,7 @@ Contains
 
       ! If convergence is successful, output timestep results
       If ( idiag >= 1 ) Then
-        !XDIR XUPDATE &
-        !XDIR XWAIT(tid) &
+        !XDIR XUPDATE XWAIT(tid) &
         !XDIR XHOST(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
@@ -172,8 +169,7 @@ Contains
         EndDo
       EndIf
 
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(enm,enold) &
       !XDIR XPRESENT(its,t,tstop,mykstep,lzsolve,lzoutput)
       Do izb = zb_lo, zb_hi
@@ -201,8 +197,7 @@ Contains
 
       Call benuc(yt,enb,enm,mask_in = lzoutput)
 
-      !XDIR XLOOP_OUTER(1) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(its,enm,enold,en0,delta_en,edot,tdel)
       Do izb = zb_lo, zb_hi
         If ( its(izb) == 0 ) Then
@@ -211,8 +206,7 @@ Contains
         EndIf
       EndDo
 
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(lzoutput,lzsolve)
       Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
 
@@ -220,8 +214,7 @@ Contains
       If ( .not. any( lzsolve ) ) Exit
     EndDo
 
-    !XDIR XUPDATE &
-    !XDIR XWAIT(tid) &
+    !XDIR XUPDATE XWAIT(tid) &
     !XDIR XHOST(its,mykstep,t,tdel)
 
     ! Test that the stop time is reached
@@ -251,8 +244,7 @@ Contains
     EndDo
     kstep = max(1, maxval(mykstep))
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(enm,enb,enold,en0,delta_en,edot) &
     !XDIR XDELETE(its,mykstep,lzsolve,lzoutput)
 

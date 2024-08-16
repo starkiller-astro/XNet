@@ -91,8 +91,7 @@ Contains
     indx = 0
     info = 0
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(dydotdy,jac,rhs,indx,info,diag0,mult1,pivot)
 
     Allocate (hjac(nzevolve))
@@ -113,8 +112,7 @@ Contains
       dindx(izb) = dev_ptr( indx(1,izb) )
     EndDo
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(djac,drhs,dindx)
 
     Return
@@ -124,8 +122,7 @@ Contains
     Use xnet_controls, Only: tid
     Implicit None
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
 
     Deallocate (diag0,mult1,pivot)
@@ -176,12 +173,10 @@ Contains
       mult(zb_lo:) => mult1(zb_lo:zb_hi)
     EndIf
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask,diag,mult)
 
-    !XDIR XLOOP_OUTER(2) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
     !XDIR XPRESENT(jac,dydotdy,pivot) &
     !XDIR XPRESENT(mask,diag,mult) &
     !XDIR XPRIVATE(rsum)
@@ -203,13 +198,11 @@ Contains
         EndIf
       EndDo
     EndDo
-    !XDIR XUPDATE &
-    !XDIR XASYNC(tid) &
+    !XDIR XUPDATE XASYNC(tid) &
     !XDIR XHOST(pivot)
 
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(pivot,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -233,8 +226,7 @@ Contains
     EndIf
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(diag,mult,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -256,8 +248,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask,diag,mult)
     
     Return
@@ -299,13 +290,11 @@ Contains
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask)
 
     ! Build the Jacobian
-    !XDIR XLOOP_OUTER(2) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
     !XDIR XPRIVATE(s1,s2,s3,s4) &
     !XDIR XPRESENT(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
     !XDIR XPRESENT(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
@@ -383,8 +372,7 @@ Contains
     EndDo
 
     If ( iheat > 0 ) Then
-      !XDIR XLOOP_OUTER(2) &
-      !XDIR XASYNC(tid) &
+      !XDIR XLOOP_OUTER(2) XASYNC(tid) &
       !XDIR XPRESENT(mask,dydotdy,cv,mex) &
       !XDIR XPRIVATE(sdot)
       Do izb = zb_lo, zb_hi
@@ -402,8 +390,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -415,8 +402,7 @@ Contains
     Call jacobian_scale(diag_in,mult_in,mask_in = mask_in)
 
     If ( idiag >= 5 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(dydotdy)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -438,8 +424,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
@@ -486,13 +471,11 @@ Contains
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(dy,dt9) &
     !XDIR XCOPYIN(mask,yrhs,t9rhs)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -528,8 +511,7 @@ Contains
     EndDo
 #endif
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -542,8 +524,7 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -555,8 +536,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(dy,dt9) &
     !XDIR XDELETE(mask,yrhs,t9rhs)
 
@@ -617,8 +597,7 @@ Contains
 #endif
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -675,13 +654,11 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(dy,dt9) &
     !XDIR XCOPYIN(mask,yrhs,t9rhs)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -718,8 +695,7 @@ Contains
     EndDo
 #endif
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -732,8 +708,7 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -745,8 +720,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(dy,dt9) &
     !XDIR XDELETE(mask,yrhs,t9rhs)
 

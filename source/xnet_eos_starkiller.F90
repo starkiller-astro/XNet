@@ -55,8 +55,7 @@ Contains
     zibar = 0.0
     sratio = 0.0
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(ye,ytot,abar,zbar,z2bar,zibar,sratio)
 
     Return
@@ -169,8 +168,7 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(ye,cv,etae,detaedt9) &
     !XDIR XCOPYIN(mask,t9,rho,y,xext,aext,zext)
 
@@ -180,8 +178,7 @@ Contains
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Call the eos
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,t9,rho,ye,abar,zbar,cv,etae,detaedt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
@@ -190,8 +187,7 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(t9,rho,ye,cv,etae,detaedt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -200,8 +196,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(ye,cv,etae,detaedt9) &
     !XDIR XDELETE(mask,t9,rho,y,xext,aext,zext)
 
@@ -282,8 +277,7 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XCOPYIN(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
@@ -295,8 +289,7 @@ Contains
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
     Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(mask,t9,rho,y,etae,detaedt9) &
     !XDIR XPRESENT(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar,sratio)
@@ -311,8 +304,7 @@ Contains
       EndIf
     EndDo
     If ( idiag >= 3 ) Then
-      !XDIR XUPDATE &
-      !XDIR XWAIT(tid) &
+      !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(t9,rho,ye,z2bar,zbar,sratio,ztilde,lambda0,gammae)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -323,8 +315,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XDELETE(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
@@ -406,13 +397,11 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !XDIR XENTER_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(ratio,dratiodeta) &
     !XDIR XCOPYIN(mask,eta)
 
-    !XDIR XLOOP_OUTER(1) &
-    !XDIR XASYNC(tid) &
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(ratio,dratiodeta) &
     !XDIR XPRESENT(mask,eta)
     Do izb = zb_lo, zb_hi
@@ -421,8 +410,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA &
-    !XDIR XASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(ratio,dratiodeta) &
     !XDIR XDELETE(mask,eta)
 
