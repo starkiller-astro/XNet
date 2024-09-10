@@ -1,3 +1,5 @@
+#include "../../source/xnet_macros.fh"
+
 module actual_eos_module
 
     use xnet_types, only: dp
@@ -98,17 +100,16 @@ module actual_eos_module
     real(dp), parameter :: onethird = 1.0_dp/3.0_dp
     real(dp), parameter :: esqu = qe * qe
 
-    !$acc declare &
-    !$acc create(tlo, thi, dlo, dhi) &
-    !$acc create(tstp, tstpi, dstp, dstpi) &
-    !$acc create(ttol, dtol) &
-    !$acc create(itmax, jtmax, d, t) &
-    !$acc create(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
-    !$acc create(dpdf, dpdfd, dpdft, dpdfdt) &
-    !$acc create(ef, efd, eft, efdt, xf, xfd, xft, xfdt)  &
-    !$acc create(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
-    !$acc create(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
-    !$acc create(do_coulomb, input_is_constant)
+    !XDIR XDECLARE_VAR(tlo, thi, dlo, dhi)
+    !XDIR XDECLARE_VAR(tstp, tstpi, dstp, dstpi)
+    !XDIR XDECLARE_VAR(ttol, dtol)
+    !XDIR XDECLARE_VAR(itmax, jtmax, d, t)
+    !XDIR XDECLARE_VAR(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
+    !XDIR XDECLARE_VAR(dpdf, dpdfd, dpdft, dpdfdt)
+    !XDIR XDECLARE_VAR(ef, efd, eft, efdt, xf, xfd, xft, xfdt)
+    !XDIR XDECLARE_VAR(dt_sav, dt2_sav, dti_sav, dt2i_sav)
+    !XDIR XDECLARE_VAR(dd_sav, dd2_sav, ddi_sav, dd2i_sav)
+    !XDIR XDECLARE_VAR(do_coulomb, input_is_constant)
 
     public :: actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
     public :: xnet_actual_eos, actual_eos_eta, actual_eos_cv
@@ -167,7 +168,7 @@ contains
 
     subroutine actual_eos(input, state)
 
-        !$acc routine seq
+        !XDIR XROUTINE_SEQ
 
         implicit none
 
@@ -1152,7 +1153,7 @@ contains
         ! quantities needed by XNet: electron chemical potential, its derivative
         ! w.r.t. temperature, and specific heat.
 
-        !$acc routine seq
+        !XDIR XROUTINE_SEQ
 
         implicit none
 
@@ -1187,7 +1188,7 @@ contains
         ! quantities needed by XNet: electron chemical potential, its derivative
         ! w.r.t. temperature, and specific heat.
 
-        !$acc routine seq
+        !XDIR XROUTINE_SEQ
 
         implicit none
 
@@ -1281,7 +1282,7 @@ contains
 
         implicit none
 
-        !$acc routine seq
+        !XDIR XROUTINE_SEQ
 
         !..input arguments
         real(dp),     intent(in ) :: temp,den,abar,zbar,ye
@@ -1700,18 +1701,17 @@ contains
         mindens = 10.d0**dlo
         maxdens = 10.d0**dhi
 
-        !$acc update device(mintemp, maxtemp, mindens, maxdens)
-
-        !$acc update &
-        !$acc device(tlo, thi, dlo, dhi) &
-        !$acc device(tstp, tstpi, dstp, dstpi) &
-        !$acc device(itmax, jtmax, d, t) &
-        !$acc device(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
-        !$acc device(dpdf, dpdfd, dpdft, dpdfdt) &
-        !$acc device(ef, efd, eft, efdt, xf, xfd, xft, xfdt)  &
-        !$acc device(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
-        !$acc device(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
-        !$acc device(do_coulomb, input_is_constant)
+        !XDIR XUPDATE &
+        !XDIR XDEVICE(mintemp, maxtemp, mindens, maxdens) &
+        !XDIR XDEVICE(tlo, thi, dlo, dhi) &
+        !XDIR XDEVICE(tstp, tstpi, dstp, dstpi) &
+        !XDIR XDEVICE(itmax, jtmax, d, t) &
+        !XDIR XDEVICE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+        !XDIR XDEVICE(dpdf, dpdfd, dpdft, dpdfdt) &
+        !XDIR XDEVICE(ef, efd, eft, efdt, xf, xfd, xft, xfdt)  &
+        !XDIR XDEVICE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+        !XDIR XDEVICE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+        !XDIR XDEVICE(do_coulomb, input_is_constant)
 
     end subroutine actual_eos_init
 
@@ -1720,21 +1720,21 @@ contains
     ! quintic hermite polynomial functions
     ! psi0 and its derivatives
     function psi0(z) result(psi0r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: psi0r
       psi0r = z**3 * ( z * (-6.0_dp*z + 15.0_dp) -10.0_dp) + 1.0_dp
     end function psi0
 
     function dpsi0(z) result(dpsi0r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: dpsi0r
       dpsi0r = z**2 * ( z * (-30.0_dp*z + 60.0_dp) - 30.0_dp)
     end function dpsi0
 
     function ddpsi0(z) result(ddpsi0r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: ddpsi0r
       ddpsi0r = z* ( z*( -120.0_dp*z + 180.0_dp) -60.0_dp)
@@ -1742,21 +1742,21 @@ contains
 
     ! psi1 and its derivatives
     function psi1(z) result(psi1r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: psi1r
       psi1r = z* ( z**2 * ( z * (-3.0_dp*z + 8.0_dp) - 6.0_dp) + 1.0_dp)
     end function psi1
 
     function dpsi1(z) result(dpsi1r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: dpsi1r
       dpsi1r = z*z * ( z * (-15.0_dp*z + 32.0_dp) - 18.0_dp) +1.0_dp
     end function dpsi1
 
     function ddpsi1(z) result(ddpsi1r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: ddpsi1r
       ddpsi1r = z * (z * (-60.0_dp*z + 96.0_dp) -36.0_dp)
@@ -1764,21 +1764,21 @@ contains
 
     ! psi2  and its derivatives
     function psi2(z) result(psi2r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: psi2r
       psi2r = 0.5_dp*z*z*( z* ( z * (-z + 3.0_dp) - 3.0_dp) + 1.0_dp)
     end function psi2
 
     function dpsi2(z) result(dpsi2r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: dpsi2r
       dpsi2r = 0.5_dp*z*( z*(z*(-5.0_dp*z + 12.0_dp) - 9.0_dp) + 2.0_dp)
     end function dpsi2
 
     function ddpsi2(z) result(ddpsi2r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: ddpsi2r
       ddpsi2r = 0.5_dp*(z*( z * (-20.0_dp*z + 36.0_dp) - 18.0_dp) + 2.0_dp)
@@ -1787,7 +1787,7 @@ contains
 
     ! biquintic hermite polynomial function
     function h5(fi,w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md) result(h5r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: fi(36)
       real(dp), intent(in) :: w0t,w1t,w2t,w0mt,w1mt,w2mt,w0d,w1d,w2d,w0md,w1md,w2md
       real(dp) :: h5r
@@ -1816,14 +1816,14 @@ contains
     ! cubic hermite polynomial functions
     ! psi0 & derivatives
     function xpsi0(z) result(xpsi0r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: xpsi0r
       xpsi0r = z * z * (2.0_dp*z - 3.0_dp) + 1.0
     end function xpsi0
 
     function xdpsi0(z) result(xdpsi0r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: xdpsi0r
       xdpsi0r = z * (6.0_dp*z - 6.0_dp)
@@ -1832,14 +1832,14 @@ contains
 
     ! psi1 & derivatives
     function xpsi1(z) result(xpsi1r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: xpsi1r
       xpsi1r = z * ( z * (z - 2.0_dp) + 1.0_dp)
     end function xpsi1
 
     function xdpsi1(z) result(xdpsi1r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: z
       real(dp) :: xdpsi1r
       xdpsi1r = z * (3.0_dp*z - 4.0_dp) + 1.0_dp
@@ -1847,7 +1847,7 @@ contains
 
     ! bicubic hermite polynomial function
     function h3(dfi,w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md) result(h3r)
-      !$acc routine seq
+      !XDIR XROUTINE_SEQ
       real(dp), intent(in) :: dfi(16)
       real(dp), intent(in) :: w0t,w1t,w0mt,w1mt,w0d,w1d,w0md,w1md
       real(dp) :: h3r

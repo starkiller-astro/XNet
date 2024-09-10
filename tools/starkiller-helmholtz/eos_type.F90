@@ -1,3 +1,5 @@
+#include "../../source/xnet_macros.fh"
+
 module eos_type_module
 
   use xnet_types, only: dp
@@ -57,9 +59,8 @@ module eos_type_module
   real(dp), allocatable, public :: minh
   real(dp), allocatable, public :: maxh
 
-  !$acc declare &
-  !$acc create(mintemp, maxtemp, mindens, maxdens, minx, maxx, minye, maxye) &
-  !$acc create(mine, maxe, minp, maxp, mins, maxs, minh, maxh)
+  !XDIR XDECLARE_VAR(mintemp, maxtemp, mindens, maxdens, minx, maxx, minye, maxye)
+  !XDIR XDECLARE_VAR(mine, maxe, minp, maxp, mins, maxs, minh, maxh)
 
   public :: clean_state, print_state, eos_get_small_temp, eos_get_small_dens
   public :: eos_get_max_temp, eos_get_max_dens, eos_input_has_var
@@ -230,7 +231,7 @@ contains
 
   subroutine eos_get_small_temp(small_temp_out)
 
-    !$acc routine seq
+    !XDIR XROUTINE_SEQ
 
     implicit none
 
@@ -244,7 +245,7 @@ contains
 
   subroutine eos_get_small_dens(small_dens_out)
 
-    !$acc routine seq
+    !XDIR XROUTINE_SEQ
 
     implicit none
 
@@ -258,7 +259,7 @@ contains
 
   subroutine eos_get_max_temp(max_temp_out)
 
-    !$acc routine seq
+    !XDIR XROUTINE_SEQ
 
     implicit none
 
@@ -272,7 +273,7 @@ contains
 
   subroutine eos_get_max_dens(max_dens_out)
 
-    !$acc routine seq
+    !XDIR XROUTINE_SEQ
 
     implicit none
 
