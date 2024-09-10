@@ -100,7 +100,7 @@ Module xnet_controls
     Module Procedure write_controls_line_r
   End Interface write_controls_line
 
-  !XDIR XDECLARE_VAR(iheat,iscrn)
+  !XDIR XDECLARE_VAR(iheat,iscrn,iconvc,ymin)
 
 Contains
 
@@ -387,7 +387,7 @@ Contains
     Call parallel_bcast(thermo_file)
 
     !XDIR XUPDATE XASYNC(tid) &
-    !XDIR XDEVICE(iheat,iscrn)
+    !XDIR XDEVICE(iheat,iscrn,iconvc,ymin)
 
     !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCREATE(lzactive,iweak,kmon,ktot)
