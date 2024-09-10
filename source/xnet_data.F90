@@ -432,10 +432,19 @@ Contains
     ! Set size of nuclear data arrays and read in nuclear data and partition function interpolation table.
     ! nname(0), gg(0) and angm(0) are placeholders for non-nuclei.
     If ( .not. allocated(nname) ) Allocate (nname(0:ny))
-    Allocate (aa(ny),zz(ny),nn(ny),be(ny),mex(ny),mm(ny),ia(ny),iz(ny),in(ny))
-    Allocate (zz2(ny),zz53(ny),zzi(ny))
-    Allocate (it9i(ng),t9i(ng))
-    Allocate (g(ng,ny),angm(0:ny))
+    If ( .not. allocated(aa) )    Allocate (aa(ny))
+    If ( .not. allocated(zz) )    Allocate (zz(ny))
+    If ( .not. allocated(nn) )    Allocate (nn(ny))
+    If ( .not. allocated(be) )    Allocate (be(ny))
+    If ( .not. allocated(mex) )   Allocate (mex(ny))
+    If ( .not. allocated(mm) )    Allocate (mm(ny))
+    If ( .not. allocated(ia) )    Allocate (ia(ny))
+    If ( .not. allocated(iz) )    Allocate (iz(ny))
+    If ( .not. allocated(in) )    Allocate (in(ny))
+    If ( .not. allocated(g) )     Allocate (g(ng,ny))
+    If ( .not. allocated(angm) )  Allocate (angm(0:ny))
+    If ( .not. allocated(it9i) )  Allocate (it9i(ng))
+    If ( .not. allocated(t9i) )   Allocate (t9i(ng))
     If ( parallel_IOProcessor() ) Call read_netwinv(data_dir)
     Call parallel_bcast(it9i)
     Call parallel_bcast(t9i)
@@ -454,11 +463,13 @@ Contains
     nn = real(in,dp)
     inmin = minval(in)
     inmax = maxval(in)
+
+    ! Some commonly used factors of Z
+    Allocate (zz2(ny),zz53(ny),zzi(ny))
     zz2 = zz*zz
     zz53 = zz**five3rd
     zzi = zz**thbim1
 
-    ! Some commonly used factors of Z
     Allocate (zseq(0:izmax+2),zseq53(0:izmax+2),zseqi(0:izmax+2))
     zseq = (/ (real(i,dp), i=0,izmax+2) /)
     zseq53 = zseq**five3rd
@@ -545,7 +556,9 @@ Contains
         Call xnet_terminate('netwinv /= sunet')
       EndIf
     EndDo
-    Allocate (zz(ny),nn(ny),be(ny))
+    If ( .not. allocated(zz) )   Allocate (zz(ny))
+    If ( .not. allocated(nn) )   Allocate (nn(ny))
+    If ( .not. allocated(be) )   Allocate (be(ny))
     zz = real(iz,dp)
     nn = real(in,dp)
 
