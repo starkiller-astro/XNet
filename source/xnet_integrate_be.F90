@@ -62,14 +62,12 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(its)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(its)
 
     ! If the zone has previously converged or failed, do not iterate
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(its,inr,lzstep,mykts)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(its,inr,lzstep,mykts)
     Do izb = zb_lo, zb_hi
       If ( its(izb) /= 0 ) Then
         inr(izb) = -1
@@ -91,9 +89,8 @@ Contains
       ! Attempt Backward Euler integration over desired timestep
       Call step_be(kstep,inr)
 
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot)
       Do izb = zb_lo, zb_hi
 
         ! If integration fails, reset abundances, reduce timestep and retry.
@@ -103,7 +100,7 @@ Contains
           yet(izb) = ye(izb)
           mykts(izb) = kts+1
 
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do k = 1, ny
             yt(k,izb) = y(k,izb)
           EndDo
@@ -126,17 +123,15 @@ Contains
         EndIf
         lzstep(izb) = ( inr(izb) == 0 )
       EndDo
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(lzstep)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(lzstep)
 
       ! Reset temperature and density for failed integrations
       Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
         & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
       If ( iheat > 0 ) Then
-        !__dir_loop_outer(1) &
-        !__dir_async(tid) &
-        !__dir_present(lzstep,t9t,t9)
+        !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+        !XDIR XPRESENT(lzstep,t9t,t9)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
             t9t(izb) = t9(izb)
@@ -147,9 +142,8 @@ Contains
       ! For the last attempt, re-calculate timestep based on derivatives
       ! as is done for the first timestep.
       If ( kts == ktsmx-1 ) Then
-        !__dir_loop_outer(1) &
-        !__dir_async(tid) &
-        !__dir_present(lzstep,tdel,tdelstart)
+        !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+        !XDIR XPRESENT(lzstep,tdel,tdelstart)
         Do izb = zb_lo, zb_hi
           If ( lzstep(izb) ) Then
             tdel(izb) = 0.0
@@ -161,9 +155,8 @@ Contains
 
       ! Log the failed integration attempts
       If ( idiag >= 2 ) Then
-        !__dir_update &
-        !__dir_wait(tid) &
-        !__dir_host(inr,tt,tdel)
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(inr,tt,tdel)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) == 0 ) Then
             izone = izb + szbatch - zb_lo
@@ -177,10 +170,9 @@ Contains
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
-    !__dir_present(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(its,inr,kmon,ktot,mykts,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
+    !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
     Do izb = zb_lo, zb_hi
       If ( inr(izb) >= 0 ) Then
         kmon(1,izb) = mykts(izb)
@@ -197,7 +189,7 @@ Contains
           rho(izb) = rhot(izb)
           yeo(izb) = ye(izb)
           ye(izb) = yet(izb)
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do k = 1, ny
             yo(k,izb) = y(k,izb)
             y(k,izb) = yt(k,izb)
@@ -210,21 +202,18 @@ Contains
 
     ! Log TS success/failure
     If ( idiag >= 0 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(inr)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(inr)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( inr(izb) > 0 .and. idiag >= 2 ) Then
-          !__dir_update &
-          !__dir_wait(tid) &
-          !__dir_host(mykts(izb))
+          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XHOST(mykts(izb))
           Write(lun_diag,"(a,2i5,2i3)") &
             & 'BE TS Success',kstep,izone,mykts(izb),inr(izb)
         ElseIf ( inr(izb) == 0 ) Then
-          !__dir_update &
-          !__dir_wait(tid) &
-          !__dir_host(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
+          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XHOST(mykts(izb),t(izb),tdel(izb),t9t(izb),rhot(izb))
           Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
             & 'BE TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),inr(izb),mykts(izb)
           Write(lun_stdout,*) 'Timestep retrys fail after ',mykts(izb),' attempts'
@@ -232,9 +221,8 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(its)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(its)
 
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer
@@ -274,14 +262,12 @@ Contains
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(inr)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(inr)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
-    !__dir_private(s1)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(inr,iterate,xtot_init,rdt,mult,aa,y,tdel,toln,xext) &
+    !XDIR XPRIVATE(s1)
     Do izb = zb_lo, zb_hi
       If ( inr(izb) == 0 ) Then
 
@@ -290,8 +276,8 @@ Contains
 
         ! Calculate initial total mass fraction
         s1 = 0.0
-        !__dir_loop_inner(1) &
-        !__dir_reduction(+,s1)
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XREDUCTION(+,s1)
         Do k = 1, ny
           s1 = s1 + aa(k)*y(k,izb)
         EndDo
@@ -307,9 +293,8 @@ Contains
         mult(izb) = 0.0
       EndIf
     EndDo
-    !__dir_update &
-    !__dir_wait(tid) &
-    !__dir_host(iterate)
+    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XHOST(iterate)
 
     ! The Newton-Raphson iteration occurs for at most kitmx iterations.
     Do kit = 1, kitmx
@@ -327,9 +312,8 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
-      !__dir_update &
-      !__dir_async(tid) &
-      !__dir_device(rebuild,eval_rates)
+      !XDIR XUPDATE XASYNC(tid) &
+      !XDIR XDEVICE(rebuild,eval_rates)
 
       ! Calculate the reaction rates and abundance time derivatives
       Call cross_sect(mask_in = eval_rates)
@@ -338,26 +322,25 @@ Contains
       Call jacobian_decomp(kstep,mask_in = rebuild)
 
       ! Calculate equation to zero
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(iterate,yrhs,y,yt,rdt,ydot,t9rhs,t9,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           If ( kit > 1 ) Then
-            !__dir_loop_inner(1)
+            !XDIR XLOOP_INNER(1)
             Do k = 1, ny
               yrhs(k,izb) = (y(k,izb)-yt(k,izb))*rdt(izb) + ydot(k,izb)
             EndDo
             If ( iheat > 0 ) t9rhs(izb) = (t9(izb)-t9t(izb))*rdt(izb) + t9dot(izb)
           Else
-            !__dir_loop_inner(1)
+            !XDIR XLOOP_INNER(1)
             Do k = 1, ny
               yrhs(k,izb) = ydot(k,izb)
             EndDo
             If ( iheat > 0 ) t9rhs(izb) = t9dot(izb)
           EndIf
         Else
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do k = 1, ny
             yrhs(k,izb) = 0.0
           EndDo
@@ -365,9 +348,8 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 4 ) Then
-        !__dir_update &
-        !__dir_wait(tid) &
-        !__dir_host(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(yrhs,ydot,yt,t9rhs,t9dot,t9t,rdt)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
             izone = izb + szbatch - zb_lo
@@ -394,19 +376,18 @@ Contains
       ! Considering the uncertainties of the reaction rates, it is doubtful that the
       ! increased precision of testc is truly increased accuracy.
       !-----------------------------------------------------------------------------------------
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
-      !__dir_present(aa,inr,testm,testc,testc2,testn,toln) &
-      !__dir_private(s1,s2,s3)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(iterate,yt,dy,reldy,t9t,dt9,relt9,xtot,xtot_init,xext) &
+      !XDIR XPRESENT(aa,inr,testm,testc,testc2,testn,toln) &
+      !XDIR XPRIVATE(s1,s2,s3)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           s1 = 0.0
           s2 = 0.0
           s3 = 0.0
-          !__dir_loop_inner(1) &
-          !__dir_private(ytmp) &
-          !__dir_reduction(+,s1,s2,s3)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(ytmp) &
+          !XDIR XREDUCTION(+,s1,s2,s3)
           Do k = 1, ny
             ytmp = yt(k,izb) + dy(k,izb)
             If ( ytmp < ymin ) Then
@@ -446,14 +427,12 @@ Contains
           EndIf
         EndIf
       EndDo
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(iterate)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(iterate)
 
       If ( idiag >= 3 ) Then
-        !__dir_update &
-        !__dir_wait(tid) &
-        !__dir_host(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(inr,testm,testc,testc2,yt,dy,reldy,t9t,dt9,relt9)
         Do izb = zb_lo, zb_hi
           If ( inr(izb) >= 0 ) Then
             izone = izb + szbatch - zb_lo
@@ -479,9 +458,8 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(inr,xtot,testn,toln)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(inr,xtot,testn,toln)
       Do izb = zb_lo, zb_hi
         If ( inr(izb) >= 0 ) Then
           izone = izb + szbatch - zb_lo
@@ -494,9 +472,8 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(inr)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(inr)
 
     stop_timer = xnet_wtime()
     timer_nraph = timer_nraph + stop_timer
@@ -568,11 +545,10 @@ Contains
     eval_rates = .false.
     rebuild = .false.
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(inr,mykts,lzstep) &
-    !__dir_copyin(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
-    !__dir_copyin(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(inr,mykts,lzstep) &
+    !XDIR XCOPYIN(iterate,eval_rates,rebuild,testc,testc2,testm,testn,toln) &
+    !XDIR XCOPYIN(xtot,xtot_init,rdt,mult,yrhs,dy,reldy,t9rhs,dt9,relt9)
 
   End Subroutine be_init
 

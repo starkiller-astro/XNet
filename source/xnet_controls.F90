@@ -100,8 +100,7 @@ Module xnet_controls
     Module Procedure write_controls_line_r
   End Interface write_controls_line
 
-  !__dir_declare &
-  !__dir_to(iheat,iscrn)
+  !XDIR XDECLARE_VAR(iheat,iscrn)
 
 Contains
 
@@ -387,13 +386,11 @@ Contains
     Call parallel_bcast(inab_file)
     Call parallel_bcast(thermo_file)
 
-    !__dir_update &
-    !__dir_async(tid) &
-    !__dir_device(iheat,iscrn)
+    !XDIR XUPDATE XASYNC(tid) &
+    !XDIR XDEVICE(iheat,iscrn)
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(lzactive,iweak,kmon,ktot)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(lzactive,iweak,kmon,ktot)
 
     Return
   End Subroutine read_controls

@@ -148,21 +148,19 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask,y,enb,enm)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask,y,enb,enm)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,y,enb,enm,zz,be) &
-    !__dir_private(ztot,btot)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,y,enb,enm,zz,be) &
+    !XDIR XPRIVATE(ztot,btot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ztot = 0.0
         btot = 0.0
-        !__dir_loop_inner(1) &
-        !__dir_reduction(+,ztot,btot)
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XREDUCTION(+,ztot,btot)
         Do k = 1, ny
           ztot = ztot + y(k,izb) * zz(k)
           btot = btot + y(k,izb) * be(k)
@@ -176,10 +174,9 @@ Contains
       EndIf
     EndDo
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(enb,enm) &
-    !__dir_delete(mask,y)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(enb,enm) &
+    !XDIR XDELETE(mask,y)
 
     Return
   End Subroutine benuc_vector
@@ -211,18 +208,16 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask,t9)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask,t9)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,t9,t9i,gg,g,dlngdt9) &
-    !__dir_private(ii,rdt9)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,t9,t9i,gg,g,dlngdt9) &
+    !XDIR XPRIVATE(ii,rdt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
-        !__dir_loop_serial(1)
+        !XDIR XLOOP_SERIAL(1)
         Do i = 1, ng
           If ( t9(izb) <= t9i(i) ) Exit
         EndDo
@@ -232,18 +227,18 @@ Contains
         gg(0,izb) = 1.0 ! placeholder for non-nuclei, gamma-rays, etc.
         Select Case (ii)
         Case (1)
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do k = 1, ny
             gg(k,izb) = g(1,k)
           EndDo
         Case (ng+1)
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do k = 1, ny
             gg(k,izb) = g(ng,k)
           EndDo
         Case Default
           rdt9 = (t9(izb)-t9i(ii-1)) / (t9i(ii)-t9i(ii-1))
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do k = 1, ny
             gg(k,izb) = safe_exp( rdt9*log(g(ii,k)) + (1.0-rdt9)*log(g(ii-1,k)) )
           EndDo
@@ -253,17 +248,17 @@ Contains
           dlngdt9(0,izb) = 0.0
           Select Case (ii)
           Case (1)
-            !__dir_loop_inner(1)
+            !XDIR XLOOP_INNER(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(2,k)/g(1,k)) / (t9i(2)-t9i(1))
             EndDo
           Case (ng+1)
-            !__dir_loop_inner(1)
+            !XDIR XLOOP_INNER(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(ng,k)/g(ng-1,k)) / (t9i(ng)-t9i(ng-1))
             EndDo
           Case Default
-            !__dir_loop_inner(1)
+            !XDIR XLOOP_INNER(1)
             Do k = 1, ny
               dlngdt9(k,izb) = log(g(ii,k)/g(ii-1,k)) / (t9i(ii)-t9i(ii-1))
             EndDo
@@ -281,9 +276,8 @@ Contains
     !  EndDo
     !EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(mask,t9)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(mask,t9)
 
     Return
   End Subroutine partf
@@ -438,10 +432,19 @@ Contains
     ! Set size of nuclear data arrays and read in nuclear data and partition function interpolation table.
     ! nname(0), gg(0) and angm(0) are placeholders for non-nuclei.
     If ( .not. allocated(nname) ) Allocate (nname(0:ny))
-    Allocate (aa(ny),zz(ny),nn(ny),be(ny),mex(ny),mm(ny),ia(ny),iz(ny),in(ny))
-    Allocate (zz2(ny),zz53(ny),zzi(ny))
-    Allocate (it9i(ng),t9i(ng))
-    Allocate (g(ng,ny),angm(0:ny))
+    If ( .not. allocated(aa) )    Allocate (aa(ny))
+    If ( .not. allocated(zz) )    Allocate (zz(ny))
+    If ( .not. allocated(nn) )    Allocate (nn(ny))
+    If ( .not. allocated(be) )    Allocate (be(ny))
+    If ( .not. allocated(mex) )   Allocate (mex(ny))
+    If ( .not. allocated(mm) )    Allocate (mm(ny))
+    If ( .not. allocated(ia) )    Allocate (ia(ny))
+    If ( .not. allocated(iz) )    Allocate (iz(ny))
+    If ( .not. allocated(in) )    Allocate (in(ny))
+    If ( .not. allocated(g) )     Allocate (g(ng,ny))
+    If ( .not. allocated(angm) )  Allocate (angm(0:ny))
+    If ( .not. allocated(it9i) )  Allocate (it9i(ng))
+    If ( .not. allocated(t9i) )   Allocate (t9i(ng))
     If ( parallel_IOProcessor() ) Call read_netwinv(data_dir)
     Call parallel_bcast(it9i)
     Call parallel_bcast(t9i)
@@ -460,11 +463,13 @@ Contains
     nn = real(in,dp)
     inmin = minval(in)
     inmax = maxval(in)
+
+    ! Some commonly used factors of Z
+    Allocate (zz2(ny),zz53(ny),zzi(ny))
     zz2 = zz*zz
     zz53 = zz**five3rd
     zzi = zz**thbim1
 
-    ! Some commonly used factors of Z
     Allocate (zseq(0:izmax+2),zseq53(0:izmax+2),zseqi(0:izmax+2))
     zseq = (/ (real(i,dp), i=0,izmax+2) /)
     zseq53 = zseq**five3rd
@@ -498,12 +503,11 @@ Contains
 
     Allocate (gg(0:ny,nzevolve),dlngdt9(0:ny,nzevolve))
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(aa,zz,nn,be,mex,mm,ia,iz,in) &
-    !__dir_copyin(zz2,zz53,zzi,zseq,zseq53,zseqi) &
-    !__dir_copyin(it9i,t9i,g,angm) &
-    !__dir_create(gg,dlngdt9)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(aa,zz,nn,be,mex,mm,ia,iz,in) &
+    !XDIR XCOPYIN(zz2,zz53,zzi,zseq,zseq53,zseqi) &
+    !XDIR XCOPYIN(it9i,t9i,g,angm) &
+    !XDIR XCREATE(gg,dlngdt9)
 
     Return
   End Subroutine read_nuclear_data
@@ -552,7 +556,9 @@ Contains
         Call xnet_terminate('netwinv /= sunet')
       EndIf
     EndDo
-    Allocate (zz(ny),nn(ny),be(ny))
+    If ( .not. allocated(zz) )   Allocate (zz(ny))
+    If ( .not. allocated(nn) )   Allocate (nn(ny))
+    If ( .not. allocated(be) )   Allocate (be(ny))
     zz = real(iz,dp)
     nn = real(in,dp)
 
@@ -929,18 +935,17 @@ Contains
     Allocate (dlnrffndt9(max(1,nffn),nzevolve))
     Allocate (rnnu(max(1,nnnu),nnuspec,nzevolve))
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
-    !__dir_copyin(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
-    !__dir_copyin(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
-    !__dir_copyin(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !__dir_copyin(iffn,ffnsum,ffnenu) &
-    !__dir_copyin(has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
-    !__dir_copyin(innu,sigmanu,ltnu,fluxnu) &
-    !__dir_create(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
-    !__dir_create(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_create(rffn,dlnrffndt9,rnnu)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(nreac,nan,la,le,iffn,innu,rc1,rc2,rc3,rc4) &
+    !XDIR XCOPYIN(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
+    !XDIR XCOPYIN(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
+    !XDIR XCOPYIN(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
+    !XDIR XCOPYIN(iffn,ffnsum,ffnenu) &
+    !XDIR XCOPYIN(has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
+    !XDIR XCOPYIN(innu,sigmanu,ltnu,fluxnu) &
+    !XDIR XCREATE(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
+    !XDIR XCREATE(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !XDIR XCREATE(rffn,dlnrffndt9,rnnu)
 
     Return
   End Subroutine read_reaction_data

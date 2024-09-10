@@ -289,7 +289,7 @@ Contains
 
 
   Logical Function on_device()
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
 #if defined(XNET_OMP_OL)
     on_device = ( .not. omp_is_initial_device() )
 #elif defined(XNET_OACC)
@@ -315,26 +315,26 @@ Contains
 
   Type(C_PTR) Function dev_ptr_int( a )
     Integer, Target, Intent(in) :: a
-    !__dir_host_data &
-    !__dir_dev_ptr(a)
+    !XDIR XHOST_DATA &
+    !XDIR XDEV_PTR(a)
     dev_ptr_int = C_LOC( a )
-    !__dir_end_host_data
+    !XDIR XEND_HOST_DATA
   End Function dev_ptr_int
 
   Type(C_PTR) Function dev_ptr_dp( a )
     Real(dp), Target, Intent(in) :: a
-    !__dir_host_data &
-    !__dir_dev_ptr(a)
+    !XDIR XHOST_DATA &
+    !XDIR XDEV_PTR(a)
     dev_ptr_dp = C_LOC( a )
-    !__dir_end_host_data
+    !XDIR XEND_HOST_DATA
   End Function dev_ptr_dp
 
   Type(C_PTR) Function dev_ptr_cptr( a )
     Type(C_PTR), Target, Intent(in) :: a
-    !__dir_host_data &
-    !__dir_dev_ptr(a)
+    !XDIR XHOST_DATA &
+    !XDIR XDEV_PTR(a)
     dev_ptr_cptr = C_LOC( a )
-    !__dir_end_host_data
+    !XDIR XEND_HOST_DATA
   End Function dev_ptr_cptr
 
 End Module xnet_gpu

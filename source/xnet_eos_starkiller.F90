@@ -55,9 +55,8 @@ Contains
     zibar = 0.0
     sratio = 0.0
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(ye,ytot,abar,zbar,z2bar,zibar,sratio)
 
     Return
   End Subroutine eos_initialize
@@ -66,7 +65,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine interfaces with and calls the underlying EoS.
     !-----------------------------------------------------------------------------------------------
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Use xnet_constants, Only: amu
     Use xnet_controls, Only: iheat, iscrn
     Use xnet_types, Only: dp
@@ -169,10 +168,9 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(ye,cv,etae,detaedt9) &
-    !__dir_copyin(mask,t9,rho,y,xext,aext,zext)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(ye,cv,etae,detaedt9) &
+    !XDIR XCOPYIN(mask,t9,rho,y,xext,aext,zext)
 
     ! Calculate Ye
     Call y_moment(y,ye,ytot(zb_lo:zb_hi), &
@@ -180,9 +178,8 @@ Contains
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Call the eos
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,t9,rho,ye,abar,zbar,cv,etae,detaedt9)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,t9,rho,ye,abar,zbar,cv,etae,detaedt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Call eosx(t9(izb),rho(izb),ye(izb),abar(izb),zbar(izb),cv(izb),etae(izb),detaedt9(izb))
@@ -190,9 +187,8 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(t9,rho,ye,cv,etae,detaedt9)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(t9,rho,ye,cv,etae,detaedt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Write(lun_diag,"(a,6es23.15)") 'EOS',t9(izb),rho(izb),ye(izb),cv(izb),etae(izb),detaedt9(izb)
@@ -200,10 +196,9 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(ye,cv,etae,detaedt9) &
-    !__dir_delete(mask,t9,rho,y,xext,aext,zext)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(ye,cv,etae,detaedt9) &
+    !XDIR XDELETE(mask,t9,rho,y,xext,aext,zext)
 
     Return
   End Subroutine eos_interface_vector
@@ -282,10 +277,9 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(ztilde,zinter,lambda0,gammae,dztildedt9) &
-    !__dir_copyin(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !XDIR XCOPYIN(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
     ! Calculate Ye
     Call y_moment(y,ye(zb_lo:zb_hi),ytot(zb_lo:zb_hi), &
@@ -295,11 +289,10 @@ Contains
     ! Calculate ratio f'/f for electrons (Salpeter, Eq. 24; DGC, Eq. 5)
     Call salpeter_ratio(etae,sratio(zb_lo:zb_hi),dztildedt9,mask_in = mask_in)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,t9,rho,y,etae,detaedt9) &
-    !__dir_present(ztilde,zinter,lambda0,gammae,dztildedt9) &
-    !__dir_present(ye,ytot,abar,zbar,z2bar,zibar,sratio)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,t9,rho,y,etae,detaedt9) &
+    !XDIR XPRESENT(ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar,sratio)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ztilde(izb) = sqrt(z2bar(izb) + sratio(izb)*zbar(izb)) ! DGC, Eq. 4
@@ -311,9 +304,8 @@ Contains
       EndIf
     EndDo
     If ( idiag >= 3 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(t9,rho,ye,z2bar,zbar,sratio,ztilde,lambda0,gammae)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(t9,rho,ye,z2bar,zbar,sratio,ztilde,lambda0,gammae)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Write(lun_diag,"(a14,9es23.15)") 'EOS Screen', &
@@ -323,10 +315,9 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(ztilde,zinter,lambda0,gammae,dztildedt9) &
-    !__dir_delete(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !XDIR XDELETE(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
     Return
   End Subroutine eos_screen_vector
@@ -340,7 +331,7 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    !__dir_routine_seq
+    !XDIR XROUTINE_SEQ
     Use fd, Only: fdm1h, fd1h, fdm3h
     Use xnet_controls, Only: iheat
     Use xnet_types, Only: dp
@@ -406,25 +397,22 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(ratio,dratiodeta) &
-    !__dir_copyin(mask,eta)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(ratio,dratiodeta) &
+    !XDIR XCOPYIN(mask,eta)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(ratio,dratiodeta) &
-    !__dir_present(mask,eta)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(ratio,dratiodeta) &
+    !XDIR XPRESENT(mask,eta)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         Call salpeter_ratio_scalar(eta(izb),ratio(izb),dratiodeta(izb))
       EndIf
     EndDo
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(ratio,dratiodeta) &
-    !__dir_delete(mask,eta)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(ratio,dratiodeta) &
+    !XDIR XDELETE(mask,eta)
 
     Return
   End Subroutine salpeter_ratio_vector

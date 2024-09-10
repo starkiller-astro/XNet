@@ -55,15 +55,13 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
-    !__dir_copyin(mask)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
+    !XDIR XCOPYIN(mask)
 
     ! Retain old values of timestep and thermo and calculate remaining time
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,mask_init,tdel,tdel_old)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,mask_init,tdel,tdel_old)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel_old(izb) = tdel(izb)
@@ -72,17 +70,15 @@ Contains
         mask_init(izb) = .false.
       EndIf
     EndDo
-    !__dir_update &
-    !__dir_wait(tid) &
-    !__dir_host(mask_init)
+    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XHOST(mask_init)
     Call cross_sect(mask_in = mask_init)
     Call yderiv(mask_in = mask_init)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,mask_init,t,tt,tstop,y,yo,ydot,t9,t9o,t9dot,ints,intso,nh) &
-    !__dir_present(tdel,tdel_next,tdel_old,tdelstart,tdel_stop,tdel_dy,tdel_dt9) &
-    !__dir_private(tdel_init,rtau_y,rtau_t9,changey,changet9)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,mask_init,t,tt,tstop,y,yo,ydot,t9,t9o,t9dot,ints,intso,nh) &
+    !XDIR XPRESENT(tdel,tdel_next,tdel_old,tdelstart,tdel_stop,tdel_dy,tdel_dt9) &
+    !XDIR XPRIVATE(tdel_init,rtau_y,rtau_t9,changey,changet9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel_stop(izb) = tstop(izb) - t(izb)
@@ -117,8 +113,8 @@ Contains
         If ( tdel_old(izb) >= 0.0 ) Then
 
           ! Calculate timescales for abundance changes, Y/(dY/dt)
-          !__dir_loop_inner(1) &
-          !__dir_private(yfloor)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(yfloor)
           Do k = 1, ny
             If ( y(k,izb) > ymin ) Then
               yfloor = max(y(k,izb),yacc)
@@ -175,10 +171,9 @@ Contains
     EndDo
 
     If ( idiag >= 2 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(tdel,tdel_old,tdel_stop,tdel_next,tdel_dy,tdel_dt9) &
-      !__dir_host(ints,intso,y,t)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(tdel,tdel_old,tdel_stop,tdel_next,tdel_dy,tdel_dt9) &
+      !XDIR XHOST(ints,intso,y,t)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -191,9 +186,8 @@ Contains
           If ( ints(izb) /= intso(izb) ) Then
             Write(lun_diag,"(a4,a5,3es23.15)") 'ITC ',nname(ints(izb)),y(ints(izb),izb),t(izb),tdel(izb)
             intso(izb) = ints(izb)
-            !__dir_update &
-            !__dir_async(tid) &
-            !__dir_device(intso(izb))
+            !XDIR XUPDATE XASYNC(tid) &
+            !XDIR XDEVICE(intso(izb))
           EndIf
         EndIf
       EndDo
@@ -204,15 +198,14 @@ Contains
 
       ! Make sure to not skip any features in the temperature or density profiles by checking
       ! for profile monotonicity between t and t+del
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(mask,nh,th,t9h,rhoh,t,tt,nt,ntt,t9,t9t,rho,rhot,tdel,tstop,dtherm)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) .and. nh(izb) > 1 ) Then
           Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
             & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
           If ( ntt(izb)-1 > nt(izb) ) Then
-            !__dir_loop_serial(1)
+            !XDIR XLOOP_SERIAL(1)
             Do j = nt(izb), ntt(izb)-1
               If ( t9h(j,izb) > t9(izb) .and. t9h(j,izb) > t9t(izb) ) Then
                 tdel(izb) = th(j,izb) - t(izb)
@@ -234,7 +227,7 @@ Contains
           ! Limit timestep if fractional density change is larger than changeth (10% by default)
           ! or fraction temperature change is larger than 0.1*changeth (1% by default)
           dtherm(izb) = 0.0
-          !__dir_loop_serial(1)
+          !XDIR XLOOP_SERIAL(1)
           Do i = 1, 10
             Call t9rhofind(kstep,tt(izb),ntt(izb),t9t(izb),rhot(izb), &
               & nh(izb),th(:,izb),t9h(:,izb),rhoh(:,izb))
@@ -251,9 +244,8 @@ Contains
         EndIf
       EndDo
       If ( idiag >= 2 ) Then
-        !__dir_update &
-        !__dir_wait(tid) &
-        !__dir_host(dtherm,tdel,t9t,rhot)
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(dtherm,tdel,t9t,rhot)
         Do izb = zb_lo, zb_hi
           If ( mask(izb) .and. nh(izb) > 1 ) Then
             izone = izb + szbatch - zb_lo
@@ -268,10 +260,9 @@ Contains
       EndIf
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
-    !__dir_delete(mask)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(mask_init,dtherm,rtau_y,tdel_dy,tdel_dt9,tdel_stop) &
+    !XDIR XDELETE(mask)
 
     Return
   End Subroutine timestep
@@ -301,13 +292,11 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask,t9)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask,t9)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,t9,iweak)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,t9,iweak)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
@@ -321,9 +310,8 @@ Contains
       EndIf
     EndDo
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(mask,t9)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(mask,t9)
 
     Return
   End Subroutine update_iweak
@@ -357,17 +345,15 @@ Contains
     start_timer = xnet_wtime()
     timer_eos = timer_eos - start_timer
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask)
 
     Call eos_interface(t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),yt(:,zb_lo:zb_hi), &
       & yet(zb_lo:zb_hi),cv(zb_lo:zb_hi),etae(zb_lo:zb_hi),detaedt9(zb_lo:zb_hi), &
       & xext(zb_lo:zb_hi),aext(zb_lo:zb_hi),zext(zb_lo:zb_hi),mask_in = mask_in)
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(mask)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
     timer_eos = timer_eos + stop_timer
@@ -410,18 +396,16 @@ Contains
     start_timer = xnet_wtime()
     timer_deriv = timer_deriv - start_timer
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask)
 
     ! From the cross sections and the counting array, calculate the reaction rates
     ! Calculate Ydot and T9dot for each nucleus, summing over the reactions which affect it.
-    !__dir_loop_outer(2) &
-    !__dir_async(tid) &
-    !__dir_present(mask,la,le,ydot,yt,b1,b2,b3,b4,mu1,mu2,mu3,mu4) &
-    !__dir_present(a1,a2,a3,a4,csect1,csect2,csect3,csect4) &
-    !__dir_present(n11,n21,n22,n31,n32,n33,n41,n42,n43,n44) &
-    !__dir_private(la1,la2,la3,la4,le1,le2,le3,le4,s1,s2,s3,s4)
+    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+    !XDIR XPRESENT(mask,la,le,ydot,yt,b1,b2,b3,b4,mu1,mu2,mu3,mu4) &
+    !XDIR XPRESENT(a1,a2,a3,a4,csect1,csect2,csect3,csect4) &
+    !XDIR XPRESENT(n11,n21,n22,n31,n32,n33,n41,n42,n43,n44) &
+    !XDIR XPRIVATE(la1,la2,la3,la4,le1,le2,le3,le4,s1,s2,s3,s4)
     Do izb = zb_lo, zb_hi
       Do i0 = 1, ny
         If ( mask(izb) ) Then
@@ -436,9 +420,9 @@ Contains
 
           ! Sum over the reactions with 1 reactant
           s1 = 0.0
-          !__dir_loop_inner(1) &
-          !__dir_private(s11) &
-          !__dir_reduction(+,s1)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(s11) &
+          !XDIR XREDUCTION(+,s1)
           Do i1 = la1, le1
             b1(i1,izb) = a1(i1)*csect1(mu1(i1),izb)
             s11 = b1(i1,izb)*yt(n11(i1),izb)
@@ -447,9 +431,9 @@ Contains
 
           ! Sum over the reactions with 2 reactants
           s2 = 0.0
-          !__dir_loop_inner(1) &
-          !__dir_private(s22) &
-          !__dir_reduction(+,s2)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(s22) &
+          !XDIR XREDUCTION(+,s2)
           Do i1 = la2, le2
             b2(i1,izb) = a2(i1)*csect2(mu2(i1),izb)
             s22 = b2(i1,izb)*yt(n21(i1),izb)*yt(n22(i1),izb)
@@ -458,9 +442,9 @@ Contains
 
           ! Sum over the reactions with 3 reactants
           s3 = 0.0
-          !__dir_loop_inner(1) &
-          !__dir_private(s33) &
-          !__dir_reduction(+,s3)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(s33) &
+          !XDIR XREDUCTION(+,s3)
           Do i1 = la3, le3
             b3(i1,izb) = a3(i1)*csect3(mu3(i1),izb)
             s33 = b3(i1,izb)*yt(n31(i1),izb)*yt(n32(i1),izb)*yt(n33(i1),izb)
@@ -469,9 +453,9 @@ Contains
 
           ! Sum over the reactions with 4 reactants
           s4 = 0.0
-          !__dir_loop_inner(1) &
-          !__dir_private(s44) &
-          !__dir_reduction(+,s4)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(s44) &
+          !XDIR XREDUCTION(+,s4)
           Do i1 = la4, le4
             b4(i1,izb) = a4(i1)*csect4(mu4(i1),izb)
             s44 = b4(i1,izb)*yt(n41(i1),izb)*yt(n42(i1),izb)*yt(n43(i1),izb)*yt(n44(i1),izb)
@@ -486,15 +470,14 @@ Contains
 
     If ( iheat > 0 ) Then
 
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(mask,ydot,t9dot,cv,mex) &
-      !__dir_private(sdot)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(mask,ydot,t9dot,cv,mex) &
+      !XDIR XPRIVATE(sdot)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           sdot = 0.0
-          !__dir_loop_inner(1) &
-          !__dir_reduction(-,sdot)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XREDUCTION(-,sdot)
           Do i0 = 1, ny
             sdot = sdot - mex(i0)*ydot(i0,izb) / cv(izb)
           EndDo
@@ -503,9 +486,8 @@ Contains
       EndDo
     EndIf
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,ktot)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ktot(4,izb) = ktot(4,izb) + 1
@@ -514,9 +496,8 @@ Contains
 
     ! Separate loop for diagnostics so compiler can properly vectorize
     If ( idiag >= 5 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(yt,t9t,ydot,t9dot,b1,b2,b3,b4)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(yt,t9t,ydot,t9dot,b1,b2,b3,b4)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -576,9 +557,8 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(mask)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
     timer_deriv = timer_deriv + stop_timer
@@ -636,10 +616,9 @@ Contains
     nr3 = nreac(3)
     nr4 = nreac(4)
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(t09,dt09,ene) &
-    !__dir_copyin(mask)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(t09,dt09,ene) &
+    !XDIR XCOPYIN(mask)
 
     ! Update thermodynamic state
     Call update_eos(mask_in = mask_in)
@@ -662,9 +641,8 @@ Contains
     Call partf(t9t(zb_lo:zb_hi),mask_in = mask_in)
 
     ! Calculate necessary thermodynamic moments
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,ene,t09,dt09,t9t,rhot,yet)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,ene,t09,dt09,t9t,rhot,yet)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ene(izb) = yet(izb)*rhot(izb)
@@ -726,15 +704,14 @@ Contains
         EndDo
       EndIf
     Else
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(rc1,rc2,rc3,rc4) &
-      !__dir_present(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-      !__dir_present(mask,t09,dt09)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(rc1,rc2,rc3,rc4) &
+      !XDIR XPRESENT(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+      !XDIR XPRESENT(mask,t09,dt09)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
-          !__dir_loop_inner(1) &
-          !__dir_private(lambda1,dlam1dt9)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(lambda1,dlam1dt9)
           Do k = 1, nr1
             lambda1 = 0.0
             dlam1dt9 = 0.0
@@ -745,8 +722,8 @@ Contains
             h1(k,izb) = ascrn*h1(k,izb) + lambda1
             dh1dt9(k,izb) = ascrn*dh1dt9(k,izb) + dlam1dt9
           EndDo
-          !__dir_loop_inner(1) &
-          !__dir_private(lambda2,dlam2dt9)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(lambda2,dlam2dt9)
           Do k = 1, nr2
             lambda2 = 0.0
             dlam2dt9 = 0.0
@@ -757,8 +734,8 @@ Contains
             h2(k,izb) = ascrn*h2(k,izb) + lambda2
             dh2dt9(k,izb) = ascrn*dh2dt9(k,izb) + dlam2dt9
           EndDo
-          !__dir_loop_inner(1) &
-          !__dir_private(lambda3,dlam3dt9)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(lambda3,dlam3dt9)
           Do k = 1, nr3
             lambda3 = 0.0
             dlam3dt9 = 0.0
@@ -769,8 +746,8 @@ Contains
             h3(k,izb) = ascrn*h3(k,izb) + lambda3
             dh3dt9(k,izb) = ascrn*dh3dt9(k,izb) + dlam3dt9
           EndDo
-          !__dir_loop_inner(1) &
-          !__dir_private(lambda4,dlam4dt9)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XPRIVATE(lambda4,dlam4dt9)
           Do k = 1, nr4
             lambda4 = 0.0
             dlam4dt9 = 0.0
@@ -786,19 +763,18 @@ Contains
     EndIf
 
     ! Calculate cross sections
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(n1i,n2i,n3i,n4i,iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
-    !__dir_present(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
-    !__dir_present(csect1,csect2,csect3,csect4) &
-    !__dir_present(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-    !__dir_present(mask,rhot,ene,gg,dlngdt9,iweak,iffn,rffn,dlnrffndt9,innu,rnnu,ktot)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(n1i,n2i,n3i,n4i,iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
+    !XDIR XPRESENT(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9) &
+    !XDIR XPRESENT(csect1,csect2,csect3,csect4) &
+    !XDIR XPRESENT(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+    !XDIR XPRESENT(mask,rhot,ene,gg,dlngdt9,iweak,iffn,rffn,dlnrffndt9,innu,rnnu,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
 
         ! Calculate the csect for reactions with 1 reactant
-        !__dir_loop_inner(1) &
-        !__dir_private(rpf1,dlnrpf1dt9,p1,s1)
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XPRIVATE(rpf1,dlnrpf1dt9,p1,s1)
         Do k = 1, nr1
           If ( (iweak(izb) <  0 .and. iwk1(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk1(k) /= 0) ) Then
@@ -841,8 +817,8 @@ Contains
         EndDo
 
         ! Calculate the csect for reactions with 2 reactants
-        !__dir_loop_inner(1) &
-        !__dir_private(rpf2,dlnrpf2dt9,p2,s2)
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XPRIVATE(rpf2,dlnrpf2dt9,p2,s2)
         Do k = 1, nr2
           If ( (iweak(izb) <  0 .and. iwk2(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk2(k) /= 0) ) Then
@@ -875,8 +851,8 @@ Contains
         EndDo
 
         ! Calculate the csect for reactions with 3 reactants
-        !__dir_loop_inner(1) &
-        !__dir_private(rpf3,dlnrpf3dt9,p3,s3)
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XPRIVATE(rpf3,dlnrpf3dt9,p3,s3)
         Do k = 1, nr3
           If ( (iweak(izb) <  0 .and. iwk3(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk3(k) /= 0) ) Then
@@ -911,8 +887,8 @@ Contains
         EndDo
 
         ! Calculate the csect for reactions with 4 reactants
-        !__dir_loop_inner(1) &
-        !__dir_private(rpf4,dlnrpf4dt9,p4,s4)
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XPRIVATE(rpf4,dlnrpf4dt9,p4,s4)
         Do k = 1, nr4
           If ( (iweak(izb) <  0 .and. iwk4(k) == 0) .or. &
             &  (iweak(izb) == 0 .and. iwk4(k) /= 0) ) Then
@@ -951,11 +927,10 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(csect1,csect2,csect3,csect4) &
-      !__dir_host(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
-      !__dir_host(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(csect1,csect2,csect3,csect4) &
+      !XDIR XHOST(dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9) &
+      !XDIR XHOST(h1,h2,h3,h4,dh1dt9,dh2dt9,dh3dt9,dh4dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -998,10 +973,9 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(t09,dt09,ene) &
-    !__dir_delete(mask)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(t09,dt09,ene) &
+    !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
     timer_csect = timer_csect + stop_timer

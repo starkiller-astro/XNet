@@ -72,20 +72,18 @@ Contains
     ! Set reaction controls not read in from control
     idiag0 = idiag
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(its,mykstep,lzsolve,lzoutput) &
-    !__dir_create(enm,enb,enold,en0,delta_en,edot)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(its,mykstep,lzsolve,lzoutput) &
+    !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot)
 
     ! Calculate the total energy of the nuclei
     Call benuc(y,enb,enm)
 
     ! Initialize trial time step abundances and conditions
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
-    !__dir_present(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
-    !__dir_present(enm,enb,enold,en0,delta_en,edot)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(kmon,ktot,tdel,tdel_old,tdel_next,nt,nto,ntt) &
+    !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,t,to,tt,ye,yeo,yet,y,yo,yt) &
+    !XDIR XPRESENT(enm,enb,enold,en0,delta_en,edot)
     Do izb = zb_lo, zb_hi
       tdel_old(izb) = tdel(izb)
       tdel_next(izb) = tdel(izb)
@@ -99,12 +97,12 @@ Contains
       rhot(izb) = rho(izb)
       yeo(izb) = ye(izb)
       yet(izb) = ye(izb)
-      !__dir_loop_inner(1)
+      !XDIR XLOOP_INNER(1)
       Do k = 1, ny
         yo(k,izb) = y(k,izb)
         yt(k,izb) = y(k,izb)
       EndDo
-      !__dir_loop_inner(1)
+      !XDIR XLOOP_INNER(1)
       Do k = 1, 5
         kmon(k,izb) = 0
         ktot(k,izb) = 0
@@ -151,9 +149,8 @@ Contains
 
       ! If convergence is successful, output timestep results
       If ( idiag >= 1 ) Then
-        !__dir_update &
-        !__dir_wait(tid) &
-        !__dir_host(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(its,t,tdel,t9o,t9,t9dot,rho,ye,yo,y,ydot)
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
           If ( its(izb) == 0 .and. idiag >= 1 ) Then
@@ -172,10 +169,9 @@ Contains
         EndDo
       EndIf
 
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(enm,enold) &
-      !__dir_present(its,t,tstop,mykstep,lzsolve,lzoutput)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(enm,enold) &
+      !XDIR XPRESENT(its,t,tstop,mykstep,lzsolve,lzoutput)
       Do izb = zb_lo, zb_hi
         If ( its(izb) == 0 ) Then
 
@@ -201,9 +197,8 @@ Contains
 
       Call benuc(yt,enb,enm,mask_in = lzoutput)
 
-      !__dir_loop_outer(1) &
-      !__dir_async(tid) &
-      !__dir_present(its,enm,enold,en0,delta_en,edot,tdel)
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(its,enm,enold,en0,delta_en,edot,tdel)
       Do izb = zb_lo, zb_hi
         If ( its(izb) == 0 ) Then
           delta_en(izb) = enm(izb) - en0(izb)
@@ -211,18 +206,16 @@ Contains
         EndIf
       EndDo
 
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(lzoutput,lzsolve)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(lzoutput,lzsolve)
       Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
 
       ! Test if all zones have stopped
       If ( .not. any( lzsolve ) ) Exit
     EndDo
 
-    !__dir_update &
-    !__dir_wait(tid) &
-    !__dir_host(its,mykstep,t,tdel)
+    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XHOST(its,mykstep,t,tdel)
 
     ! Test that the stop time is reached
     Do izb = zb_lo, zb_hi
@@ -251,12 +244,11 @@ Contains
     EndDo
     kstep = max(1, maxval(mykstep))
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(enm,enb,enold,en0,delta_en,edot) &
-    !__dir_delete(its,mykstep,lzsolve,lzoutput)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(enm,enb,enold,en0,delta_en,edot) &
+    !XDIR XDELETE(its,mykstep,lzsolve,lzoutput)
 
-    !__dir_wait(tid)
+    !XDIR XWAIT(tid)
 
     stop_timer = xnet_wtime()
     timer_xnet = timer_xnet + stop_timer

@@ -91,9 +91,8 @@ Contains
     indx = 0
     info = 0
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(dydotdy,jac,rhs,indx,info,diag0,mult1,pivot)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(dydotdy,jac,rhs,indx,info,diag0,mult1,pivot)
 
     Allocate (hjac(nzevolve))
     Allocate (hrhs(nzevolve))
@@ -113,9 +112,8 @@ Contains
       dindx(izb) = dev_ptr( indx(1,izb) )
     EndDo
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(djac,drhs,dindx)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(djac,drhs,dindx)
 
     Return
   End Subroutine read_jacobian_data
@@ -124,9 +122,8 @@ Contains
     Use xnet_controls, Only: tid
     Implicit None
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(dydotdy,jac,rhs,indx,info,djac,drhs,dindx,diag0,mult1,pivot)
 
     Deallocate (diag0,mult1,pivot)
     Deallocate (dydotdy,jac,rhs,indx,info)
@@ -176,21 +173,19 @@ Contains
       mult(zb_lo:) => mult1(zb_lo:zb_hi)
     EndIf
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask,diag,mult)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask,diag,mult)
 
-    !__dir_loop_outer(2) &
-    !__dir_async(tid) &
-    !__dir_present(jac,dydotdy,pivot) &
-    !__dir_present(mask,diag,mult) &
-    !__dir_private(rsum)
+    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+    !XDIR XPRESENT(jac,dydotdy,pivot) &
+    !XDIR XPRESENT(mask,diag,mult) &
+    !XDIR XPRIVATE(rsum)
     Do izb = zb_lo, zb_hi
       Do j1 = 1, msize
         If ( mask(izb) ) Then
           rsum = 0.0
-          !__dir_loop_inner(1) &
-          !__dir_reduction(+,rsum)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XREDUCTION(+,rsum)
           Do i0 = 1, msize
             jac(i0,j1,izb) = mult(izb) * dydotdy(j1,i0,izb)
             If ( i0 == j1 ) Then
@@ -203,14 +198,12 @@ Contains
         EndIf
       EndDo
     EndDo
-    !__dir_update &
-    !__dir_async(tid) &
-    !__dir_host(pivot)
+    !XDIR XUPDATE XASYNC(tid) &
+    !XDIR XHOST(pivot)
 
     If ( idiag >= 3 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(pivot,jac)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(pivot,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -233,9 +226,8 @@ Contains
     EndIf
 
     If ( idiag >= 5 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(diag,mult,jac)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(diag,mult,jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -256,9 +248,8 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(mask,diag,mult)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(mask,diag,mult)
     
     Return
   End Subroutine jacobian_scale
@@ -299,80 +290,78 @@ Contains
     start_timer = xnet_wtime()
     timer_jacob = timer_jacob - start_timer
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_copyin(mask)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask)
 
     ! Build the Jacobian
-    !__dir_loop_outer(2) &
-    !__dir_async(tid) &
-    !__dir_private(s1,s2,s3,s4) &
-    !__dir_present(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
-    !__dir_present(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !__dir_present(mu1,mu2,mu3,mu4,a1,a2,a3,a4) &
-    !__dir_present(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
+    !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+    !XDIR XPRIVATE(s1,s2,s3,s4) &
+    !XDIR XPRESENT(mask,dydotdy,yt,b1,b2,b3,b4,la,le,cv,mex) &
+    !XDIR XPRESENT(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
+    !XDIR XPRESENT(mu1,mu2,mu3,mu4,a1,a2,a3,a4) &
+    !XDIR XPRESENT(b1,b2,b3,b4,dcsect1dt9,dcsect2dt9,dcsect3dt9,dcsect4dt9)
     Do izb = zb_lo, zb_hi
       Do i0 = 1, ny
         If ( mask(izb) ) Then
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do j1 = 1, msize
             dydotdy(j1,i0,izb) = 0.0
           EndDo
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do j1 = la(1,i0), le(1,i0)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n11(j1),i0,izb) = dydotdy(n11(j1),i0,izb) + b1(j1,izb)
           EndDo
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do j1 = la(2,i0), le(2,i0)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n21(j1),i0,izb) = dydotdy(n21(j1),i0,izb) + b2(j1,izb) * yt(n22(j1),izb)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n22(j1),i0,izb) = dydotdy(n22(j1),i0,izb) + b2(j1,izb) * yt(n21(j1),izb)
           EndDo
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do j1 = la(3,i0), le(3,i0)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n31(j1),i0,izb) = dydotdy(n31(j1),i0,izb) + b3(j1,izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n32(j1),i0,izb) = dydotdy(n32(j1),i0,izb) + b3(j1,izb) * yt(n33(j1),izb) * yt(n31(j1),izb)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n33(j1),i0,izb) = dydotdy(n33(j1),i0,izb) + b3(j1,izb) * yt(n31(j1),izb) * yt(n32(j1),izb)
           EndDo
-          !__dir_loop_inner(1)
+          !XDIR XLOOP_INNER(1)
           Do j1 = la(4,i0), le(4,i0)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n41(j1),i0,izb) = dydotdy(n41(j1),i0,izb) + b4(j1,izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n42(j1),i0,izb) = dydotdy(n42(j1),i0,izb) + b4(j1,izb) * yt(n43(j1),izb) * yt(n44(j1),izb) * yt(n41(j1),izb)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n43(j1),i0,izb) = dydotdy(n43(j1),i0,izb) + b4(j1,izb) * yt(n44(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb)
-            !__dir_atomic
+            !XDIR XATOMIC
             dydotdy(n44(j1),i0,izb) = dydotdy(n44(j1),i0,izb) + b4(j1,izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb)
           EndDo
 
           If ( iheat > 0 ) Then
             s1 = 0.0
-            !__dir_loop_inner(1) &
-            !__dir_reduction(+,s1)
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XREDUCTION(+,s1)
             Do j1 = la(1,i0), le(1,i0)
               s1 = s1 + a1(j1) * dcsect1dt9(mu1(j1),izb) * yt(n11(j1),izb)
             EndDo
             s2 = 0.0
-            !__dir_loop_inner(1) &
-            !__dir_reduction(+,s2)
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XREDUCTION(+,s2)
             Do j1 = la(2,i0), le(2,i0)
               s2 = s2 + a2(j1) * dcsect2dt9(mu2(j1),izb) * yt(n21(j1),izb) * yt(n22(j1),izb)
             EndDo
             s3 = 0.0
-            !__dir_loop_inner(1) &
-            !__dir_reduction(+,s3)
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XREDUCTION(+,s3)
             Do j1 = la(3,i0), le(3,i0)
               s3 = s3 + a3(j1) * dcsect3dt9(mu3(j1),izb) * yt(n31(j1),izb) * yt(n32(j1),izb) * yt(n33(j1),izb)
             EndDo
             s4 = 0.0
-            !__dir_loop_inner(1) &
-            !__dir_reduction(+,s4)
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XREDUCTION(+,s4)
             Do j1 = la(4,i0), le(4,i0)
               s4 = s4 + a4(j1) * dcsect4dt9(mu4(j1),izb) * yt(n41(j1),izb) * yt(n42(j1),izb) * yt(n43(j1),izb) * yt(n44(j1),izb)
             EndDo
@@ -383,16 +372,15 @@ Contains
     EndDo
 
     If ( iheat > 0 ) Then
-      !__dir_loop_outer(2) &
-      !__dir_async(tid) &
-      !__dir_present(mask,dydotdy,cv,mex) &
-      !__dir_private(sdot)
+      !XDIR XLOOP_OUTER(2) XASYNC(tid) &
+      !XDIR XPRESENT(mask,dydotdy,cv,mex) &
+      !XDIR XPRIVATE(sdot)
       Do izb = zb_lo, zb_hi
         Do j1 = 1, msize
           If ( mask(izb) ) Then
             sdot = 0.0
-            !__dir_loop_inner(1) &
-            !__dir_reduction(-,sdot)
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XREDUCTION(-,sdot)
             Do i0 = 1, ny
               sdot = sdot - mex(i0)*dydotdy(j1,i0,izb) / cv(izb)
             EndDo
@@ -402,9 +390,8 @@ Contains
       EndDo
     EndIf
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,ktot)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,ktot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         ktot(3,izb) = ktot(3,izb) + 1
@@ -415,9 +402,8 @@ Contains
     Call jacobian_scale(diag_in,mult_in,mask_in = mask_in)
 
     If ( idiag >= 5 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(dydotdy)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(dydotdy)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -438,9 +424,8 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_delete(mask)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XDELETE(mask)
 
     stop_timer = xnet_wtime()
     timer_jacob = timer_jacob + stop_timer
@@ -486,23 +471,21 @@ Contains
     start_timer = xnet_wtime()
     timer_solve = timer_solve - start_timer
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(dy,dt9) &
-    !__dir_copyin(mask,yrhs,t9rhs)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(dy,dt9) &
+    !XDIR XCOPYIN(mask,yrhs,t9rhs)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,rhs,yrhs,t9rhs)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !__dir_loop_inner(1)
+        !XDIR XLOOP_INNER(1)
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       Else
-        !__dir_loop_inner(1)
+        !XDIR XLOOP_INNER(1)
         Do i = 1, msize
           rhs(i,izb) = 0.0
         EndDo
@@ -528,12 +511,11 @@ Contains
     EndDo
 #endif
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,rhs,dy,dt9)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !__dir_loop_inner(1)
+        !XDIR XLOOP_INNER(1)
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
@@ -542,9 +524,8 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(dy,dt9)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -555,10 +536,9 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(dy,dt9) &
-    !__dir_delete(mask,yrhs,t9rhs)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(dy,dt9) &
+    !XDIR XDELETE(mask,yrhs,t9rhs)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer
@@ -617,9 +597,8 @@ Contains
 #endif
 
     If ( idiag >= 6 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(jac)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(jac)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -675,23 +654,21 @@ Contains
     timer_solve = timer_solve - start_timer
     timer_bksub = timer_bksub - start_timer
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(dy,dt9) &
-    !__dir_copyin(mask,yrhs,t9rhs)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(dy,dt9) &
+    !XDIR XCOPYIN(mask,yrhs,t9rhs)
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,rhs,yrhs,t9rhs)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,rhs,yrhs,t9rhs)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !__dir_loop_inner(1)
+        !XDIR XLOOP_INNER(1)
         Do i = 1, ny
           rhs(i,izb) = yrhs(i,izb)
         EndDo
         If ( iheat > 0 ) rhs(ny+1,izb) = t9rhs(izb)
       Else
-        !__dir_loop_inner(1)
+        !XDIR XLOOP_INNER(1)
         Do i = 1, msize
           rhs(i,izb) = 0.0
         EndDo
@@ -718,12 +695,11 @@ Contains
     EndDo
 #endif
 
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(mask,rhs,dy,dt9)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,rhs,dy,dt9)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
-        !__dir_loop_inner(1)
+        !XDIR XLOOP_INNER(1)
         Do i = 1, ny
           dy(i,izb) = rhs(i,izb)
         EndDo
@@ -732,9 +708,8 @@ Contains
     EndDo
 
     If ( idiag >= 6 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(dy,dt9)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(dy,dt9)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -745,10 +720,9 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(dy,dt9) &
-    !__dir_delete(mask,yrhs,t9rhs)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(dy,dt9) &
+    !XDIR XDELETE(mask,yrhs,t9rhs)
 
     stop_timer = xnet_wtime()
     timer_solve = timer_solve + stop_timer

@@ -67,9 +67,8 @@ Contains
     EndIf
 
     If ( itsout >= 1 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(t,t9,rho,tdel,edot,y,kmon)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(t,t9,rho,tdel,edot,y,kmon)
       Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,2es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
@@ -156,9 +155,8 @@ Contains
 
     ! Write final abundances to diagnostic output (in ASCII)
     If ( idiag >= 0 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(t,t9,rho,ye,y)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(t,t9,rho,ye,y)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -174,9 +172,8 @@ Contains
 
     ! Write performance counters and timers to diagnostic output (or to stdout if idiag = -1)
     If ( idiag >= 0 .or. ( idiag >= -1 .and. parallel_IOProcessor() ) ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(ktot)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(ktot)
       Write(lun_diag,"(a10,a5,5a10)") 'Counters: ','Zone','TS','NR','Jacobian','Deriv','CrossSect'
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then

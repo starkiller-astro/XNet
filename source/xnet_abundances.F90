@@ -123,17 +123,15 @@ Contains
     EndIf
     If ( .not. any(mask) ) Return
 
-    !__dir_enter_data &
-    !__dir_async(tid) &
-    !__dir_create(ye,ytot,abar,zbar,z2bar,zibar) &
-    !__dir_copyin(mask,y,xext,aext,zext)
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCREATE(ye,ytot,abar,zbar,z2bar,zibar) &
+    !XDIR XCOPYIN(mask,y,xext,aext,zext)
        
     ! Calculate abundance moments
-    !__dir_loop_outer(1) &
-    !__dir_async(tid) &
-    !__dir_present(ye,ytot,abar,zbar,z2bar,zibar) &
-    !__dir_present(mask,y,xext,aext,zext) &
-    !__dir_private(yext,ntot,atot,ztot,z2tot,zitot)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar) &
+    !XDIR XPRESENT(mask,y,xext,aext,zext) &
+    !XDIR XPRIVATE(yext,ntot,atot,ztot,z2tot,zitot)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         yext = xext(izb) / aext(izb)
@@ -143,8 +141,8 @@ Contains
         ztot  = 0.0
         z2tot = 0.0
         zitot = 0.0
-        !__dir_loop_inner(1) &
-        !__dir_reduction(+,ntot,atot,ztot,z2tot,zitot)
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XREDUCTION(+,ntot,atot,ztot,z2tot,zitot)
         Do k = 1, ny
           ntot  = ntot  + y(k,izb)
           atot  = atot  + y(k,izb) * aa(k)
@@ -168,9 +166,8 @@ Contains
     EndDo
        
     If ( idiag >= 3 ) Then
-      !__dir_update &
-      !__dir_wait(tid) &
-      !__dir_host(ye,ytot,abar,zbar,z2bar,zibar)
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(ye,ytot,abar,zbar,z2bar,zibar)
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           Write(lun_diag,"(a4,6es23.15)") 'YMom', &
@@ -179,10 +176,9 @@ Contains
       EndDo
     EndIf
 
-    !__dir_exit_data &
-    !__dir_async(tid) &
-    !__dir_copyout(ye,ytot,abar,zbar,z2bar,zibar) &
-    !__dir_delete(mask,y,xext,aext,zext)
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(ye,ytot,abar,zbar,z2bar,zibar) &
+    !XDIR XDELETE(mask,y,xext,aext,zext)
 
     Return
   End Subroutine y_moment_vector
