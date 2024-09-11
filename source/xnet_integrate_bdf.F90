@@ -25,9 +25,12 @@
 ! 
 !***************************************************************************************************
 
+#include "xnet_macros.fh"
+
 Module xnet_integrate_bdf
   Use nuclear_data, Only: ny
-  Use xnet_controls, Only: idiag, iheat, iscrn, nzevolve, szbatch, zb_lo, zb_hi, lzactive, lun_diag, lun_stdout
+  Use xnet_controls, Only: idiag, iheat, iscrn, nzevolve, szbatch, zb_lo, zb_hi, lzactive, tid, &
+    & lun_diag, lun_stdout
   Use xnet_types, Only: dp
   Implicit None
   Private
@@ -110,6 +113,31 @@ Module xnet_integrate_bdf
   Real(dp), Allocatable :: ydot0(:,:)   ! Saved abundance derivatives from beginning of timestep
   Real(dp), Allocatable :: t9dot0(:)    ! Saved temperature derivatives from beginning of timestep
 
+  Logical, Allocatable :: restore(:)    ! Logical mask for zones to restore initial state
+  Logical, Allocatable :: rescale(:)    ! Logical mask for zones to rescale Nordsieck vector
+  Logical, Allocatable :: rebuild(:)    ! Logical mask for zones to rebuild Newton matrix
+  Logical, Allocatable :: refactor(:)   ! Logical mask for zones to rebuild Jacobian
+  Logical, Allocatable :: iterate(:)    ! Logical mask for zones being iterated
+  Logical, Allocatable :: converged(:)  ! Logical mask for zones which have converged
+  Logical, Allocatable :: eval_rates(:) ! Logical mask for zones need rates to be evaluated
+
+  Real(dp), Allocatable :: diag(:)      ! Added to diagonal of Newton matrix
+  Real(dp), Allocatable :: mult(:)      ! Multiplied with each element of Jacobian
+  Real(dp), Allocatable :: yrhs(:,:)    ! Abundance RHS
+  Real(dp), Allocatable :: dy(:,:)      ! Abundance change after each solve
+  Real(dp), Allocatable :: t9rhs(:)     ! Temperature RHS
+  Real(dp), Allocatable :: dt9(:)       ! Temperature change after each solve
+  Real(dp), Allocatable :: dvec(:,:)    ! Combined dy and dt9
+  Real(dp), Allocatable :: del(:)       ! Weighted norm of deltas 
+  Real(dp), Allocatable :: delp(:)      ! Previous del
+  Real(dp), Allocatable :: dcon(:)      ! Convergence criteria
+
+  Real(dp), Allocatable :: errorq(:,:)  ! Error estimates for different q increments
+  Real(dp), Allocatable :: acorhat(:,:) ! Modified accumulated corrections
+
+  Logical, Allocatable :: detect(:)     ! Logical mask for whether to do stabliity detection
+  Integer, Allocatable :: ldflag(:)     ! Stability detection return code
+
   Integer :: neq
 
   Integer, Parameter :: BDF_STATUS_SKIP    = -1
@@ -144,12 +172,18 @@ Contains
     ! Local variables
     Integer :: kts, k, izb, izone
 
-    ! Initial setup and allocations
-    If ( kstep == 1 ) Call bdf_reset
-
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
+    !XDIR XENTER_DATA ASYNC(tid) &
+    !XDIR XCOPYIN(ierr)
+
+    ! Initial setup and allocations
+    If ( kstep == 1 ) Call bdf_reset
+
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(ydot,ydot0,t9dot,t9dot0,eta_next) &
+    !XDIR XPRESENT(ierr,ierr_nr,ierr_ts,nit_ts,nerr_ts,ncf_ts)
     Do izb = zb_lo, zb_hi
 
       ! Copy status flag to local copy
@@ -163,6 +197,7 @@ Contains
       EndIf
 
       ! Save initial derivatives so they can be reloaded later if necessary
+      !XDIR XLOOP_INNER(1)
       Do k = 1, ny
         ydot0(k,izb) = ydot(k,izb)
       EndDo
@@ -176,15 +211,18 @@ Contains
       nerr_ts(izb) = 0
       ncf_ts(izb) = 0
     EndDo
+    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XHOST(ierr_nr)
 
     ! Make adjustments to account for any change in stepsize or order from previous step
     If ( kstep /= 1 ) Call bdf_adjust(kstep)
 
     Do kts = 1, max_it_ts
-
       Do izb = zb_lo, zb_hi
         bdf_active(izb) = ( ierr_nr(izb) == BDF_STATUS_FAIL )
       EndDo
+      !XDIR XUPDATE XASYNC(tid) &
+      !XDIR XDEVICE(bdf_active)
 
       Call bdf_update(kstep)
       Call bdf_predict(kstep)
@@ -201,6 +239,10 @@ Contains
     Call bdf_eta(kstep)
     If ( check_stability ) Call bdf_stab(kstep)
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(ierr,ierr_nr,ierr_ts,nit_ts,nit_nrslv,eta,z) &
+    !XDIR XPRESENT(kmon,ktot,tdel,tdel_next,nt,nto,ntt,t,to,tt) &
+    !XDIR XPRESENT(t9,t9o,t9t,rho,rhoo,rhot,ye,yeo,yet,y,yo,yt)
     Do izb = zb_lo, zb_hi
 
       ! Set the factor for the next timestep
@@ -208,6 +250,7 @@ Contains
 
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
         ierr_ts(izb) = BDF_STATUS_SUCCESS
+        !XDIR XLOOP_INNER(1)
         Do k = 1, ny
           yt(k,izb) = z(k,0,izb)
           yo(k,izb) = y(k,izb)
@@ -238,16 +281,27 @@ Contains
     EndDo
 
     ! Log TS success/failure
-    Do izb = zb_lo, zb_hi
-      izone = izb + szbatch - zb_lo
-      If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
-        If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3)") &
-          'BDF TS Success',kstep,izone,nit_ts(izb),nit_nr(izb)
-      ElseIf ( ierr_nr(izb) == BDF_STATUS_FAIL .or. ierr_ts(izb) == BDF_STATUS_FAIL ) Then
-        If ( idiag >= 0 ) Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
-          'BDF TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),nit_nr(izb),nit_ts(izb)
-      EndIf
-    EndDo
+    If ( idiag >= 0 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(ierr_nr,ierr_ts)
+      Do izb = zb_lo, zb_hi
+        izone = izb + szbatch - zb_lo
+        If ( ierr_nr(izb) == BDF_STATUS_SUCCESS .and. idiag >= 2 ) Then
+          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XHOST(nit_ts(izb),nit_nr(izb))
+          Write(lun_diag,"(a,2i5,2i3)") &
+            'BDF TS Success',kstep,izone,nit_ts(izb),nit_nr(izb)
+        ElseIf ( ierr_nr(izb) == BDF_STATUS_FAIL .or. ierr_ts(izb) == BDF_STATUS_FAIL ) Then
+          !XDIR XUPDATE XWAIT(tid) &
+          !XDIR XHOST(t(izb),tdel(izb),t9t(izb),rhot(izb),nit_ts(izb),nit_nr(izb))
+          Write(lun_diag,"(a,2i5,4es12.4,2i3)") &
+            'BDF TS Fail',kstep,izone,t(izb),tdel(izb),t9t(izb),rhot(izb),nit_nr(izb),nit_ts(izb)
+        EndIf
+      EndDo
+    EndIf
+
+    !XDIR XEXIT_DATA ASYNC(tid) &
+    !XDIR XCOPYOUT(ierr)
 
     stop_timer = xnet_wtime()
     timer_tstep = timer_tstep + stop_timer
@@ -374,6 +428,62 @@ Contains
     ydot0 = 0.0_dp
     t9dot0 = 0.0_dp
 
+    If ( .not. allocated(restore) ) Allocate (restore(nzevolve))
+    If ( .not. allocated(rescale) ) Allocate (rescale(nzevolve))
+    If ( .not. allocated(rebuild) ) Allocate (rebuild(nzevolve))
+    If ( .not. allocated(refactor) ) Allocate (refactor(nzevolve))
+    If ( .not. allocated(iterate) ) Allocate (iterate(nzevolve))
+    If ( .not. allocated(converged) ) Allocate (converged(nzevolve))
+    If ( .not. allocated(eval_rates) ) Allocate (eval_rates(nzevolve))
+    restore = .false.
+    rescale = .false.
+    rebuild = .false.
+    refactor = .false.
+    iterate = .false.
+    converged = .false.
+    eval_rates = .false.
+
+    If ( .not. allocated(diag) ) Allocate (diag(nzevolve))
+    If ( .not. allocated(mult) ) Allocate (mult(nzevolve))
+    If ( .not. allocated(yrhs) ) Allocate (yrhs(ny,nzevolve))
+    If ( .not. allocated(dy) ) Allocate (dy(ny,nzevolve))
+    If ( .not. allocated(t9rhs) ) Allocate (t9rhs(nzevolve))
+    If ( .not. allocated(dt9) ) Allocate (dt9(nzevolve))
+    If ( .not. allocated(dvec) ) Allocate (dvec(neq,nzevolve))
+    If ( .not. allocated(del) ) Allocate (del(nzevolve))
+    If ( .not. allocated(delp) ) Allocate (delp(nzevolve))
+    If ( .not. allocated(dcon) ) Allocate (dcon(nzevolve))
+    diag = 0.0_dp
+    mult = 0.0_dp
+    yrhs = 0.0_dp
+    dy = 0.0_dp
+    t9rhs = 0.0_dp
+    dt9 = 0.0_dp
+    dvec = 0.0_dp
+    del = 0.0_dp
+    delp = 0.0_dp
+    dcon = 0.0_dp
+
+    If ( .not. allocated(errorq) ) Allocate (errorq(-1:1,nzevolve))
+    If ( .not. allocated(acorhat) ) Allocate (acorhat(neq,nzevolve))
+    errorq = 0.0_dp
+    acorhat = 0.0_dp
+
+    If ( .not. allocated(detect) ) Allocate (detect(nzevolve))
+    If ( .not. allocated(ldflag) ) Allocate (ldflag(nzevolve))
+    detect = .false.
+    ldflag = 0
+
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(A_pascal,Ainv_pascal,rtol,atol,bdf_active,retry_ts) &
+    !XDIR XCOPYIN(nit_nrslv,nit_nr,nit_ts,ierr_nr,ierr_ts,nerr_ts,ncf_ts) &
+    !XDIR XCOPYIN(q,deltaq,j_age,p_age,q_age,nscon,sddat,z,z0,zt0) &
+    !XDIR XCOPYIN(hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio) &
+    !XDIR XCOPYIN(ewt,acor,acorp,acnrm,crate,tq,tq2save,ydot0,t9dot0) &
+    !XDIR XCOPYIN(restore,rescale,rebuild,refactor,iterate,converged,eval_rates) &
+    !XDIR XCOPYIN(diag,mult,yrhs,dy,t9rhs,dt9,dvec,del,delp,dcon) &
+    !XDIR XCOPYIN(errorq,acorhat,detect,ldflag)
+
     Return
   End Subroutine bdf_init
 
@@ -388,6 +498,13 @@ Contains
     ! Local variables
     Integer :: i, j, k, izb
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(yt,ydot,t9t,t9dot,tdel) &
+    !XDIR XPRESENT(bdf_active,retry_ts) &
+    !XDIR XPRESENT(nit_nrslv,nit_nr,nit_ts,ierr_nr,ierr_ts,nerr_ts,ncf_ts) &
+    !XDIR XPRESENT(q,deltaq,j_age,p_age,q_age,nscon,sddat,z,z0,zt0) &
+    !XDIR XPRESENT(hvec,lvec,dt_scale,etaq,eta,eta_next,gam,gamhat,gamratio) &
+    !XDIR XPRESENT(ewt,acor,acorp,acnrm,crate,tq,tq2save,ydot0,t9dot0)
     Do izb = zb_lo, zb_hi
       bdf_active(izb) = .false.
       retry_ts(izb) = .false.
@@ -407,12 +524,14 @@ Contains
       q_age(izb) = 0
       nscon(izb) = 0
 
+      !XDIR XLOOP_INNER(2)
       Do k = 1, 3
         Do i = 1, 5
           sddat(i,k,izb) = 0.0_dp
         EndDo
       EndDo
 
+      !XDIR XLOOP_INNER(2)
       Do j = 0, max_order
         Do i = 1, neq
           z(i,j,izb) = 0.0_dp
@@ -421,6 +540,7 @@ Contains
         EndDo
       EndDo
 
+      !XDIR XLOOP_INNER(1)
       Do i = 1, ny
         z(i,0,izb) = yt(i,izb)
         z(i,1,izb) = ydot(i,izb) * tdel(izb)
@@ -430,12 +550,14 @@ Contains
         z(neq,1,izb) = t9dot(izb) * tdel(izb)
       EndIf
 
+      !XDIR XLOOP_INNER(1)
       Do i = 0, max_order
         hvec(i,izb) = tdel(izb)
         lvec(i,izb) = 0.0_dp
       EndDo
       dt_scale(izb) = tdel(izb)
 
+      !XDIR XLOOP_INNER(1)
       Do i = -1, 1
         etaq(i,izb) = 0.0_dp
       EndDo
@@ -445,6 +567,7 @@ Contains
       gamhat(izb) = tdel(izb)
       gamratio(izb) = 1.0_dp
 
+      !XDIR XLOOP_INNER(1)
       Do i = 1, neq
         ewt(i,izb) = 0.0_dp
         acor(i,izb) = 0.0_dp
@@ -453,11 +576,13 @@ Contains
       acnrm(izb) = 0.0_dp
       crate(izb) = 0.0_dp
 
+      !XDIR XLOOP_INNER(1)
       Do i = -1, 2
         tq(i,izb) = 0.0_dp
       EndDo
       tq2save(izb) = 0.0_dp
 
+      !XDIR XLOOP_INNER(1)
       Do i = 1, ny
         ydot0(i,izb) = ydot(i,izb)
       EndDo
@@ -480,11 +605,12 @@ Contains
 
     ! Local variables
     Integer :: i, j, izb
-    Logical :: rescale(zb_lo:zb_hi)
 
     ! See if stepsize has changed from last step
-    rescale = .false.
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(rescale,ierr_ts,tdel,tdel_old,eta)
     Do izb = zb_lo, zb_hi
+      rescale(izb) = .false.
       If ( ierr_ts(izb) == BDF_STATUS_SUCCESS ) Then
         If ( abs(tdel(izb)/tdel_old(izb) - 1.0_dp) > epsilon(0.0_dp) ) Then
           eta(izb) = tdel(izb) / tdel_old(izb)
@@ -518,8 +644,12 @@ Contains
     ! Local variables
     Integer :: i, j, k, izb, izone
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(bdf_active) &
+    !XDIR XPRESENT(z,z0,zt0,q,A_pascal)
     Do izb = zb_lo, zb_hi
       If ( bdf_active(izb) ) Then
+        !XDIR XLOOP_INNER(2)
         Do j = 0, max_order
           Do i = 1, neq
             z0(i,j,izb) = z(i,j,izb)
@@ -528,6 +658,7 @@ Contains
         EndDo
         Do i = 0, q(izb)
           Do j = i+1, q(izb)
+            !XDIR XLOOP_INNER(1)
             Do k = 1, neq
               zt0(k,i,izb) = zt0(k,i,izb) + z(k,j,izb) * A_pascal(j,i)
             EndDo
@@ -537,6 +668,8 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(q,tdel,z,zt0,yt,ydot,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         Write(lun_diag,"(a,2i5,i3,1es12.4)") 'BDF Predict',kstep,izone,q(izb),tdel(izb)
@@ -576,6 +709,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: nname
     Use xnet_conditions, Only: tdel, tt
+    Use xnet_controls, Only: iconvc, ymin
     Implicit None
 
     ! Input variables
@@ -587,12 +721,18 @@ Contains
     Character(5) :: ewtname(2)
     Integer :: iewt(2), i, j, izb, izone
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(bdf_active) &
+    !XDIR XPRESENT(lvec,hvec,q,tq,gam,gamhat,gamratio,tdel) &
+    !XDIR PRIVATE(hsum,xi_inv,xistar_inv,alpha0,alpha0_hat,c,cinv) &
+    !XDIR PRIVATE(a1,a2,a3,a4,a5,a6)
     Do izb = zb_lo, zb_hi
       If ( bdf_active(izb) ) Then
 
         ! Compute lvec and tq
         lvec(0,izb) = 1.0_dp
         lvec(1,izb) = 1.0_dp
+        !XDIR XLOOP_SERIAL(1)
         Do i = 2, max_order
           lvec(i,izb) = 0.0_dp
         EndDo
@@ -602,12 +742,17 @@ Contains
         alpha0_hat = -1.0_dp
         hsum = tdel(izb)
         If ( q(izb) > 1 ) Then
+          !XDIR XLOOP_SERIAL(1) &
+          !XDIR XREDUCTION(+,hsum) &
+          !XDIR XREDUCTION(-,alpha0) &
+          !XDIR XPRIVATE(xi_inv)
           Do j = 2, q(izb)-1
             hsum = hsum + hvec(j-1,izb)
             xi_inv = tdel(izb) / hsum
             alpha0 = alpha0 - 1.0_dp / real(j,dp)
 
             ! lvec(i) are coefficients of product(1 to j) (1 + x/xi_i)
+            !XDIR XLOOP_SERIAL(1)
             Do i = j, 1, -1
               lvec(i,izb) = lvec(i,izb) + lvec(i-1,izb) * xi_inv
             EndDo
@@ -619,6 +764,7 @@ Contains
           hsum = hsum + hvec(q(izb)-1,izb)
           xi_inv = tdel(izb) / hsum
           alpha0_hat = -lvec(1,izb) - xi_inv
+          !XDIR XLOOP_SERIAL(1)
           Do i = q(izb), 1, -1
             lvec(i,izb) = lvec(i,izb) + lvec(i-1,izb) * xistar_inv
           EndDo
@@ -645,9 +791,6 @@ Contains
         cinv = (1.0_dp - a6 + a5) / a2
         tq(1,izb) = abs(cinv / (xi_inv * real(q(izb)+2,dp) * a5))
 
-        ! Pre-compute error weights
-        Call error_weights( z(:,0,izb), ewt(:,izb) )
-
         gam(izb) = tdel(izb) / lvec(1,izb)
         If ( kstep > 1 ) Then
           gamratio(izb) = gam(izb) / gamhat(izb)
@@ -658,7 +801,38 @@ Contains
       EndIf
     EndDo
 
+    ! Pre-compute error weights
+    If ( iconvc == 0 .or. iconvc == 1 ) Then
+      !XDIR XLOOP(2) XASYNC(tid) &
+      !XDIR XPRESENT(bdf_active,z,ewt)
+      Do izb = zb_lo, zb_hi
+        Do i = 1, neq
+          If ( bdf_active(izb) ) Then
+            If ( z(i,0,izb) < ymin ) Then
+              ewt(i,izb) = 0.0_dp
+            ElseIf ( z(i,0,izb) < atol(i) ) Then
+              ewt(i,izb) = 1.0_dp / (rtol(i) * atol(i))
+            Else
+              ewt(i,izb) = 1.0_dp / (rtol(i) * abs(z(i,0,izb)))
+            EndIf
+          EndIf
+        EndDo
+      EndDo
+    Else
+      !XDIR XLOOP(2) XASYNC(tid) &
+      !XDIR XPRESENT(bdf_active,z,ewt)
+      Do izb = zb_lo, zb_hi
+        Do i = 1, neq
+          If ( bdf_active(izb) ) Then
+            ewt(i,izb) = 1.0_dp / ( rtol(i) * max(abs(z(i,0,izb)),ymin) + atol(i) )
+          EndIf
+        EndDo
+      EndDo
+    EndIf
+
     If ( idiag >= 3 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR HOST(bdf_active,q,tdel,tt,hvec,tq,ewt)
       Do izb = zb_lo, zb_hi
         If ( bdf_active(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -700,20 +874,20 @@ Contains
     Integer, Intent(in) :: kstep
 
     ! Local variables
-    Real(dp) :: diag(zb_lo:zb_hi), cstar
-    Real(dp) :: yrhs(ny,zb_lo:zb_hi), dy(ny,zb_lo:zb_hi)
-    Real(dp) :: t9rhs(zb_lo:zb_hi), dt9(zb_lo:zb_hi)
-    Real(dp) :: dvec(neq), del(zb_lo:zb_hi), delp(zb_lo:zb_hi), dcon(zb_lo:zb_hi)
+    Real(dp) :: cstar
     Integer :: idymx, i, k, kit, izb, izone
-    Logical :: rebuild(zb_lo:zb_hi), refactor(zb_lo:zb_hi)
-    Logical :: iterate(zb_lo:zb_hi), converged(zb_lo:zb_hi), eval_rates(zb_lo:zb_hi)
 
     start_timer = xnet_wtime()
     timer_nraph = timer_nraph - start_timer
 
     ! Load prediction into abundance vector and initialize masks
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(bdf_active,yt,t9t,zt0,acor,nit_nr,nit_nrslv) &
+    !XDIR XPRESENT(rebuild,refactor,iterate,converged,retry_ts) &
+    !XDIR XPRESENT(p_age,j_age,gam,gamratio,crate,delp,diag,mult)
     Do izb = zb_lo, zb_hi
       If ( bdf_active(izb) ) Then
+        !XDIR XLOOP_INNER(1)
         Do i = 1, ny
           acor(i,izb) = 0.0_dp
           yt(i,izb) = zt0(i,0,izb)
@@ -738,22 +912,28 @@ Contains
       crate(izb) = 1.0_dp
       delp(izb) = 0.0_dp
       diag(izb) = 1.0_dp
+      mult(izb) = -gam(izb)
     EndDo
+    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XHOST(iterate,refactor,rebuild)
     If ( iheat == 0 ) Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi),t9t(zb_lo:zb_hi), &
       rhot(zb_lo:zb_hi),mask_in = retry_ts(zb_lo:zb_hi))
 
     ! Do the NR iteration
     Do kit = 1, max_it_nrslv
 
+      ! Increment NR counter
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(iterate,nit_nr,nit_nrslv)
       Do izb = zb_lo, zb_hi
-
-        ! Increment NR counter
         If ( iterate(izb) ) Then
           nit_nr(izb) = nit_nr(izb) + 1
           nit_nrslv(izb) = nit_nrslv(izb) + 1
         EndIf
+      EndDo
 
-        ! Only re-evaluate rates if first iteration or if need to re-evaluate Jacobian
+      ! Only re-evaluate rates if first iteration or if need to re-evaluate Jacobian
+      Do izb = zb_lo, zb_hi
         If ( iheat > 0 ) Then
           eval_rates(izb) = iterate(izb)
         ElseIf ( kit == 1 ) Then
@@ -762,15 +942,19 @@ Contains
           eval_rates(izb) = .false.
         EndIf
       EndDo
+      !XDIR XUPDATE XASYNC(tid) &
+      !XDIR XDEVICE(eval_rates)
 
       ! Update abundance derivatives and build Jacobian
       Call cross_sect(mask_in = eval_rates)
       Call yderiv(mask_in = iterate)
       Call jacobian_build(mask_in = rebuild)
-      Call jacobian_scale(diag,-gam(zb_lo:zb_hi),mask_in = refactor)
+      Call jacobian_scale(diag,mult,mask_in = refactor)
       Call jacobian_decomp(kstep,mask_in = refactor)
 
       If ( idiag >= 4 ) Then
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(refactor,rebuild,nit_nr,gam,gamratio,p_age,j_age)
         Do izb = zb_lo, zb_hi
           izone = izb + szbatch - zb_lo
           If ( refactor(izb) ) Write(lun_diag,"(a,3i5,2es14.7,i5)") &
@@ -780,6 +964,11 @@ Contains
         EndDo
       EndIf
 
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(refactor,rebuild,iterate) &
+      !XDIR XPRESENT(gam,gamhat,gamratio,crate,p_age,j_age,lvec,acor) &
+      !XDIR XPRESENT(yrhs,ydot,t9rhs,t9dot,zt0) &
+      !XDIR PRIVATE(cstar)
       Do izb = zb_lo, zb_hi
 
         ! Reset Jacobian age
@@ -798,6 +987,7 @@ Contains
         ! Calculate RHS
         If ( iterate(izb) ) Then
           cstar = 2.0_dp / ( 1.0_dp + gamratio(izb) )
+          !XDIR XLOOP_INNER(1)
           Do k = 1, ny
             yrhs(k,izb) =  cstar * ( gam(izb)*ydot(k,izb) - zt0(k,1,izb)/lvec(1,izb) - acor(k,izb) )
           EndDo
@@ -806,6 +996,9 @@ Contains
       EndDo
 
       If ( idiag >= 4 ) Then
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(iterate,nit_nr,gam,gamratio,tdel) &
+        !XDIR XHOST(yrhs,ydot,yt,zt0,t9rhs,t9dot,t9t)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
             izone = izb + szbatch - zb_lo
@@ -823,6 +1016,9 @@ Contains
       Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
 
       ! Apply the iterative correction
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(iterate,aa,yt,dy,t9t,dt9,zt0) &
+      !XDIR XPRESENT(acor,dvec,ewt,del,delp,crate,dcon,tq,nit_nr)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
 
@@ -837,20 +1033,22 @@ Contains
               dy(k,izb) = 1.0_dp / aa(k) - zt0(k,0,izb) - acor(k,izb)
             EndIf
             acor(k,izb) = acor(k,izb) + dy(k,izb)
-            dvec(k) = dy(k,izb)
+            dvec(k,izb) = dy(k,izb)
           EndDo
           If ( iheat > 0 ) Then
-            dvec(neq) = dt9(izb)
+            dvec(neq,izb) = dt9(izb)
             acor(neq,izb) = acor(neq,izb) + dt9(izb)
             t9t(izb) = zt0(neq,0,izb) + acor(neq,izb)
           EndIf
-          del(izb) = normw( dvec, ewt(:,izb) )
+          del(izb) = normw( dvec(:,izb), ewt(:,izb) )
           If ( nit_nr(izb) > 1 ) crate(izb) = max( cr_down*crate(izb), del(izb)/delp(izb) )
           dcon(izb) = del(izb) * min(1.0_dp,crate(izb)) * tq(0,izb)
         EndIf
       EndDo
 
       If ( idiag >= 3 ) Then
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(iterate,nit_nr,dy,y,dt9,t9t,yt,del,dcon,crate)
         Do izb = zb_lo, zb_hi
           If ( iterate(izb) ) Then
             izone = izb + szbatch - zb_lo
@@ -870,6 +1068,9 @@ Contains
       EndIf
 
       ! Test for convergence
+      !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+      !XDIR XPRESENT(iterate,converged,refactor,rebuild,nit_nr,nit_nrslv,j_age) &
+      !XDIR XPRESENT(dcon,acor,acnrm,ewt,del,delp,gamratio,yt,t9t,zt0)
       Do izb = zb_lo, zb_hi
         If ( iterate(izb) ) Then
           converged(izb) = ( dcon(izb) < tol_nr )
@@ -893,6 +1094,7 @@ Contains
 
             ! Reset the iteration and try again with a new Jacobian
             If ( j_age(izb) > 0 ) Then
+              !XDIR XLOOP_INNER(1)
               Do k = 1, ny
                 yt(k,izb) = zt0(k,0,izb)
                 acor(k,izb) = 0.0_dp
@@ -914,6 +1116,8 @@ Contains
           delp(izb) = del(izb)
         EndIf
       EndDo
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(iterate)
 
       ! Check that all zones are converged
       If ( .not. any(iterate) ) Exit
@@ -921,6 +1125,8 @@ Contains
     EndDo
     
     If ( idiag >= 2 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(converged,nit_nr,nit_nrslv,dcon,gamratio,crate,j_age,p_age)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( converged(izb) ) Then
@@ -955,15 +1161,18 @@ Contains
     Real(dp), Parameter :: biasq = 6.0_dp
     Real(dp), Parameter :: addon = 1.0e-6_dp
     Real(dp) :: error
-    Integer :: i, j, izb, izone
-    Logical :: restore(zb_lo:zb_hi), rescale(zb_lo:zb_hi)
+    Integer :: i, j, k, izb, izone
 
-    restore = .false.
-    rescale = .false.
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(bdf_active,restore,rescale,retry_ts) &
+    !XDIR XPRESENT(nit_nr,nit_nrslv,nit_ts,ncf_ts,ierr_nr,ierr_ts,nerr_ts) &
+    !XDIR XPRESENT(eta,eta_next,q,tq,q_age,deltaq,acnrm) &
+    !XDIR XPRESENT(y,ydot0,t9,t9dot0,z,t,tdel,kmon,ktot)
     Do izb = zb_lo, zb_hi
+      restore(izb) = .false.
+      rescale(izb) = .false.
       retry_ts(izb) = .false.
       If ( bdf_active(izb) ) Then
-        izone = izb + szbatch - zb_lo
 
         ! NR iteration failed to converge...
         If ( nit_nr(izb) > max_it_nr ) Then
@@ -1053,8 +1262,11 @@ Contains
                 q_age(izb) = q(izb) - nstep_qwait
 
                 ! Reload Nordsieck vector from scratch instead of restoring to state prior to prediction
-                z(1:ny,0,izb) = y(:,izb)
-                z(1:ny,1,izb) = ydot0(:,izb) * tdel(izb)
+                !XDIR XLOOP_INNER(1)
+                Do k = 1, ny
+                  z(k,0,izb) = y(k,izb)
+                  z(k,1,izb) = ydot0(k,izb) * tdel(izb)
+                EndDo
                 If ( iheat > 0 ) Then
                   z(neq,0,izb) = t9(izb)
                   z(neq,1,izb) = t9dot0(izb) * tdel(izb)
@@ -1088,10 +1300,14 @@ Contains
         nit_ts(izb) = nit_ts(izb) + 1
       EndIf
     EndDo
+    !XDIR XUPDATE XWAIT(tid) &
+    !XDIR XHOST(ierr_nr,retry_ts)
 
     ! Log the failed integration attempts
     If ( idiag >= 1 ) Then
       Do izb = zb_lo, zb_hi
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(nit_nr,nit_ts,ncf_ts,t,tdel,tq,acnrm,nerr_ts,eta,q,retry_ts)
         If ( bdf_active(izb) ) Then
           izone = izb + szbatch - zb_lo
           If ( nit_nr(izb) > max_it_nr ) Then
@@ -1152,14 +1368,19 @@ Contains
     ! Local variables
     Integer :: i, j, k, izb, izone
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(ierr_nr,q,acor,lvec,hvec,q_age,j_age,p_age,nscon) &
+    !XDIR XPRESENT(yt,t9t,z,zt0)
     Do izb = zb_lo, zb_hi
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
 
         ! Apply corrections to Nordsieck vector
+        !XDIR XLOOP_INNER(1)
         Do k = 1, ny
           z(k,0,izb) = yt(k,izb)
         EndDo
         If ( iheat > 0 ) z(neq,0,izb) = t9t(izb)
+        !XDIR XLOOP_INNER(2)
         Do j = 1, q(izb)
           Do i = 1, neq
             z(i,j,izb) = zt0(i,j,izb) + acor(i,izb) * lvec(j,izb)
@@ -1180,6 +1401,8 @@ Contains
     EndDo
 
     If ( idiag >= 3 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(ierr_nr,q,acnrm,acor,zt0,z,yt,lvec,ydot,tdel,t9t,t9dot)
       Do izb = zb_lo, zb_hi
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
           izone = izb + szbatch - zb_lo
@@ -1214,38 +1437,48 @@ Contains
     Real(dp), Parameter :: biasq = 6.0_dp
     Real(dp), Parameter :: biasqp1 = 10.0_dp
     Real(dp), Parameter :: addon = 1.0e-6_dp
-    Real(dp) :: c, error(-1:1,zb_lo:zb_hi), acorhat(neq)
+    Real(dp) :: c
     Real(dp) :: alpha0, alpha1, prod, xi, xiold, hsum, a1
     Integer :: i, j, izb, izone
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(ierr_nr,eta,etaq,eta_next,tq,tq2save,z,hvec,ewt) &
+    !XDIR XPRESENT(q,q_age,deltaq,acor,acorp,acorhat,acnrm,errorq,nscon)
     Do izb = zb_lo, zb_hi
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
         izone = izb + szbatch - zb_lo
+        !XDIR XLOOP_INNER(1)
         Do i = -1, 1
-          error(i,izb) = 0.0_dp
+          errorq(i,izb) = 0.0_dp
         EndDo
 
         ! Only allow change in order of there were no problems in the solve
         If ( eta_next(izb) > 1.0_dp ) Then
 
           ! Compute eta for each potential change in q
-          etaq(:,izb) = 1.0_dp
-          error(0,izb) = tq(0,izb) * acnrm(izb)
-          etaq(0,izb) = 1.0_dp / ( (biasq * error(0,izb)) ** (1.0_dp/(q(izb)+1)) + addon )
+          !XDIR XLOOP_INNER(1)
+          Do i = -1, 1
+            etaq(i,izb) = 1.0_dp
+          EndDo
+          errorq(0,izb) = tq(0,izb) * acnrm(izb)
+          etaq(0,izb) = 1.0_dp / ( (biasq * errorq(0,izb)) ** (1.0_dp/(q(izb)+1)) + addon )
           If ( q_age(izb) > q(izb) ) Then
 
             ! eta for q-1
             If ( q(izb) > 1 ) Then
-              error(-1,izb) = tq(-1,izb) * normw( z(:,q(izb),izb), ewt(:,izb) )
-              etaq(-1,izb) = 1.0_dp / ( (biasqm1 * error(-1,izb)) ** (1.0_dp/q(izb)) + addon )
+              errorq(-1,izb) = tq(-1,izb) * normw( z(:,q(izb),izb), ewt(:,izb) )
+              etaq(-1,izb) = 1.0_dp / ( (biasqm1 * errorq(-1,izb)) ** (1.0_dp/q(izb)) + addon )
             EndIf
 
             ! eta for q+1
             If ( q(izb) < max_order ) Then
               c = (tq(2,izb) / tq2save(izb)) * (hvec(1,izb) / hvec(2,izb)) ** (q(izb)+1)
-              acorhat(:) = acor(:,izb) - c * acorp(:,izb)
-              error(1,izb) = tq(1,izb) * normw( acorhat(:), ewt(:,izb) )
-              etaq(1,izb) = 1.0_dp / ( (biasqp1 * error(1,izb)) ** (1.0_dp/(q(izb)+2)) + addon )
+              !XDIR XLOOP_INNER(1)
+              Do i = 1, neq
+                acorhat(i,izb) = acor(i,izb) - c * acorp(i,izb)
+              EndDo
+              errorq(1,izb) = tq(1,izb) * normw( acorhat(:,izb), ewt(:,izb) )
+              etaq(1,izb) = 1.0_dp / ( (biasqp1 * errorq(1,izb)) ** (1.0_dp/(q(izb)+2)) + addon )
             EndIf
 
             ! Wait a bit before considering another order change
@@ -1283,20 +1516,25 @@ Contains
         EndIf
 
         ! Save these for the next timestep
-        acorp(:,izb) = acor(:,izb)
+        !XDIR XLOOP_INNER(1)
+        Do i = 1, neq
+          acorp(i,izb) = acor(i,izb)
+        EndDo
         tq2save(izb) = tq(2,izb)
       EndIf
     EndDo
 
     If ( idiag >= 2 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(ierr_nr,eta_next,errorq,etaq,q_age,q,deltaq,eta)
       Do izb = zb_lo, zb_hi
         If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
           If ( eta_next(izb) > 1.0_dp ) Then
             izone = izb + szbatch - zb_lo
             If ( idiag >= 3 ) Then
               Do i = -1, 1
-                If ( abs(error(i,izb)) > 0.0_dp ) Write(lun_diag,"(a,sp,i2,s,a,2es23.15)") &
-                  'BDF Eta(',i,')',error(i,izb),etaq(i,izb)
+                If ( abs(errorq(i,izb)) > 0.0_dp ) Write(lun_diag,"(a,sp,i2,s,a,2es23.15)") &
+                  'BDF Eta(',i,')',errorq(i,izb),etaq(i,izb)
               EndDo
             EndIf
             If ( idiag >= 2 ) Write(lun_diag,"(a,2i5,2i3,sp,i3,s,4es12.4)") &
@@ -1322,12 +1560,15 @@ Contains
 
     ! Local variables
     Real(dp) :: sq, sqm1, sqm2
-    Integer :: ldflag(zb_lo:zb_hi), fact, i, k, izb, izone
-    Logical :: detect(zb_lo:zb_hi)
+    Integer :: fact, i, k, izb, izone
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(ierr_nr,q,deltaq,sddat,acnrm,tq,z,ewt,nscon,detect) &
+    !XDIR XPRIVATE(sq,sqm1,sqm2,fact)
     Do izb = zb_lo, zb_hi
       If ( ierr_nr(izb) == BDF_STATUS_SUCCESS ) Then
         If ( q(izb) >= 3 ) Then
+          !XDIR XLOOP_INNER(1)
           Do k = 1, 3
             Do i = 5, 2, -1
               sddat(i,k,izb) = sddat(i-1,k,izb)
@@ -1346,6 +1587,8 @@ Contains
         q(izb) >= 3 .and. deltaq(izb) >= 0 .and. nscon(izb) >= q(izb)+5 )
     EndDo
     Call bdf_stab_detect(detect,ldflag)
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(detect,ldflag,deltaq,eta,eta_next,etaq,nscon)
     Do izb = zb_lo, zb_hi
       If ( detect(izb) ) Then
         If ( ldflag(izb) > 3 ) Then
@@ -1357,6 +1600,8 @@ Contains
       EndIf
     EndDo
     If ( idiag >= 2 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(ldflag,q,eta,ldflag)
       Do izb = zb_lo, zb_hi
         If ( ldflag(izb) > 3 ) Then
           izone = izb + szbatch - zb_lo
@@ -1397,9 +1642,17 @@ Contains
     Real(dp) :: ratp, ratm, qfac1, qfac2, bb, rrb
     Integer :: i, j, k, kmin, it, izb, izone
 
-    kflag = 0
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,kflag,sddat,q) &
+    !XDIR XPRIVATE(rat,rav,qkr,sigsq,smin,smax,ssmax,ssdat) &
+    !XDIR XPRIVATE(qp,rrc,sqmx,qjk,vrat,qc,qco) &
+    !XDIR XPRIVATE(rr,smink,smaxk,sumrat,sumrsq,vmin,vmax,drrmax,adrr) &
+    !XDIR XPRIVATE(tem,sqmax,saqk,s,sqmaxk,saqj,sqmin) &
+    !XDIR XPRIVATE(ratp,ratm,qfac1,qfac2,bb,rrb)
     loop0: Do izb = zb_lo, zb_hi
+      kflag(izb) = 0
       If ( mask(izb) ) Then
+        !XDIR XLOOP_INNER(2)
         Do k = 1, 3
           Do i = 1, 5
             ssdat(i,k) = sddat(i,k,izb)
@@ -1409,6 +1662,9 @@ Contains
         Do k = 1, 3
           smink = +huge(0.0_dp)
           smaxk = -huge(0.0_dp)     
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XREDUCTION(min,smink) &
+          !XDIR XREDUCTION(max,smaxk)
           Do i = 1, 5
             smink = min( smink, ssdat(i,k) )
             smaxk = max( smaxk, ssdat(i,k) )
@@ -1422,6 +1678,8 @@ Contains
           ssmax(k) = smaxk*smaxk
           sumrat = 0.0_dp
           sumrsq = 0.0_dp
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XREDUCTION(+,sumrat,sumrsq)
           Do i = 1, 4
             rat(i,k) = ssdat(i,k) / ssdat(i+1,k)
             sumrat = sumrat + rat(i,k)
@@ -1434,12 +1692,16 @@ Contains
           qc(3,k) = 0.0_dp
           qc(2,k) = ssdat(2,k)*ssdat(5,k) - ssdat(3,k)*ssdat(4,k)
           qc(1,k) = ssdat(4,k)*ssdat(4,k) - ssdat(3,k)*ssdat(5,k)
+          !XDIR XLOOP_INNER(1)
           Do i = 1, 5
             qco(i,k) = qc(i,k)
           EndDo
         EndDo
         vmin = +huge(0.0_dp)
         vmax = -huge(0.0_dp)     
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XREDUCTION(min,vmin) &
+        !XDIR XREDUCTION(max,vmax)
         Do i = 1, 4
           vmin = min( vmin, vrat(i) )
           vmax = max( vmax, vrat(i) )
@@ -1450,11 +1712,15 @@ Contains
             Cycle loop0
           Else
             rr = 0.0_dp
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XREDUCTION(+,rr)
             Do i = 1, 3
               rr = rr + rav(i)
             EndDo
             rr = rr / 3.0_dp
             drrmax = -huge(0.0_dp)
+            !XDIR XLOOP_INNER(1) &
+            !XDIR XREDUCTION(max,drrmax)
             Do i = 1, 3
               drrmax = max( drrmax, abs(rav(i) - rr) )
             EndDo
@@ -1470,6 +1736,7 @@ Contains
             kflag(izb) = -4
             Cycle loop0
           EndIf
+          !XDIR XLOOP_INNER(1)
           Do k = 2, 3
             qco(1,k) = 0.0_dp
             Do i = 2, 5
@@ -1481,6 +1748,7 @@ Contains
             kflag(izb) = -4
             Cycle loop0
           EndIf
+          !XDIR XLOOP_INNER(1)
           Do i = 3, 5
             qco(i,3) = qco(i,3) - (qco(2,3)/qco(2,2))*qco(i,2)
           EndDo
@@ -1494,6 +1762,8 @@ Contains
             Cycle loop0
           EndIf
           sqmax = -huge(0.0_dp)
+          !XDIR XLOOP_INNER(1) &
+          !XDIR XREDUCTION(max,sqmax)
           Do k = 1, 3
             qkr(k) = qc(5,k) + rr*(qc(4,k) + rr*rr*(qc(2,k) + rr*qc(1,k)))
             sqmax = max( sqmax, abs(qkr(k))/ssmax(k) )
@@ -1513,6 +1783,8 @@ Contains
                 EndIf
                 s = rrc(k)
                 sqmax = -huge(0.0_dp)
+                !XDIR XLOOP_INNER(1) &
+                !XDIR XREDUCTION(max,sqmax)
                 Do j = 1, 3
                   qjk(j,k) = qc(5,j) + s*(qc(4,j) + s*s*(qc(2,j) + s*qc(1,j)))
                   sqmax = max( sqmax, abs(qjk(j,k))/ssmax(j) )
@@ -1528,6 +1800,7 @@ Contains
                 kflag(izb) = 3
                 Exit
               Else
+                !XDIR XLOOP_INNER(1)
                 Do j = 1, 3
                   qkr(j) = qjk(j,kmin)
                 EndDo
@@ -1539,6 +1812,8 @@ Contains
             EndIf
           EndIf
         EndIf
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XPRIVATE(rsa,rsb,rsc,rsd,rd1a,rd1b,rd1c,rd2a,rd2b,rd3a,cest1,corr1)
         Do k = 1, 3
           rsa = ssdat(1,k)
           rsb = ssdat(2,k)*rr
@@ -1607,6 +1882,8 @@ Contains
     Integer :: i, j, izb, izone
 
     If ( idiag >= 2 ) Then
+      !XDIR XUPDATE XWAIT(tid) &
+      !XDIR XHOST(deltaq,q)
       Do izb = zb_lo, zb_hi
         izone = izb + szbatch - zb_lo
         If ( deltaq(izb) /= 0 ) Write(lun_diag,"(a,2i5,i3,sp,i3,s)") &
@@ -1614,10 +1891,14 @@ Contains
       EndDo
     EndIf
 
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(tdel,deltaq,q,q_age,lvec,hvec,acor,z) &
+    !XDIR XPRIVATE(alpha0,alpha1,prod,xi,xiold,hsum,a1)
     Do izb = zb_lo, zb_hi
       If ( deltaq(izb) == -1 ) Then
 
         ! Decrease order
+        !XDIR XLOOP_INNER(1)
         Do i = 0, max_order
           lvec(i,izb) = 0.0_dp
         EndDo
@@ -1630,11 +1911,13 @@ Contains
             lvec(i,izb) = lvec(i,izb)*xi + lvec(i-1,izb)
           EndDo
         EndDo
+        !XDIR XLOOP_INNER(2)
         Do j = 2, q(izb)-1
           Do i = 1, neq
             z(i,j,izb) = z(i,j,izb) - z(i,q(izb),izb) * lvec(j,izb)
           EndDo
         EndDo
+        !XDIR XLOOP_INNER(1)
         Do i = 1, neq
           z(i,q(izb),izb) = 0.0_dp
         EndDo
@@ -1644,6 +1927,7 @@ Contains
       ElseIf ( deltaq(izb) == +1 ) Then
 
         ! Increase order
+        !XDIR XLOOP_INNER(1)
         Do i = 0, max_order
           lvec(i,izb) = 0.0_dp
         EndDo
@@ -1666,11 +1950,13 @@ Contains
           xiold = xi
         EndDo
         a1 = -(alpha0 + alpha1) / prod
+        !XDIR XLOOP_INNER(2)
         Do j = 2, q(izb)
           Do i = 1, neq
             z(i,j,izb) = z(i,j,izb) + a1 * acor(i,izb) * lvec(j,izb)
           EndDo
         EndDo
+        !XDIR XLOOP_INNER(1)
         Do i = 1, neq
           z(i,q(izb)+1,izb) = a1 * acor(i,izb)
         EndDo
@@ -1696,12 +1982,18 @@ Contains
     ! Local variables
     Integer :: i, j, izb
 
+    !XDIR XENTER_DATA ASYNC(tid) &
+    !XDIR XCOPYIN(mask)
+
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,tdel,t,tt,eta,dt_scale,hvec,q,z,nscon)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tdel(izb) = eta(izb) * dt_scale(izb)
         hvec(0,izb) = tdel(izb)
         tt(izb) = t(izb) + tdel(izb)
         ! Scale Nordsieck vector to account for change in stepsize
+        !XDIR XLOOP_INNER(2)
         Do j = 1, q(izb)
           Do i = 1, neq
             z(i,j,izb) = z(i,j,izb) * eta(izb)**j
@@ -1711,6 +2003,9 @@ Contains
         nscon(izb) = 0
       EndIf
     EndDo
+
+    !XDIR XEXIT_DATA ASYNC(tid) &
+    !XDIR XCOPYOUT(mask)
 
     Return
   End Subroutine bdf_rescale
@@ -1727,8 +2022,14 @@ Contains
     ! Local variables
     Integer :: i, j, izb
 
+    !XDIR XENTER_DATA ASYNC(tid) &
+    !XDIR XCOPYIN(mask)
+
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,z,z0)
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
+        !XDIR XLOOP_INNER(2)
         Do j = 0, max_order
           Do i = 1, neq
             z(i,j,izb) = z0(i,j,izb)
@@ -1736,6 +2037,9 @@ Contains
         EndDo
       EndIf
     EndDo
+
+    !XDIR XEXIT_DATA ASYNC(tid) &
+    !XDIR XCOPYOUT(mask)
 
     Return
   End Subroutine bdf_restore
@@ -1778,6 +2082,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine returns the error weights for comparing errors in y
     !-----------------------------------------------------------------------------------------------
+    !XDIR XROUTINE_VECTOR
     Use xnet_controls, Only: iconvc, ymin
     Implicit None
 
@@ -1792,6 +2097,7 @@ Contains
 
     n = size(y)
     If ( iconvc == 0 .or. iconvc == 1 ) Then
+      !XDIR XLOOP_INNER(1)
       Do i = 1, n
         If ( y(i) < ymin ) Then
           wt(i) = 0.0_dp
@@ -1802,6 +2108,7 @@ Contains
         EndIf
       EndDo
     Else
+      !XDIR XLOOP_INNER(1)
       Do i = 1, n
         wt(i) = 1.0_dp / ( rtol(i) * max(abs(y(i)),ymin) + atol(i) )
       EndDo
@@ -1820,6 +2127,7 @@ Contains
     !   iconvc = 3 : RMS norm
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: iconvc
+    !XDIR XROUTINE_VECTOR
     Implicit None
 
     ! Input variables
@@ -1834,19 +2142,27 @@ Contains
     n = size(x)
     xnrm = 0.0_dp
     If ( iconvc == 0 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(max,xnrm)
       Do i = 1, n
         xnrm = max( xnrm, abs( x(i) * wt(i) ) )
       EndDo
     ElseIf ( iconvc == 1 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(+,xnrm)
       Do i = 1, n
         xnrm = xnrm + abs( x(i) * wt(i) )
       EndDo
     ElseIf ( iconvc == 2 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(+,xnrm)
       Do i = 1, n
         xnrm = xnrm + ( x(i) * wt(i) )**2
       EndDo
       xnrm = sqrt( xnrm )
     ElseIf ( iconvc == 3 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(+,xnrm)
       Do i = 1, n
         xnrm = xnrm + ( x(i) * wt(i) )**2
       EndDo
