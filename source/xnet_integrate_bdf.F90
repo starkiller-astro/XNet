@@ -791,6 +791,9 @@ Contains
         cinv = (1.0_dp - a6 + a5) / a2
         tq(1,izb) = abs(cinv / (xi_inv * real(q(izb)+2,dp) * a5))
 
+        ! Pre-compute error weights
+        Call error_weights( z(:,0,izb), ewt(:,izb), rtol, atol, neq )
+
         gam(izb) = tdel(izb) / lvec(1,izb)
         If ( kstep > 1 ) Then
           gamratio(izb) = gam(izb) / gamhat(izb)
@@ -800,35 +803,6 @@ Contains
         EndIf
       EndIf
     EndDo
-
-    ! Pre-compute error weights
-    If ( iconvc == 0 .or. iconvc == 1 ) Then
-      !XDIR XLOOP(2) XASYNC(tid) &
-      !XDIR XPRESENT(bdf_active,z,ewt,rtol,atol)
-      Do izb = zb_lo, zb_hi
-        Do i = 1, neq
-          If ( bdf_active(izb) ) Then
-            If ( z(i,0,izb) < ymin ) Then
-              ewt(i,izb) = 0.0_dp
-            ElseIf ( z(i,0,izb) < atol(i) ) Then
-              ewt(i,izb) = 1.0_dp / (rtol(i) * atol(i))
-            Else
-              ewt(i,izb) = 1.0_dp / (rtol(i) * abs(z(i,0,izb)))
-            EndIf
-          EndIf
-        EndDo
-      EndDo
-    Else
-      !XDIR XLOOP(2) XASYNC(tid) &
-      !XDIR XPRESENT(bdf_active,z,ewt,rtol,atol)
-      Do izb = zb_lo, zb_hi
-        Do i = 1, neq
-          If ( bdf_active(izb) ) Then
-            ewt(i,izb) = 1.0_dp / ( rtol(i) * max(abs(z(i,0,izb)),ymin) + atol(i) )
-          EndIf
-        EndDo
-      EndDo
-    EndIf
 
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(tid) &
@@ -2071,7 +2045,7 @@ Contains
     Return
   End Subroutine pascal_build
 
-  Subroutine error_weights( y, wt, rtol, atol )
+  Subroutine error_weights( y, wt, rtol, atol, n )
     !-----------------------------------------------------------------------------------------------
     ! This routine returns the error weights for comparing errors in y
     !-----------------------------------------------------------------------------------------------
@@ -2080,15 +2054,15 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: y(:), rtol(:), atol(:)
+    Real(dp), Intent(in) :: y(n), rtol(n), atol(n)
+    Integer, Intent(in) :: n
 
     ! Output variables
-    Real(dp), Intent(out) :: wt(size(y))
+    Real(dp), Intent(out) :: wt(n)
 
     ! Local variables
-    Integer :: i, n
+    Integer :: i
 
-    n = size(y)
     If ( iconvc == 0 .or. iconvc == 1 ) Then
       !XDIR XLOOP_INNER(1)
       Do i = 1, n
