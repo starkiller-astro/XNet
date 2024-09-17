@@ -2110,61 +2110,6 @@ Contains
     Return
   End Subroutine error_weights
 
-  Function normw2( x, wt ) Result( xnrm )
-    !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the weighted l-norm of vector x, with l deteremined from the value of
-    ! the iconvc control:
-    !   iconvc = 0 : infinity norm
-    !   iconvc = 1 : 1-norm
-    !   iconvc = 2 : 2-norm
-    !   iconvc = 3 : RMS norm
-    !-----------------------------------------------------------------------------------------------
-    Use xnet_controls, Only: iconvc
-    !XDIR XROUTINE_VECTOR
-    Implicit None
-
-    ! Input variables
-    Real(dp), Intent(in) :: x(:), wt(:)
-
-    ! Function variable
-    Real(dp) :: xnrm
-
-    ! Local variables
-    Integer :: i, n, incx
-
-    n = size(x)
-    xnrm = 0.0_dp
-    If ( iconvc == 0 ) Then
-      !XDIR XLOOP_INNER(1) &
-      !XDIR XREDUCTION(max,xnrm)
-      Do i = 1, n
-        xnrm = max( xnrm, abs( x(i) * wt(i) ) )
-      EndDo
-    ElseIf ( iconvc == 1 ) Then
-      !XDIR XLOOP_INNER(1) &
-      !XDIR XREDUCTION(+,xnrm)
-      Do i = 1, n
-        xnrm = xnrm + abs( x(i) * wt(i) )
-      EndDo
-    ElseIf ( iconvc == 2 ) Then
-      !XDIR XLOOP_INNER(1) &
-      !XDIR XREDUCTION(+,xnrm)
-      Do i = 1, n
-        xnrm = xnrm + ( x(i) * wt(i) )**2
-      EndDo
-      xnrm = sqrt( xnrm )
-    ElseIf ( iconvc == 3 ) Then
-      !XDIR XLOOP_INNER(1) &
-      !XDIR XREDUCTION(+,xnrm)
-      Do i = 1, n
-        xnrm = xnrm + ( x(i) * wt(i) )**2
-      EndDo
-      xnrm = sqrt( xnrm / real(n,dp) )
-    EndIf
-
-    Return
-  End Function normw2
-
   Function normw( x, wt, n ) Result( xnrm )
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the weighted l-norm of vector x, with l deteremined from the value of
