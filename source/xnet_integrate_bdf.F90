@@ -804,7 +804,7 @@ Contains
     ! Pre-compute error weights
     If ( iconvc == 0 .or. iconvc == 1 ) Then
       !XDIR XLOOP(2) XASYNC(tid) &
-      !XDIR XPRESENT(bdf_active,z,ewt)
+      !XDIR XPRESENT(bdf_active,z,ewt,rtol,atol)
       Do izb = zb_lo, zb_hi
         Do i = 1, neq
           If ( bdf_active(izb) ) Then
@@ -820,7 +820,7 @@ Contains
       EndDo
     Else
       !XDIR XLOOP(2) XASYNC(tid) &
-      !XDIR XPRESENT(bdf_active,z,ewt)
+      !XDIR XPRESENT(bdf_active,z,ewt,rtol,atol)
       Do izb = zb_lo, zb_hi
         Do i = 1, neq
           If ( bdf_active(izb) ) Then
@@ -1040,7 +1040,7 @@ Contains
             acor(neq,izb) = acor(neq,izb) + dt9(izb)
             t9t(izb) = zt0(neq,0,izb) + acor(neq,izb)
           EndIf
-          del(izb) = normw( dvec(:,izb), ewt(:,izb) )
+          del(izb) = normw( dvec(:,izb), ewt(:,izb), neq )
           If ( nit_nr(izb) > 1 ) crate(izb) = max( cr_down*crate(izb), del(izb)/delp(izb) )
           dcon(izb) = del(izb) * min(1.0_dp,crate(izb)) * tq(0,izb)
         EndIf
@@ -1079,7 +1079,7 @@ Contains
           If ( converged(izb) ) Then
             iterate(izb) = .false.
             If ( nit_nr(izb) > 1 ) Then
-              acnrm(izb) = normw( acor(:,izb), ewt(:,izb) )
+              acnrm(izb) = normw( acor(:,izb), ewt(:,izb), neq )
             Else
               acnrm(izb) = del(izb)
             EndIf
@@ -1117,7 +1117,7 @@ Contains
         EndIf
       EndDo
       !XDIR XUPDATE XWAIT(tid) &
-      !XDIR XHOST(iterate)
+      !XDIR XHOST(iterate,refactor,rebuild)
 
       ! Check that all zones are converged
       If ( .not. any(iterate) ) Exit
@@ -1466,7 +1466,7 @@ Contains
 
             ! eta for q-1
             If ( q(izb) > 1 ) Then
-              errorq(-1,izb) = tq(-1,izb) * normw( z(:,q(izb),izb), ewt(:,izb) )
+              errorq(-1,izb) = tq(-1,izb) * normw( z(:,q(izb),izb), ewt(:,izb), neq )
               etaq(-1,izb) = 1.0_dp / ( (biasqm1 * errorq(-1,izb)) ** (1.0_dp/q(izb)) + addon )
             EndIf
 
@@ -1477,7 +1477,7 @@ Contains
               Do i = 1, neq
                 acorhat(i,izb) = acor(i,izb) - c * acorp(i,izb)
               EndDo
-              errorq(1,izb) = tq(1,izb) * normw( acorhat(:,izb), ewt(:,izb) )
+              errorq(1,izb) = tq(1,izb) * normw( acorhat(:,izb), ewt(:,izb), neq )
               etaq(1,izb) = 1.0_dp / ( (biasqp1 * errorq(1,izb)) ** (1.0_dp/(q(izb)+2)) + addon )
             EndIf
 
@@ -1576,8 +1576,8 @@ Contains
           EndDo
           fact = ifactorial(q(izb)-1)
           sq = fact * q(izb) * (q(izb)+1) * acnrm(izb) / max( tq(2,izb), small )
-          sqm1 = fact * q(izb) * normw( z(:,q(izb),izb), ewt(:,izb) )
-          sqm2 = fact * normw( z(:,q(izb)-1,izb), ewt(:,izb) )
+          sqm1 = fact * q(izb) * normw( z(:,q(izb),izb), ewt(:,izb), neq )
+          sqm2 = fact * normw( z(:,q(izb)-1,izb), ewt(:,izb), neq )
           sddat(1,1,izb) = sqm2*sqm2
           sddat(1,2,izb) = sqm1*sqm1
           sddat(1,3,izb) = sq*sq
@@ -1891,14 +1891,13 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XLOOP(1) XASYNC(tid) &
     !XDIR XPRESENT(tdel,deltaq,q,q_age,lvec,hvec,acor,z) &
     !XDIR XPRIVATE(alpha0,alpha1,prod,xi,xiold,hsum,a1)
     Do izb = zb_lo, zb_hi
       If ( deltaq(izb) == -1 ) Then
 
         ! Decrease order
-        !XDIR XLOOP_INNER(1)
         Do i = 0, max_order
           lvec(i,izb) = 0.0_dp
         EndDo
@@ -1911,13 +1910,11 @@ Contains
             lvec(i,izb) = lvec(i,izb)*xi + lvec(i-1,izb)
           EndDo
         EndDo
-        !XDIR XLOOP_INNER(2)
         Do j = 2, q(izb)-1
           Do i = 1, neq
             z(i,j,izb) = z(i,j,izb) - z(i,q(izb),izb) * lvec(j,izb)
           EndDo
         EndDo
-        !XDIR XLOOP_INNER(1)
         Do i = 1, neq
           z(i,q(izb),izb) = 0.0_dp
         EndDo
@@ -1927,12 +1924,10 @@ Contains
       ElseIf ( deltaq(izb) == +1 ) Then
 
         ! Increase order
-        !XDIR XLOOP_INNER(1)
         Do i = 0, max_order
           lvec(i,izb) = 0.0_dp
         EndDo
         lvec(2,izb) = 1.0_dp
-        hsum = 0.0_dp
         alpha0 = -1.0_dp
         alpha1 = 1.0_dp
         prod = 1.0_dp
@@ -1950,13 +1945,11 @@ Contains
           xiold = xi
         EndDo
         a1 = -(alpha0 + alpha1) / prod
-        !XDIR XLOOP_INNER(2)
         Do j = 2, q(izb)
           Do i = 1, neq
             z(i,j,izb) = z(i,j,izb) + a1 * acor(i,izb) * lvec(j,izb)
           EndDo
         EndDo
-        !XDIR XLOOP_INNER(1)
         Do i = 1, neq
           z(i,q(izb)+1,izb) = a1 * acor(i,izb)
         EndDo
@@ -2078,7 +2071,7 @@ Contains
     Return
   End Subroutine pascal_build
 
-  Subroutine error_weights( y, wt )
+  Subroutine error_weights( y, wt, rtol, atol )
     !-----------------------------------------------------------------------------------------------
     ! This routine returns the error weights for comparing errors in y
     !-----------------------------------------------------------------------------------------------
@@ -2087,7 +2080,7 @@ Contains
     Implicit None
 
     ! Input variables
-    Real(dp), Intent(in) :: y(:)
+    Real(dp), Intent(in) :: y(:), rtol(:), atol(:)
 
     ! Output variables
     Real(dp), Intent(out) :: wt(size(y))
@@ -2117,7 +2110,7 @@ Contains
     Return
   End Subroutine error_weights
 
-  Function normw( x, wt ) Result( xnrm )
+  Function normw2( x, wt ) Result( xnrm )
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the weighted l-norm of vector x, with l deteremined from the value of
     ! the iconvc control:
@@ -2140,6 +2133,61 @@ Contains
     Integer :: i, n, incx
 
     n = size(x)
+    xnrm = 0.0_dp
+    If ( iconvc == 0 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(max,xnrm)
+      Do i = 1, n
+        xnrm = max( xnrm, abs( x(i) * wt(i) ) )
+      EndDo
+    ElseIf ( iconvc == 1 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(+,xnrm)
+      Do i = 1, n
+        xnrm = xnrm + abs( x(i) * wt(i) )
+      EndDo
+    ElseIf ( iconvc == 2 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(+,xnrm)
+      Do i = 1, n
+        xnrm = xnrm + ( x(i) * wt(i) )**2
+      EndDo
+      xnrm = sqrt( xnrm )
+    ElseIf ( iconvc == 3 ) Then
+      !XDIR XLOOP_INNER(1) &
+      !XDIR XREDUCTION(+,xnrm)
+      Do i = 1, n
+        xnrm = xnrm + ( x(i) * wt(i) )**2
+      EndDo
+      xnrm = sqrt( xnrm / real(n,dp) )
+    EndIf
+
+    Return
+  End Function normw2
+
+  Function normw( x, wt, n ) Result( xnrm )
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculates the weighted l-norm of vector x, with l deteremined from the value of
+    ! the iconvc control:
+    !   iconvc = 0 : infinity norm
+    !   iconvc = 1 : 1-norm
+    !   iconvc = 2 : 2-norm
+    !   iconvc = 3 : RMS norm
+    !-----------------------------------------------------------------------------------------------
+    Use xnet_controls, Only: iconvc
+    !XDIR XROUTINE_VECTOR
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: x(n), wt(n)
+    Integer, Intent(in) :: n
+
+    ! Function variable
+    Real(dp) :: xnrm
+
+    ! Local variables
+    Integer :: i, incx
+
     xnrm = 0.0_dp
     If ( iconvc == 0 ) Then
       !XDIR XLOOP_INNER(1) &
