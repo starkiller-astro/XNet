@@ -177,7 +177,7 @@ Contains
 
     ! Pre-calculate phase space integrals and derivatives
     !XDIR XLOOP(2) XASYNC(tid) &
-    !XDIR XPRESENT(mask,t9,has_logft,ffn_qval,phasei,dphaseidt9) &
+    !XDIR XPRESENT(mask,t9,etae,has_logft,ffn_qval,phasei,dphaseidt9) &
     !XDIR XPRIVATE(cheme)
     Do izb = zb_lo, zb_hi
       Do k = 1, nffn
@@ -204,7 +204,7 @@ Contains
     End Do
 
     !XDIR XLOOP(2) XASYNC(tid) &
-    !XDIR XPRESENT(mask,t9,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
+    !XDIR XPRESENT(mask,t9,lt1,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
     !XDIR XPRESENT(phasei,dphaseidt9) &
     !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
     !XDIR XPRIVATE(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt)

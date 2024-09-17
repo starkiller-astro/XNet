@@ -245,7 +245,7 @@ Contains
 
       ! Compute neutrino cross sections
       !XDIR XLOOP_OUTER(2) XASYNC(tid) &
-      !XDIR XPRESENT(mask,sigmanu,ltnu,fluxnu,nuspec) &
+      !XDIR XPRESENT(mask,sigmanu,ltnu,fluxnu,nuspec,rate) &
       !XDIR XPRIVATE(it)
       Do izb = zb_lo, zb_hi
         Do j = 1, nnuspec

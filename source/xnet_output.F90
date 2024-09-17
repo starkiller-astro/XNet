@@ -96,6 +96,7 @@ Contains
         EndIf
       EndDo
     EndIf
+    If ( idiag >= 0 ) Flush(lun_diag)
 
     stop_timer = xnet_wtime()
     timer_output = timer_output + stop_timer
@@ -183,6 +184,7 @@ Contains
       EndDo
       Call write_timers_summary(lun_diag)
     EndIf
+    If ( idiag >= 0 ) Flush(lun_diag)
 
     ! Use the following line to restart the timers
     If ( itimer_reset > 0 ) Call reset_timers

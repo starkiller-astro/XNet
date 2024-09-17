@@ -90,7 +90,7 @@ Contains
       Call step_be(kstep,inr)
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
-      !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot)
+      !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot,lzstep)
       Do izb = zb_lo, zb_hi
 
         ! If integration fails, reset abundances, reduce timestep and retry.
