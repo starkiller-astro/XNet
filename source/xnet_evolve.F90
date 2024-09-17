@@ -238,6 +238,7 @@ Contains
           Write(th_fname,"(3(a,i3.3))") 'th_fail_',zone_id(1,izb),'_',zone_id(2,izb),'_',zone_id(3,izb)
           Call write_xnet_th(th_fname,th_fname,tstart(izb),tstop(izb),t9start(izb),rhostart(izb),yestart(izb),ierr)
 
+          Flush(lun_diag)
           Call xnet_terminate('[XNet] Evolution failed to converge')
         EndIf
       EndIf
