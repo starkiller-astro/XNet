@@ -130,6 +130,7 @@ Contains
     ! Calculate abundance moments
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(ye,ytot,abar,zbar,z2bar,zibar) &
+    !XDIR XPRESENT(aa,zz,zz2,zzi) &
     !XDIR XPRESENT(mask,y,xext,aext,zext) &
     !XDIR XPRIVATE(yext,ntot,atot,ztot,z2tot,zitot)
     Do izb = zb_lo, zb_hi
