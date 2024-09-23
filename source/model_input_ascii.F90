@@ -324,7 +324,7 @@ Module model_input_ascii
 
 
       ! Calculate properties of matter not in network
-      If ( yext > 0.0 .and. xnet < 1.0 ) Then
+      If ( yext > 0.0 .and. xnet < 1.0 .and. znet < yein ) Then
         xext = 1.0 - xnet
         aext = xext / yext
         If ( yein <= 0.0 .or. yein >= 1.0 ) then
