@@ -22,7 +22,8 @@ Contains
     ! timestep determined by the integration scheme and the changing thermodynamic conditions.
     ! Integration is performed by a choice of methods controlled by the isolv flag.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, nname, aa, benuc, enudot
+    Use nuclear_data, Only: ny, nname, aa, benuc
+    Use reaction_data, Only: enudot
     Use xnet_abundances, Only: yo, y, yt, ystart, ydot, xext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart

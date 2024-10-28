@@ -181,67 +181,6 @@ Contains
     Return
   End Subroutine benuc_vector
 
-  Subroutine enudot(y,sqnu,mask_in)
-    !-----------------------------------------------------------------------------------------------
-    ! This routine calculates the neutrino energy loss rate.
-    !-----------------------------------------------------------------------------------------------
-    Use reaction_data, Only: n1i
-    Use xnet_constants, Only: epmev
-    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
-    Use xnet_ffn, Only: qkffn, iffn
-    Use xnet_types, Only: dp
-    Implicit None
-
-    ! Input variables
-    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
-
-    ! Input/Output variables
-    Real(dp), Intent(inout) :: sqnu(zb_lo:zb_hi) ! Neutrino energy loss rate [ergs g^{-1} s^{-1}]
-
-    ! Optional variables
-    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
-
-    ! Local variables
-    Real(dp) :: sqnu1
-    Integer :: k, izb
-    Logical, Pointer :: mask(:)
-
-    If ( present(mask_in) ) Then
-      mask(zb_lo:) => mask_in
-    Else
-      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
-    EndIf
-    If ( .not. any(mask) ) Return
-
-    !XDIR XENTER_DATA XASYNC(tid) &
-    !XDIR XCOPYIN(mask,y,sqnu)
-
-    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
-    !XDIR XPRESENT(mask,qkffn,iffn,y,sqnu) &
-    !XDIR XPRIVATE(sqnu1)
-    Do izb = zb_lo, zb_hi
-      If ( mask(izb) ) Then
-
-        ! Loop over 1 species weak reactions to calculate neutrino loss
-        sqnu1 = 0.0
-        !XDIR XLOOP_INNER(1) &
-        !XDIR XREDUCTION(+,sqnu1)
-        Do k = 1, nr1
-          sqnu1 = sqnu1 + y(n1i(1,k),izb) * qkffn(iffn(k),izb)
-        EndDo
-
-        ! Change units from MeV/nucleon to erg/g
-        sqnu(izb) = epmev * avn * sqnu1
-      EndIf
-    EndDo
-
-    !XDIR XEXIT_DATA XASYNC(tid) &
-    !XDIR XCOPYOUT(sqnu) &
-    !XDIR XDELETE(mask,y)
-
-    Return
-  End Subroutine enudot
-
   Subroutine partf(t9,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! This routine calculates the nuclear partition functions as a function of temperature.
@@ -1015,5 +954,66 @@ Contains
 
     Return
   End Subroutine read_reaction_data
+
+  Subroutine enudot(y,sqnu,mask_in)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculates the neutrino energy loss rate.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_constants, Only: epmev, avn
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
+    Use xnet_ffn, Only: qkffn, iffn
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
+
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: sqnu(zb_lo:zb_hi) ! Neutrino energy loss rate [ergs g^{-1} s^{-1}]
+
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
+    ! Local variables
+    Real(dp) :: sqnu1
+    Integer :: k, izb
+    Logical, Pointer :: mask(:)
+
+    If ( present(mask_in) ) Then
+      mask(zb_lo:) => mask_in
+    Else
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+    EndIf
+    If ( .not. any(mask) ) Return
+
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask,y,sqnu)
+
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,qkffn,iffn,y,sqnu) &
+    !XDIR XPRIVATE(sqnu1)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+
+        ! Loop over 1 species weak reactions to calculate neutrino loss
+        sqnu1 = 0.0
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XREDUCTION(+,sqnu1)
+        Do k = 1, nr1
+          sqnu1 = sqnu1 + y(n1i(1,k),izb) * qkffn(iffn(k),izb)
+        EndDo
+
+        ! Change units from MeV/nucleon to erg/g
+        sqnu(izb) = epmev * avn * sqnu1
+      EndIf
+    EndDo
+
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(sqnu) &
+    !XDIR XDELETE(mask,y)
+
+    Return
+  End Subroutine enudot
 
 End Module reaction_data
