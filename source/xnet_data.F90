@@ -659,7 +659,7 @@ Contains
     Use xnet_constants, Only: five3rd
     Use xnet_controls, Only: iheat, iscrn, lun_stderr, nzevolve, iweak0, tid
     Use xnet_ffn, Only: read_ffn_data, ffnsum, ffnenu, ffn_ec, ffn_beta, ffn_qval, has_logft, &
-      & phasei,dphaseidt9, ngrid, rffn, dlnrffndt9
+      & qkffn, phasei, dphaseidt9, ngrid, rffn, dlnrffndt9
     Use xnet_nnu, Only: read_nnu_data, nnu_match, ntnu, nnuspec, sigmanu, ltnu, fluxnu, rnnu
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
     Use xnet_types, Only: dp
@@ -704,9 +704,11 @@ Contains
         Call read_ffn_data(nffn,data_dir)
       Else
         Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
+        Allocate (qkffn(nffn,nzevolve))
         Allocate (has_logft(nffn))
         ffnsum = 0.0
         ffnenu = 0.0
+        qkffn = 0.0
         has_logft = 0
 
         ! Additional data for logft rates
@@ -721,6 +723,7 @@ Contains
       EndIf
       Call parallel_bcast(ffnsum)
       Call parallel_bcast(ffnenu)
+      Call parallel_bcast(qkffn)
       Call parallel_bcast(has_logft)
 
       ! Additional data for logft rates
@@ -730,10 +733,12 @@ Contains
       Call parallel_bcast(phasei)
       Call parallel_bcast(dphaseidt9)
     Else
-      Allocate(ffnsum(1,ngrid),ffnenu(1,ngrid))
+      Allocate (ffnsum(1,ngrid),ffnenu(1,ngrid))
+      Allocate (qkffn(1,nzevolve))
       Allocate (has_logft(1))
       ffnsum = 0.0
       ffnenu = 0.0
+      qkffn = 0.0
       has_logft = 0
 
       ! Additional arrays for logft rates
@@ -940,7 +945,7 @@ Contains
     !XDIR XCOPYIN(iwk1,iwk2,iwk3,iwk4,irev1,irev2,irev3,irev4) &
     !XDIR XCOPYIN(mu1,mu2,mu3,mu4,a1,a2,a3,a4,n1i,n2i,n3i,n4i) &
     !XDIR XCOPYIN(n10,n11,n20,n21,n22,n30,n31,n32,n33,n40,n41,n42,n43,n44) &
-    !XDIR XCOPYIN(iffn,ffnsum,ffnenu) &
+    !XDIR XCOPYIN(iffn,ffnsum,ffnenu,qkffn) &
     !XDIR XCOPYIN(has_logft,ffn_ec,ffn_beta,ffn_qval,phasei,dphaseidt9) &
     !XDIR XCOPYIN(innu,sigmanu,ltnu,fluxnu) &
     !XDIR XCREATE(b1,b2,b3,b4,csect1,csect2,csect3,csect4) &
@@ -949,5 +954,68 @@ Contains
 
     Return
   End Subroutine read_reaction_data
+
+  Subroutine enudot(y,sqnu,mask_in)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine calculates the neutrino energy loss rate.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_constants, Only: epmev, avn
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
+    Use xnet_ffn, Only: qkffn
+    Use xnet_types, Only: dp
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: y(ny,zb_lo:zb_hi)
+
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: sqnu(zb_lo:zb_hi) ! Neutrino energy loss rate [ergs g^{-1} s^{-1}]
+
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
+    ! Local variables
+    Real(dp) :: sqnu1
+    Integer :: k, izb, nr1
+    Logical, Pointer :: mask(:)
+
+    If ( present(mask_in) ) Then
+      mask(zb_lo:) => mask_in
+    Else
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+    EndIf
+    If ( .not. any(mask) ) Return
+    
+    nr1 = nreac(1)
+
+    !XDIR XENTER_DATA XASYNC(tid) &
+    !XDIR XCOPYIN(mask,y,sqnu)
+
+    !XDIR XLOOP_OUTER(1) XASYNC(tid) &
+    !XDIR XPRESENT(mask,qkffn,iffn,y,sqnu) &
+    !XDIR XPRIVATE(sqnu1)
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+
+        ! Loop over 1 species weak reactions to calculate neutrino loss
+        sqnu1 = 0.0
+        !XDIR XLOOP_INNER(1) &
+        !XDIR XREDUCTION(+,sqnu1)
+        Do k = 1, nr1
+          sqnu1 = sqnu1 + y(n1i(1,k),izb) * qkffn(iffn(k),izb)
+        EndDo
+
+        ! Change units from MeV/nucleon to erg/g
+        sqnu(izb) = epmev * avn * sqnu1
+      EndIf
+    EndDo
+
+    !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(sqnu) &
+    !XDIR XDELETE(mask,y)
+
+    Return
+  End Subroutine enudot
 
 End Module reaction_data

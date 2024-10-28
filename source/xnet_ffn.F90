@@ -21,6 +21,7 @@ Module xnet_ffn
     & (/ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0 /)
   Real(dp), Allocatable :: ffn_ec(:,:), ffn_beta(:,:) ! dim(nffn,ngrid)
   Real(dp), Allocatable :: ffnsum(:,:), ffnenu(:,:)   ! dim(nffn,ngrid)
+  Real(dp), Allocatable :: qkffn(:,:)                 ! Neutrino energy losses
   Real(dp), Allocatable :: ffn_qval(:)
   Real(dp), Allocatable :: phasei(:,:), dphaseidt9(:,:) ! dim(nffn,ngrid)
   Integer, Allocatable :: has_logft(:)
@@ -28,6 +29,7 @@ Module xnet_ffn
   Real(dp), Allocatable :: rffn(:,:)              ! FFN reaction rates
   Real(dp), Allocatable :: dlnrffndt9(:,:)        ! log FFN reaction rates
 
+  Real(dp), Parameter :: lqkmin = -90.0, qkmin = 1.0e-90
   Real(dp), Parameter :: lrfmin = -30.0, rfmin = 1.0e-30
 
 Contains
@@ -47,11 +49,13 @@ Contains
     has_logft = 0
 
     Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
+    Allocate (qkffn(nffn,nzevolve))
     Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
     Allocate (ffn_qval(nffn))
     Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
     ffnsum = 0.0
     ffnenu = 0.0
+    qkffn = 0.0
     ffn_ec = 0.0
     ffn_beta = 0.0
     ffn_qval = 0.0
@@ -158,6 +162,7 @@ Contains
 
     ! Local variables
     Real(dp) :: r1, r2, dr1, dr2, dr1_ec, dr2_ec
+    Real(dp) :: qdr1, qdr2, qr1, qr2, qk
     Real(dp) :: rf_beta, rf_ec, cheme
     Real(dp) :: enel, dt9, dene, rdt9, rdene, drbeta_dt, drec_dt
     Integer :: i, izb, k, le1, i1, i2, i3, i4
@@ -207,7 +212,8 @@ Contains
     !XDIR XPRESENT(mask,t9,lt1,ene,rf,dlnrfdt9,has_logft,ffnsum,ffn_ec,ffn_beta) &
     !XDIR XPRESENT(phasei,dphaseidt9) &
     !XDIR XPRIVATE(enel,le1,dt9,rdt9,dene,rdene,i1,i2,i3,i4) &
-    !XDIR XPRIVATE(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt)
+    !XDIR XPRIVATE(dr1,dr2,r1,r2,dr1_ec,dr2_ec,rf_ec,rf_beta,drbeta_dt,drec_dt) &
+    !XDIR XPRIVATE(qdr1,qdr2,qr1,qr2,qk)
     Do izb = zb_lo, zb_hi
       Do k = 1, nffn
         If ( mask(izb) ) Then
@@ -225,6 +231,17 @@ Contains
           i2 = i1 + 1
           i3 = nt9grid*le1 + lt1(izb)
           i4 = i3 + 1
+
+          qdr1 = ffnenu(k,i2) - ffnenu(k,i1)
+          qdr2 = ffnenu(k,i4) - ffnenu(k,i3)
+          qr1 = ffnenu(k,i1) + rdt9*qdr1
+          qr2 = ffnenu(k,i3) + rdt9*qdr2
+          qk = qr1 + rdene*(qr2 - qr1)
+          If ( qk > lqkmin ) Then
+            qkffn(k,izb) = 10.0**qk
+          Else
+            qkffn(k,izb) = 0.0
+          EndIf
 
           If ( has_logft(k) > 0 ) Then
 

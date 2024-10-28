@@ -19,7 +19,7 @@ Module xnet_output
 
 Contains
 
-  Subroutine ts_output(kstep,enuc,edot,mask_in)
+  Subroutine ts_output(kstep,enuc,edot,sqnu,mask_in)
     !-----------------------------------------------------------------------------------------------
     ! The per timestep output routine. If the flag itsout > 0, full_net calls this routine to handle
     ! stepwise output.
@@ -37,7 +37,7 @@ Contains
 
     ! Input variables
     Integer, Intent(in) :: kstep
-    Real(dp), Intent(in) :: enuc(zb_lo:zb_hi), edot(zb_lo:zb_hi)
+    Real(dp), Intent(in) :: enuc(zb_lo:zb_hi), edot(zb_lo:zb_hi), sqnu(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -69,17 +69,18 @@ Contains
     If ( itsout >= 1 ) Then
       !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(t,t9,rho,tdel,edot,y,kmon)
-      Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,2es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
+      Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,3es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then
           izone = izb + szbatch - zb_lo
 
           ! An abundance snapshot is written to the binary file
-          Write(lun_ts(izb)) kstep,t(izb),t9(izb),rho(izb),tdel(izb),edot(izb),y(:,izb),flx(:,izb)
+          Write(lun_ts(izb)) kstep,t(izb),t9(izb),rho(izb),sqnu(izb),tdel(izb), &
+            & edot(izb),y(:,izb),flx(:,izb)
 
           ! For itsout>=2, output important mass fractions to the ASCII file
           If ( itsout >= 2 ) Write(lun_ev(izb),ev_format) &
-            & kstep,t(izb),t9(izb),rho(izb),edot(izb),tdel(izb), &
+            & kstep,t(izb),t9(izb),rho(izb),edot(izb),sqnu(izb),tdel(izb), &
             & (aa(inucout(i))*y(inucout(i),izb),i=1,nnucout),(kmon(j,izb),j=1,2)
 
           ! For itsout>=3, output time and thermo evolution to the screen
