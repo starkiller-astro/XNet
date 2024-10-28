@@ -75,7 +75,7 @@ Contains
           izone = izb + szbatch - zb_lo
 
           ! An abundance snapshot is written to the binary file
-          Write(lun_ts(izb)) kstep,t(izb),t9(izb),rho(izb),sqnu(izb),tdel(izb),
+          Write(lun_ts(izb)) kstep,t(izb),t9(izb),rho(izb),sqnu(izb),tdel(izb), &
             & edot(izb),y(:,izb),flx(:,izb)
 
           ! For itsout>=2, output important mass fractions to the ASCII file
