@@ -962,7 +962,7 @@ Contains
     Use nuclear_data, Only: ny
     Use xnet_constants, Only: epmev, avn
     Use xnet_controls, Only: zb_lo, zb_hi, lzactive, tid
-    Use xnet_ffn, Only: qkffn, iffn
+    Use xnet_ffn, Only: qkffn
     Use xnet_types, Only: dp
     Implicit None
 
@@ -977,7 +977,7 @@ Contains
 
     ! Local variables
     Real(dp) :: sqnu1
-    Integer :: k, izb
+    Integer :: k, izb, nr1
     Logical, Pointer :: mask(:)
 
     If ( present(mask_in) ) Then
@@ -986,6 +986,8 @@ Contains
       mask(zb_lo:) => lzactive(zb_lo:zb_hi)
     EndIf
     If ( .not. any(mask) ) Return
+    
+    nr1 = nreac(1)
 
     !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask,y,sqnu)
