@@ -16,13 +16,13 @@ Module xnet_evolve
 
 Contains
 
-  Subroutine full_net(kstep)
+  Subroutine full_net(kstep,denu)
     !-----------------------------------------------------------------------------------------------
     ! The abundance evolution is performed over a series of timesteps, with the duration of the
     ! timestep determined by the integration scheme and the changing thermodynamic conditions.
     ! Integration is performed by a choice of methods controlled by the isolv flag.
     !-----------------------------------------------------------------------------------------------
-    Use nuclear_data, Only: ny, nname, aa, benuc
+    Use nuclear_data, Only: ny, nname, aa, benuc, enudot
     Use xnet_abundances, Only: yo, y, yt, ystart, ydot, xext
     Use xnet_conditions, Only: t, to, tt, tdel, tdel_old, tdel_next, t9, t9o, t9t, t9dot, rho, rhoo, &
       & rhot, yeo, ye, yet, nt, nto, ntt, tstart, tstop, nstart, t9start, rhostart, yestart
@@ -39,12 +39,14 @@ Contains
 
     ! Output variables
     Integer, Intent(out) :: kstep
+    Real(dp), Intent(out) :: denu(zb_lo:zb_hi)
 
     ! Local variables
     !Integer, Parameter :: kstep_output = 10
     Real(dp) :: enm(zb_lo:zb_hi), enb(zb_lo:zb_hi)
     Real(dp) :: enold(zb_lo:zb_hi), en0(zb_lo:zb_hi)
     Real(dp) :: delta_en(zb_lo:zb_hi), edot(zb_lo:zb_hi)
+    Real(dp) :: sqnu(zb_lo:zb_hi)
     Real(dp) :: yout(ny+1)
     Integer :: k, izb, izone, nstep_est, idiag0
     Integer :: its(zb_lo:zb_hi), mykstep(zb_lo:zb_hi)
@@ -74,7 +76,7 @@ Contains
 
     !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(its,mykstep,lzsolve,lzoutput) &
-    !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot)
+    !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
 
     ! Calculate the total energy of the nuclei
     Call benuc(y,enb,enm)
@@ -112,10 +114,12 @@ Contains
       en0(izb) = enm(izb)
       delta_en(izb) = 0.0
       edot(izb) = 0.0
+      denu(izb) = 0.0
+      sqnu(izb) = 0.0
     EndDo
 
     ! Output initial abundances and conditions
-    Call ts_output(0,delta_en,edot)
+    Call ts_output(0,delta_en,edot,sqnu)
     If ( idiag >= 0 ) Then
       Do izb = zb_lo, zb_hi
         If ( lzactive(izb) ) Then
@@ -196,19 +200,21 @@ Contains
       EndDo
 
       Call benuc(yt,enb,enm,mask_in = lzoutput)
+      Call enudot(yt,sqnu,mask_in = lzoutput)
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
-      !XDIR XPRESENT(its,enm,enold,en0,delta_en,edot,tdel)
+      !XDIR XPRESENT(its,enm,enold,en0,delta_en,edot,denu,sqnu,tdel)
       Do izb = zb_lo, zb_hi
-        If ( its(izb) == 0 ) Then
+        If ( lzoutput(izb) ) Then
           delta_en(izb) = enm(izb) - en0(izb)
           edot(izb) = -(enm(izb)-enold(izb)) / tdel(izb)
+          denu(izb) = denu(izb) + sqnu(izb) * tdel(izb)
         EndIf
       EndDo
 
       !XDIR XUPDATE XWAIT(tid) &
       !XDIR XHOST(lzoutput,lzsolve)
-      Call ts_output(kstep,delta_en,edot,mask_in = lzoutput)
+      Call ts_output(kstep,delta_en,edot,sqnu,mask_in = lzoutput)
 
       ! Test if all zones have stopped
       If ( .not. any( lzsolve ) ) Exit
@@ -246,6 +252,7 @@ Contains
     kstep = max(1, maxval(mykstep))
 
     !XDIR XEXIT_DATA XASYNC(tid) &
+    !XDIR XCOPYOUT(denu) &
     !XDIR XDELETE(enm,enb,enold,en0,delta_en,edot) &
     !XDIR XDELETE(its,mykstep,lzsolve,lzoutput)
 

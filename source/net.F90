@@ -58,6 +58,9 @@ Program net
   ! Thermodynamic input data
   Real(dp), Allocatable :: dyf(:), flx_diff(:)
 
+  ! Neutrino loss data
+  Real(dp), Allocatable :: denu(:)
+
   ! Input Data descriptions
   Character(80) :: data_desc, data_dir
   Character(80), Allocatable :: abund_desc(:), thermo_desc(:)
@@ -191,12 +194,17 @@ Program net
   ! Allocate zone description arrays
   Allocate (abund_desc(nzevolve),thermo_desc(nzevolve))
 
+  ! Allocate neutrino loss data
+  Allocate ( denu(nzevolve) )
+  denu = 0.0
+
   !XDIR XENTER_DATA XASYNC(tid) &
   !XDIR XCOPYIN(y,yo,yt,ydot,ystart,xext,aext,zext) &
   !XDIR XCOPYIN(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XCOPYIN(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
   !XDIR XCOPYIN(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-  !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+  !XDIR XCOPYIN(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
+  !XDIR XCOPYIN(denu)
 
   !XDIR XWAIT(tid)
 
@@ -302,9 +310,9 @@ Program net
             Open(newunit=lun_ev(izb), file=ev_file, action='write')
 
             ! Write evolution file header
-            Write(ev_header_format,"(a)") "(a4,a15,4a10,"//trim(nnucout_string)//"a9,a4)"
+            Write(ev_header_format,"(a)") "(a4,a15,5a10,"//trim(nnucout_string)//"a9,a4)"
             Write(lun_ev(izb),ev_header_format) &
-              & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' Timestep ',(nname(inucout(i)),i=1,nnucout), ' It '
+              & 'k ',' Time ',' T(GK) ',' Density ',' dE/dt ',' sqnu ',' Timestep ',(nname(inucout(i)),i=1,nnucout), ' It '
           EndIf
         EndIf
       EndDo
@@ -320,7 +328,7 @@ Program net
     timer_setup = timer_setup + stop_timer
 
     ! Evolve abundance from tstart to tstop
-    Call full_net(kstep)
+    Call full_net(kstep,denu(zb_lo:zb_hi))
 
     ! Test how well sums of fluxes match abundances changes
     If ( idiag >= 3 ) Then
@@ -360,7 +368,8 @@ Program net
   !XDIR XDELETE(tdel,tdel_next,tdel_old,t,tt,to,t9,t9t,t9o,t9dot) &
   !XDIR XDELETE(rho,rhot,rhoo,ye,yet,yeo,cv,etae,detaedt9,nt,ntt,nto,ints,intso) &
   !XDIR XDELETE(tstart,tstop,tdelstart,nstart,t9start,rhostart,yestart) &
-  !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms)
+  !XDIR XDELETE(nh,th,t9h,rhoh,yeh,tmevnu,fluxcms) &
+  !XDIR XDELETE(denu)
 
   !XDIR XWAIT(tid)
 
