@@ -1,7 +1,7 @@
 MODULE ffn_module
   IMPLICIT NONE
 
-  INTEGER, PARAMETER :: max_nffn = 466
+  INTEGER, PARAMETER :: max_nffn = 1600
   INTEGER            :: nffn
   LOGICAL            :: netweak_flag = .true.
 
@@ -13,16 +13,31 @@ MODULE ffn_module
   CHARACTER(LEN=256) :: netweak_data_dir   = './ffn_data'
 
   INTEGER            :: lun_netweak_in
-  CHARACTER(LEN=256) :: netweak_in_fname   = 'lmpffnoda.data'
+  CHARACTER(LEN=256) :: netweak_in_fname   = 'updated_rate_table.txt'
 
   INTEGER            :: lun_netweak_out
   CHARACTER(LEN=256) :: netweak_out_fname  = 'netweak'
+
+  INTEGER            :: lun_sunet_in
+  CHARACTER(LEN=256) :: sunet_fname = 'sunet.sn160'
+
+  INTEGER            :: lun_element_in
+  CHARACTER(LEN=256) :: element_list_fname = 'element_list.txt'
+  
+!  INTEGER            :: lun_netwinv_in
+!  CHARACTER(LEN=256) :: netwinv_in_fname = 'winvne_JINAv22'
 
   namelist /ffn_input/ &
     netweak_flag, &
     netweak_data_dir, &
     netweak_in_fname, &
     netweak_out_fname
+
+  namelist /net_input/ &
+    sunet_fname
+
+!  namelist /partf_input/ &
+!    netwinv_in_fname
 
   CONTAINS
 
@@ -47,7 +62,6 @@ MODULE ffn_module
     name_len = LEN_TRIM(cname)
 
     iffn(1:2) = 0
-
     IF ( name_len > 0 .and. nffn > 0 ) THEN
       jj = 0
       DO ii = 1, nffn
@@ -61,6 +75,54 @@ MODULE ffn_module
 
     RETURN
   END SUBROUTINE ffn_index_from_name
+  
+  SUBROUTINE check_network(a_in,z_in,e_list,spec_list,num_spec,rate)
+        IMPLICIT NONE
+        INTEGER             :: z_in,num_spec
+        CHARACTER(LEN=3)    :: a_in
+        CHARACTER(LEN=*)    :: e_list(119)
+        CHARACTER(LEN=2)    ::element, element_min1
+        CHARACTER(LEN=*)    :: spec_list(num_spec)
+        CHARACTER(LEN=5)    :: spec1, spec2
+        LOGICAL             :: rate
+
+        IF ( a_in == '1  ' .and. z_in == 1 ) THEN
+                spec1 = '    p'
+                spec2 = '    n'
+        !this prevents the code from trying to read data for elements past z=118
+        ELSEIF ( z_in > 118 ) THEN
+                spec1 = 'no777'
+                spec2 = 'no777'
+        ELSE
+                element = e_list(z_in+1)
+                element_min1 = e_list(z_in)
+                spec1 = adjustr(element//a_in)
+                spec2 = adjustr(element_min1//a_in)
+        END IF
+
+        IF (ANY(spec_list == spec1) .AND. ANY(spec_list == spec2)) THEN
+                rate = .true.
+        ELSE
+                rate = .false.
+        END IF
+  END SUBROUTINE check_network
+
+  SUBROUTINE build_element_list(e_in, e_file_num, zz, e_list)
+        IMPLICIT NONE
+        CHARACTER(LEN=256)    :: e_in
+        INTEGER               :: zz(119)
+        CHARACTER(LEN=*)      :: e_list(119)
+        INTEGER               :: z_val,ii,e_file_num
+        CHARACTER(LEN=2)      :: element
+
+        DO ii = 1,119
+                READ(e_file_num,'(i3,1x,a2)') z_val, element
+                zz(ii) = z_val
+                element = adjustr(element)
+                e_list(ii) = element
+        END DO
+
+  END SUBROUTINE build_element_list
 
   SUBROUTINE write_ffn_rate( iffn )
     USE net_module, ONLY: write_net_rate, lun_netsu_out
@@ -92,9 +154,29 @@ MODULE ffn_module
 
     RETURN
   END SUBROUTINE write_ffn_rate
+  
+  SUBROUTINE calculate_q_value( spec1, spec2, q_value )
+    ! calculates the Q-value of a reaction in units of MeV
+    USE partf_module, ONLY: mex_list
+    USE net_module, ONLY: net_index_from_name
+    IMPLICIT NONE
+    CHARACTER(5)         :: spec1, spec2
+    INTEGER              :: s1_index, s2_index
+    REAL(8)              :: mex1, mex2
+    REAL(8), INTENT(OUT) ::q_value
+    
+    !Determine mass excess of each species
+    call net_index_from_name( spec1, s1_index )
+    call net_index_from_name( spec2, s2_index )
+    mex1 = mex_list(s1_index)
+    mex2 = mex_list(s2_index)
+
+    q_value = mex1 - mex2
+    
+  END SUBROUTINE calculate_q_value
 
   SUBROUTINE build_netweak
-    USE net_module, ONLY: nuc_rename, net_index_from_name
+    USE net_module, ONLY: nuc_rename, net_index_from_name, nname_net, nnet
     IMPLICIT NONE
 
     ! Local variables
@@ -106,9 +188,160 @@ MODULE ffn_module
     INTEGER :: ii, jj, inucmin, inucmax, ierr
     LOGICAL :: keep_rate, is_sorted
 
+    INTEGER,PARAMETER  :: num_reac = 7677
+    CHARACTER(LEN=5)   :: sunet_list(nnet),s1,s2
+    INTEGER            :: z_list(119),z
+    CHARACTER(LEN=2)   :: element_list(119),el,el_min1
+    INTEGER            :: i,j,k,x
+    REAL               :: beta_plus, beta_minus, leps_plus, leps_minus, nu, nubar
+    REAL(8)            :: q
+    !REAL(8)            :: lsum_plus(num_reac,143),lsum_minus(num_reac,143),nu_list(num_reac,143),nubar_list(num_reac,143)
+    REAL               :: lsum_plus(143),lsum_minus(143),nu_list(143),nubar_list(143)
+    CHARACTER(LEN=3)   :: a
+    !REAL               :: temp_sum_plus(num_reac,11,13),temp_sum_minus(num_reac,11,13),temp_nu(num_reac,11,13),temp_nubar(num_reac,11,13)
+    REAL               :: temp_sum_plus(11,13),temp_sum_minus(11,13),temp_nu(11,13),temp_nubar(11,13)
+    
     nffn = 0
+    !skip routine if weak reactions are ignored
     IF ( .not. netweak_flag ) RETURN
+    
+    IF ( netweak_in_fname == 'updated_rate_table.txt') THEN
+      !build element list for use in headers and network check
+      CALL build_element_list(element_list_fname, lun_element_in, z_list, element_list)
 
+      READ(lun_netweak_in,*, IOSTAT=ierr)
+
+      DO i = 1, num_reac
+        !read first line from each block of data
+        READ(lun_netweak_in,'(1x,a3,1x,i3)', advance = 'no') a, z
+        READ(lun_netweak_in, '(33x,f8.3,1x,f8.3,2x,f8.3,2x,f8.3,1x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
+                                          beta_minus, leps_plus, nubar
+        a = trim(adjustl(a))
+                
+        !determine if all species are in our network
+        call check_network(a, z, element_list, nname_net, nnet, keep_rate)
+                
+        !if all species are in our network, read in relevant data, else go to next reaction
+        IF ( keep_rate ) THEN
+          
+          lsum_plus(1) = log10(10.d0**beta_plus + 10.d0**leps_minus)
+          lsum_minus(1) = log10(10.d0**beta_minus + 10.d0**leps_plus)
+          nu_list(1) = nu
+          nubar_list(1) = nubar
+          
+          !rename H1 and free neutrons or construct species name
+          IF ( z == 1 .and. a == '1  ') THEN
+            s1 = '    p'
+            s2 = '    n'
+          ELSE
+            el = element_list(z+1)
+            el_min1 = element_list(z)
+            s1 = adjustr(el//a)
+            s2 = adjustr(el_min1//a)
+          END IF
+                        
+          call calculate_q_value( s1, s2, q ) 
+
+          !count electron capture rate
+          nffn = nffn + 1
+          nname_ffn(1, nffn) = s1
+          nname_ffn(2, nffn) = s2
+          q_ffn(nffn) = q
+
+          !count beta decay rate
+          nffn = nffn + 1
+          nname_ffn(1, nffn) = s2
+          nname_ffn(2, nffn) = s1
+          q_ffn(nffn) = -q
+                        
+          IF ( nu_list(1) < -99.999 ) THEN
+            nu_list(1) = -99.99
+          END IF
+
+          IF ( nubar_list(1) < -99.999 ) THEN
+            nubar_list(1) = -99.999
+          END IF
+
+          IF ( lsum_plus(1) < -99.999 ) THEN
+            lsum_plus(1) = -99.999
+          END IF
+
+          IF ( lsum_minus(1) < -99.999 ) THEN
+            lsum_minus(1) = -99.999
+          END IF
+                        
+          DO j = 2,143
+            READ(lun_netweak_in, '(41x, f8.3,1x,f8.3,2x,f8.3,2x,f8.3,1x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
+                    beta_minus, leps_plus, nubar
+            
+            lsum_plus(j) = log10(10.d0**beta_plus + 10.d0**leps_minus)
+            lsum_minus(j) = log10(10.d0**beta_minus + 10.d0**leps_plus)
+            nu_list(j) = nu
+            nubar_list(j) = nubar
+
+            IF ( nu_list(j) < -99.999 ) THEN  
+              nu_list(j) = -99.999
+            END IF
+
+            IF ( nubar_list(j) < -99.999 ) THEN  
+              nubar_list(j) = -99.999
+            END IF
+
+            IF ( lsum_plus(j) < -99.999 ) THEN
+              lsum_plus(j) = -99.999
+            END IF
+
+            IF ( lsum_minus(j) < -99.999 ) THEN
+              lsum_minus(j) = -99.999
+            END IF
+          END DO
+        ELSE
+          !if reaction is not in the network, mark it as such
+          a = 'NiN'
+          z = -1
+          
+          !skip reaction that is not in our network
+          DO j = 2,143
+            READ(lun_netweak_in,*)
+          END DO
+        END IF
+        
+        !re-index data that is in the network
+        IF ( a .ne. 'NiN' ) THEN
+          x = 0
+          DO j = 1,13
+            DO k = 1,11
+              x = x+1
+              temp_sum_plus(k,j) = lsum_plus(x)
+              temp_sum_minus(k,j) = lsum_minus(x)
+              temp_nu(k,j) = nu_list(x)
+              temp_nubar(k,j) = nubar_list(x)
+            END DO
+          END DO
+          
+          x = 0
+          DO j = 1,11
+            DO k = 1,13
+              x = x+1
+              lsum_plus(x) = temp_sum_plus(j,k)
+              lsum_minus(x) = temp_sum_minus(j,k)
+              nu_list(x) = temp_nu(j,k)
+              nubar_list(x) = temp_nubar(j,k)
+            END DO
+          END DO
+
+          !write reaction data to netweak file
+          WRITE(lun_netweak_out,'(5x,2a5,28x,a3,6x,1pe12.5)') s1,s2,'ecr',q
+          WRITE(lun_netweak_out,'(9(f8.3))') (lsum_plus(j),nu_list(j), j=1,143)
+          WRITE(lun_netweak_out,'(5x,2a5,28x,a3,6x,1pe12.5)') s2,s1,'ecr',-1*q
+          WRITE(lun_netweak_out,'(9(f8.3))') (lsum_minus(j),nubar_list(j), j=1,143)
+
+        END IF  
+
+
+      END DO
+        
+    ELSE
     ! Extract rates needed by the new network
     DO
       READ(lun_netweak_in,'(14x,a5,25x,f8.4)',IOSTAT=ierr) nname_read(1), q_read(1)
@@ -217,6 +450,7 @@ MODULE ffn_module
     END DO
 
     RETURN
+    END IF
   END SUBROUTINE build_netweak
 
 END MODULE ffn_module
