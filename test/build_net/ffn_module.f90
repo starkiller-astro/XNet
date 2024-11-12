@@ -18,9 +18,6 @@ MODULE ffn_module
   INTEGER            :: lun_netweak_out
   CHARACTER(LEN=256) :: netweak_out_fname  = 'netweak'
 
-  INTEGER            :: lun_sunet_in
-  CHARACTER(LEN=256) :: sunet_fname = 'sunet.sn160'
-
   INTEGER            :: lun_element_in
   CHARACTER(LEN=256) :: element_list_fname = 'element_list.txt'
   
@@ -32,9 +29,6 @@ MODULE ffn_module
     netweak_data_dir, &
     netweak_in_fname, &
     netweak_out_fname
-
-  namelist /net_input/ &
-    sunet_fname
 
 !  namelist /partf_input/ &
 !    netwinv_in_fname
