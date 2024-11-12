@@ -23,9 +23,11 @@
   netweak_flag = .true.
   netweak_data_dir = './ffn_data'
 
-  netweak_in_fname = 'lmpffnoda.data'
+  netweak_in_fname = 'updated_rate_table.txt'
 
   netweak_out_fname = 'netweak'
+
+  element_list_fname = 'element_list.txt'
 
 /
 

@@ -27,6 +27,8 @@ MODULE partf_module
   CHARACTER(LEN=256) :: netwinv_out_fmt1   = '(a5,f12.3,2i4,f6.1,f15.8)'
   CHARACTER(LEN=256) :: netwinv_out_fmt2   = '(8es12.5)'
 
+  REAL(8)            :: mex_list(max_nwinv)
+  
   CHARACTER(LEN=256) :: mass_data_dir = './mass_data'
 
   INTEGER            :: lun_ame03
@@ -152,6 +154,7 @@ MODULE partf_module
         & nname_read,aa_read,iz_read,in_read,sp_read,mex_read
       END IF
       WRITE(lun_netwinv_out,netwinv_out_fmt2) (g_read(m),m=1,24)
+      mex_list(jnuc) = mex_read
       inuc = inuc_winv(jnuc) + 1
     END DO
       

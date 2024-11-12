@@ -63,7 +63,8 @@ MODULE file_module
     & ame11_fname, reac1_fname, ame11extrap_fname, frdm_fname, &
     & ame03_fname, ame03extrap_fname, netwinv_data_dir, mass_data_dir, partf_input
     USE ffn_module, ONLY: lun_netweak_in, lun_netweak_out, &
-    & netweak_in_fname, netweak_out_fname, netweak_flag, netweak_data_dir, ffn_input
+    & netweak_in_fname, netweak_out_fname, netweak_flag, netweak_data_dir, ffn_input, &
+    & element_list_fname, lun_element_in
     USE nnu_module, ONLY: lun_netneutr_in, lun_netneutr_out, &
     & netneutr_in_fname, netneutr_out_fname, netneutr_flag, netneutr_data_dir, nnu_input
     IMPLICIT NONE
@@ -111,6 +112,11 @@ MODULE file_module
       CALL safe_open_old( lun_netweak_in, netweak_data_dir, netweak_in_fname, ierr )
       IF ( ierr /= 0 ) netweak_flag = .false.
     END IF
+    
+    IF ( netweak_flag ) THEN
+      CALL safe_open_old( lun_element_in, netweak_data_dir, element_list_fname, ierr)
+      IF ( ierr /=0 ) netweak_flag = .false.
+    END IF
 
     IF ( netneutr_flag ) THEN
       CALL safe_open_old( lun_netneutr_in, netneutr_data_dir, netneutr_in_fname, ierr )
@@ -142,7 +148,7 @@ MODULE file_module
     USE net_module, ONLY: lun_sunet_in, lun_sunet_out, lun_netsu_in, lun_netsu_out
     USE partf_module, ONLY: lun_netwinv_in, lun_netwinv_out, lun_ame11, &
     & lun_reac1, lun_ame11extrap, lun_frdm, lun_ame03, lun_ame03extrap
-    USE ffn_module, ONLY: lun_netweak_in, lun_netweak_out, netweak_flag
+    USE ffn_module, ONLY: lun_netweak_in, lun_netweak_out, netweak_flag, lun_element_in
     USE nnu_module, ONLY: lun_netneutr_in, lun_netneutr_out, netneutr_flag
     IMPLICIT NONE
 
@@ -160,6 +166,7 @@ MODULE file_module
     CLOSE( lun_netwinv_out )
     CLOSE( lun_netweak_out )
     IF ( netweak_flag ) CLOSE( lun_netweak_in )
+    IF ( netweak_flag ) CLOSE( lun_element_in )
     IF ( netneutr_flag ) CLOSE( lun_netneutr_in )
     IF ( netneutr_flag ) CLOSE( lun_netneutr_out )
 

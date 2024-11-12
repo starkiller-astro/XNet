@@ -201,6 +201,8 @@ MODULE net_module
     nnet = inuc - 1
 !   WRITE(*,'(15a5)') (nname_net(inuc),inuc=1,nnet)
     WRITE(*,'(a,i5)') '# species: ',nnet
+    
+    !PRINT *,nname_net
 
     RETURN
   END SUBROUTINE read_sunet
