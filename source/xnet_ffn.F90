@@ -49,7 +49,7 @@ Contains
     has_logft = 0
 
     Allocate (ffnsum(nffn,ngrid),ffnenu(nffn,ngrid))
-    Allocate (qkffn(nffn,nzevolve))
+    Allocate (qkffn(0:nffn,nzevolve))
     Allocate (ffn_ec(nffn,ngrid),ffn_beta(nffn,ngrid))
     Allocate (ffn_qval(nffn))
     Allocate (phasei(nffn,nzevolve),dphaseidt9(nffn,nzevolve))
