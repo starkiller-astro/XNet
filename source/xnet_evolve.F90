@@ -254,7 +254,7 @@ Contains
 
     !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(denu) &
-    !XDIR XDELETE(enm,enb,enold,en0,delta_en,edot) &
+    !XDIR XDELETE(enm,enb,enold,en0,delta_en,edot,sqnu) &
     !XDIR XDELETE(its,mykstep,lzsolve,lzoutput)
 
     !XDIR XWAIT(tid)
