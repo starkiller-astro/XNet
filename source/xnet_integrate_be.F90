@@ -500,12 +500,10 @@ Contains
     If ( .not. allocated(testc) ) Allocate (testc(nzevolve))
     If ( .not. allocated(testc2) ) Allocate (testc2(nzevolve))
     If ( .not. allocated(testm) ) Allocate (testm(nzevolve))
-    If ( .not. allocated(testn) ) Allocate (testn(nzevolve))
     If ( .not. allocated(toln) ) Allocate (toln(nzevolve))
     testc = 0.0_dp
     testc2 = 0.0_dp
     testm = 0.0_dp
-    testn = 0.0_dp
     If ( iconvc /= 0 ) Then
       testn => testc
       toln = tolc
