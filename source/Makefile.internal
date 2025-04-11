@@ -26,11 +26,13 @@ IBM_MACHINE = \
               mira
 
 ## Get PE_ENV from LMOD if being used
-ifdef LMOD_FAMILY_COMPILER
-    PE_ENV = $(shell echo $${LMOD_FAMILY_COMPILER} | tr a-z A-Z)
-    ifeq ($(PE_ENV),GCC)
-        PE_ENV = GNU
-    endif
+ifndef PE_ENV
+  ifdef LMOD_FAMILY_COMPILER
+      PE_ENV = $(shell echo $${LMOD_FAMILY_COMPILER} | tr a-z A-Z)
+      ifeq ($(PE_ENV),GCC)
+          PE_ENV = GNU
+      endif
+  endif
 endif
 
 FC_MPI  = mpifort
@@ -245,24 +247,29 @@ else ifeq ($(PE_ENV),GNU)
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
 
-else ifeq ($(PE_ENV),CRAY)
+else ifeq ($(findstring $(PE_ENV),CCE CRAY),$(PE_ENV))
 
     INLINE_DB     = ./$(EXE)_inline
     INLINE        = -h wp -h pl=$(INLINE_DB)
 
     # generic flags
-    OPT_FLAGS     = -O2 $(INLINE)
+    OPT_FLAGS     = -O2 -G2# $(INLINE)
     DEBUG_FLAGS   = -O0 -eD
 
     ifeq ($(OPENMP_MODE),ON)
-        OPENMP    =
+        OPENMP    = -fopenmp
     else
-        OPENMP    = -h noomp
+        OPENMP    =
     endif
     ifeq ($(OPENACC_MODE),ON)
-        OPENACC   =
+        OPENACC   = -h acc
     else
         OPENACC   = -h noacc
+    endif
+    ifeq ($(OPENMP_OL_MODE),ON)
+        OPENMP_OL = -fopenmp
+    else
+        OPENMP_OL =
     endif
 
     # Fortran-specific flags
