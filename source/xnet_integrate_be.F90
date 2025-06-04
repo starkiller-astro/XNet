@@ -24,6 +24,7 @@ Module xnet_integrate_be
   Real(dp), Allocatable :: yrhs(:,:), dy(:,:), reldy(:,:)
   Real(dp), Allocatable :: t9rhs(:), dt9(:), relt9(:)
   Logical , Allocatable :: iterate(:), eval_rates(:), rebuild(:)
+  Logical , Allocatable :: write_matrix(:), write_rhs(:)
 
   Public :: solve_be, be_init
 
@@ -241,7 +242,8 @@ Contains
     Use xnet_controls, Only: iconvc, idiag, iheat, ijac, kitmx, lun_diag, tolc, tolm, tolt9, ymin, &
       & szbatch, zb_lo, zb_hi, tid
     Use xnet_integrate, Only: cross_sect, yderiv
-    Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve
+    Use xnet_jacobian, Only: jacobian_bksub, jacobian_decomp, jacobian_build, jacobian_solve, &
+      & jacobian_write_matrix, jacobian_write_rhs, jac_cond
     Use xnet_timers, Only: xnet_wtime, start_timer, stop_timer, timer_nraph
     Use xnet_types, Only: dp
     Implicit None
@@ -448,10 +450,16 @@ Contains
               If ( iheat > 0 ) Write(lun_diag,"(a3,2i5,i3,5x,2es23.15,5x,es12.4)") &
                 & 'dT9',kstep,izone,kit,dt9(izb),t9t(izb),relt9(izb)
             EndIf
-            Write(lun_diag,"(a,3i5,3es14.6)") 'NR',kstep,izone,kit,testm(izb),testc(izb),testc2(izb)
+            Write(lun_diag,"(a,3i5,4es14.6)") 'NR',kstep,izone,kit,testm(izb),testc(izb),testc2(izb),jac_cond(izb)
           EndIf
         EndDo
       EndIf
+      Do izb = zb_lo, zb_hi
+        write_matrix(izb) = ( iterate(izb) .and. izb == 1 .and. jac_cond(izb) > 5.0e10 )
+        write_rhs(izb) = write_matrix(izb)
+      EndDo
+      Call jacobian_write_matrix(mask_in = write_matrix)
+      Call jacobian_write_rhs(yrhs,t9rhs,mask_in = write_rhs)
 
       ! Check that all zones are converged
       If ( .not. any(iterate) ) Exit
@@ -542,6 +550,11 @@ Contains
     iterate = .false.
     eval_rates = .false.
     rebuild = .false.
+
+    If ( .not. allocated(write_matrix) ) Allocate (write_matrix(nzevolve))
+    If ( .not. allocated(write_rhs) ) Allocate (write_rhs(nzevolve))
+    write_matrix = .false.
+    write_rhs = .false.
 
     !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(inr,mykts,lzstep) &

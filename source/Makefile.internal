@@ -236,7 +236,7 @@ else ifeq ($(PE_ENV),GNU)
     DEBUG_FFLAGS  = -fcheck=bounds,do,mem,pointer -ffpe-trap=invalid,zero,overflow -fbacktrace \
                     -Wno-unused-dummy-argument -Wno-unused-label -Wno-maybe-uninitialized
 
-    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -Wno-compare-reals
+    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fallow-argument-mismatch -Wno-compare-reals
     F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -ffree-line-length-none
 
     # C-specific flags
@@ -438,9 +438,10 @@ endif
 
 ## MA48
 MA48           = MA48
-MA48_DIR      ?= .
+MA48_DIR      ?= ../tools/HSL
 MA48_SRC       = $(addprefix $(MA48_DIR)/, \
 		 MA48.f)
+MA48_SRC      += mmio.f
 MA48_OBJ       = $(addsuffix .o,$(basename $(MA48_SRC)))
 
 ## MA41

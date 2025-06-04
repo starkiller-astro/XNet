@@ -29,6 +29,8 @@ Module xnet_jacobian
   ! Jacobian data arrays
   Real(dp), Allocatable :: dydotdy(:,:) ! dYdot/dY part of jac
   Real(dp), Allocatable :: tvals(:,:)   ! Jacobian matrix
+  Real(dp), Allocatable :: jac(:,:,:)   ! Jacobian matrix
+  Real(dp), Allocatable :: jac_cond(:)  ! Jacobian matrix
   Real(dp), Allocatable :: sident(:)    ! Identity matrix
   Integer, Allocatable  :: ridx(:)      ! Row indices of non-zeroes
   Integer, Allocatable  :: cidx(:)      ! Column indices of non-zeroes
@@ -62,6 +64,18 @@ Module xnet_jacobian
   ! Some other solver parameters
   Logical, Parameter :: trans = .false. ! Flag for solving the transposed system
   Integer, Parameter :: kbksubmx = 3, kdecompmx = 5 ! Max loop counts
+
+  Interface
+    Subroutine mmwrite(ounit,rep,field,symm,rows,cols,nnz,indx,jndx,ival,rval,cval)
+      Integer :: ival(*)
+      Double Precision :: rval(*)
+      Complex :: cval(*)
+      Integer :: indx(*)
+      Integer :: jndx(*)
+      Integer :: ounit, rows, cols, nnz
+      Character(len=*) :: rep, field, symm
+    End Subroutine mmwrite
+  End Interface
 
 Contains
 
@@ -195,6 +209,8 @@ Contains
     Call parallel_bcast(cntl)
     Call parallel_bcast(maxerr)
 
+    Allocate (jac(msize,msize,nzevolve))
+    Allocate (jac_cond(nzevolve))
     Allocate (dydotdy(nnz,nzevolve),tvals(nnz,nzevolve))
     Allocate (jobA(nzevolve))
     Allocate (jobB(nzevolve))
@@ -214,6 +230,8 @@ Contains
     EndIf
 
     ! Initialize work arrays
+    jac = 0.0
+    jac_cond = 0.0
     vals = 0.0
     wB = 0.0
     wC = 0.0
@@ -235,6 +253,7 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: zb_lo, zb_hi, lzactive
     Use xnet_types, Only: dp
+    Use matrix_util, Only: matrix_cond
     Implicit None
 
     ! Input variables
@@ -257,6 +276,11 @@ Contains
     Do izb = zb_lo, zb_hi
       If ( mask(izb) ) Then
         tvals(:,izb) = mult(izb) * dydotdy(:,izb) + diag(izb) * sident
+        jac(:,:,izb) = 0.0_dp
+        Do i = 1, nnz
+          jac(ridx(i),cidx(i),izb) = tvals(i,izb)
+        EndDo
+        Call matrix_cond(msize,jac(:,:,izb),jac_cond(izb))
       EndIf
     EndDo
     
@@ -464,6 +488,90 @@ Contains
 
     Return
   End Subroutine jacobian_build
+
+  Subroutine jacobian_write_matrix(mask_in)
+    Use xnet_controls, Only: zb_lo, zb_hi, lzactive
+    Implicit None
+
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
+    ! Local variables
+    Integer :: ival(1)
+    Complex :: cval(1)
+    Integer :: izb
+    Integer :: lun_matrix
+    Logical, Pointer :: mask(:)
+
+    If ( present(mask_in) ) Then
+      mask(zb_lo:) => mask_in
+    Else
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+    EndIf
+    If ( .not. any(mask) ) Return
+
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(tvals(:,izb))
+        Open(newunit=lun_matrix, file="matrix.mtx")
+        Call mmwrite(lun_matrix,'coordinate','real','general',msize,msize,nnz, &
+          & ridx,cidx,ival,tvals(:,izb),cval)
+        Close(lun_matrix)
+      EndIf
+    EndDo
+
+    Return
+  End Subroutine jacobian_write_matrix
+
+  Subroutine jacobian_write_rhs(yrhs,t9rhs,mask_in)
+    !-----------------------------------------------------------------------------------------------
+    ! This routine solves the system of equations composed of the Jacobian and RHS vector.
+    !-----------------------------------------------------------------------------------------------
+    Use nuclear_data, Only: ny
+    Use xnet_controls, Only: iheat, zb_lo, zb_hi, lzactive, tid
+    Use xnet_types, Only: dp
+    Use xnet_util, Only: xnet_terminate
+    Implicit None
+
+    ! Input variables
+    Real(dp), Intent(in) :: yrhs(ny,zb_lo:zb_hi)
+    Real(dp), Intent(in) :: t9rhs(zb_lo:zb_hi)
+
+    ! Optional variables
+    Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
+
+    ! Local variables
+    Real(dp) :: rhs(msize)
+    Integer :: ival(1)
+    Complex :: cval(1)
+    Integer :: izb
+    Integer :: lun_rhs
+    Logical, Pointer :: mask(:)
+
+    If ( present(mask_in) ) Then
+      mask(zb_lo:) => mask_in
+    Else
+      mask(zb_lo:) => lzactive(zb_lo:zb_hi)
+    EndIf
+    If ( .not. any(mask) ) Return
+
+    Do izb = zb_lo, zb_hi
+      If ( mask(izb) ) Then
+        !XDIR XUPDATE XWAIT(tid) &
+        !XDIR XHOST(yrhs(:,izb),t9rhs(izb))
+        rhs(1:ny) = yrhs(:,izb)
+        If ( iheat > 0 ) rhs(ny+1) = t9rhs(izb)
+        Open(newunit=lun_rhs, file="rhs.mtx")
+        Call mmwrite(lun_rhs,'array','real','general',msize,1,msize, &
+          & ridx,cidx,ival,rhs,cval)
+        Close(lun_rhs)
+        Call xnet_terminate('Wrote matrix and RHS')
+      EndIf
+    EndDo
+
+    Return
+  End Subroutine jacobian_write_rhs
 
   Subroutine jacobian_solve(kstep,yrhs,dy,t9rhs,dt9,mask_in)
     !-----------------------------------------------------------------------------------------------
