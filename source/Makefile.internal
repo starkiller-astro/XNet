@@ -236,8 +236,8 @@ else ifeq ($(PE_ENV),GNU)
     DEBUG_FFLAGS  = -fcheck=bounds,do,mem,pointer -ffpe-trap=invalid,zero,overflow -fbacktrace \
                     -Wno-unused-dummy-argument -Wno-unused-label -Wno-maybe-uninitialized
 
-    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-compare-reals
-    F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -ffree-line-length-none
+    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -Wno-compare-reals
+    F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -ffree-line-length-none
 
     # C-specific flags
     OPT_CFLAGS    =
