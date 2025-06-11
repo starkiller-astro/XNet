@@ -1331,7 +1331,7 @@ Contains
     Implicit None
 
     ! Output variables
-    Real(dp), Intent(out) :: hnse(ny)
+    Real(dp), Intent(out) :: hnse(izmax)
 
     ! Local variables
     Integer, Parameter :: iz1 = 1
