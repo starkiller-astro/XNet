@@ -1,7 +1,7 @@
 MODULE ffn_module
   IMPLICIT NONE
 
-  INTEGER, PARAMETER :: max_nffn = 1600
+  INTEGER, PARAMETER :: max_nffn = 9999
   INTEGER            :: nffn
   LOGICAL            :: netweak_flag = .true.
 
@@ -208,7 +208,7 @@ MODULE ffn_module
       DO i = 1, num_reac
         !read first line from each block of data
         READ(lun_netweak_in,'(1x,a3,1x,i3)', advance = 'no') a, z
-        READ(lun_netweak_in, '(33x,f8.3,1x,f8.3,2x,f8.3,2x,f8.3,1x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
+        READ(lun_netweak_in, '(33x,f8.3,1x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
                                           beta_minus, leps_plus, nubar
         a = trim(adjustl(a))
                 
@@ -265,7 +265,7 @@ MODULE ffn_module
           END IF
                         
           DO j = 2,143
-            READ(lun_netweak_in, '(41x, f8.3,1x,f8.3,2x,f8.3,2x,f8.3,1x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
+            READ(lun_netweak_in, '(41x, f8.3,1x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
                     beta_minus, leps_plus, nubar
             
             lsum_plus(j) = log10(10.d0**beta_plus + 10.d0**leps_minus)
