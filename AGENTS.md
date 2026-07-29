@@ -1,14 +1,6 @@
 # CLAUDE.md - XNet
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-> **How to read this file:** Sections marked **[CURRENT STATE]** describe the codebase as it actually exists today.
-> Sections marked **[TARGET STATE]** describe where we are going.
-> Sections marked **[MIGRATION POLICY]** tell you how to behave at the boundary.
-> Never confuse current state with target state.
-> When in doubt, read the code and ask.
-
----
+This file provides guidance to Codex and other coding-agent workflows in this repository.
 
 ## Project Overview
 
@@ -30,11 +22,7 @@ Astrophysical reactive flow problems: core-collapse supernovae, thermonuclear su
 From laptops to leadership-class HPC (Frontier, Aurora, Perlmutter); varying hardware architectures supported via CUDA/ROCm/oneMKL numerical libraries and OpenMP/OpenACC compiler directives.
 
 **Primary language(s):**
-
-* **[CURRENT STATE]:** Fortran 2003 (source code), GNU Make (build system), Python (analysis/plotting), bash (testing)
-* **[TARGET STATE]:** Fortran 2018 (source code), CMake + GNU Make (build system), Python (analysis/plotting/testing)
-
----
+Fortran 2003 (source code), GNU Make (build system), Python (analysis/plotting), bash (testing)
 
 ## Physics Domain Primer
 
@@ -115,9 +103,7 @@ enough that the composition reaches thermodynamic equilibrium (NSE). In NSE:
 See `doc/references.md` for the full reference list including community codes
 and all references cited in source-code comments.
 
----
-
-## Build System [CURRENT STATE]
+## Build System
 
 All builds run from `source/`.
 The `XNET_DIR` environment variable should point to the repo root.
@@ -160,11 +146,12 @@ make clean
 
 - `VPATH` used heavily to locate source files.
 
----
+- This build system is quite dated and flawed and needs to be modernized (either with improved GNU Make framework or CMake)
 
-## Testing [CURRENT STATE]
+## Testing
 
-The existing test infrastructure is **effectively broken and will be replaced**.
+The existing test infrastructure is **effectively broken and needs modernization/replacement**.
+Many of the individual tests are scientifically valid, but the test mechanism itself is flawed.
 
 ```bash
 # From source/, these commands exist but have known issues:
@@ -189,7 +176,7 @@ make test                       # Runs test_serial, test_heat, test_setup, test_
 - No unit tests exist.
 
 Do not invest time fixing `test_xnet.sh` or `makefile_tests.yml`. Build new
-test infrastructure from scratch (see Testing [TARGET STATE]).
+test infrastructure from scratch.
 
 ### Criteria for Retiring/Replacing Existing Tests
 
@@ -199,27 +186,9 @@ When replacing an existing regression test:
    improved regression test) before removing the old test
 3. Document the retirement in the PR description
 
----
+### Proposed New Test Ideas
 
-## Testing [TARGET STATE]
-
-### Unit Testing Framework
-
-XNet uses **test-drive** (fortran-lang/test-drive), a lightweight procedural
-Fortran testing framework, pulled in as a git submodule. It is a single
-Fortran source file with no external dependencies.
-
-Key properties:
-- Pure Fortran, no preprocessor — tests are standard `.F90` files
-- `check()` assertions for logical, integer, real, complex, and string comparisons
-- Real comparisons support absolute and relative tolerances
-- Test discovery via `collect` subroutines; individual tests selectable by name
-- Works with Make (no CMake required)
-- Each test suite compiles to a standalone executable that exits nonzero on failure
-
-### Test Tiers
-
-Tests are organized into three tiers:
+Tests organized into three tiers:
 
 #### Tier 1: Unit Tests (seconds, run on every push)
 
@@ -267,7 +236,7 @@ Representative problems (not exhaustive):
 - X-ray burst (CNO network) — exercises proton-rich burning
 - Network setup round-trip — verifies preprocessing
 
-### Tolerance Strategy
+### Proposed Tolerance Strategy
 
 Tests do NOT require bitwise reproducibility. Tolerances depend on the quantity:
 
@@ -287,9 +256,7 @@ For **monitoring changes over time** (performance, timestep count):
 - Alert (not fail) if value changes by > 10%
 - Fail if value changes by > 50%
 
----
-
-## Code Architecture [CURRENT STATE]
+## Code Architecture
 
 ### Directory Structure
 
@@ -392,7 +359,7 @@ XNet/
   ├── .github/workflows/               # CI configuration
   │   └── makefile_tests.yml           # GitHub Actions: test_simple, test_setup, test_nse
   │
-  ├── CLAUDE.md                        # Claude Code guidance
+  ├── AGENTS.md                        # LLM coding agent guidance
   └── README.md                        # Project overview (minimal)
 ```
 
@@ -415,217 +382,3 @@ full_net loop iteration:
   solve_be/bdf() → Newton-Raphson loop:
                      yderiv() → jacobian_build() → jacobian_solve() → update yt
 ```
-
----
-
-## Fortran Coding Conventions [CURRENT STATE]
-
-* See `doc/XNet_Formatting_Guidelines.md` for full details (somewhat dated). Key rules:
-
-	- **Case**: lowercase except capitalized language keywords (`Call`, `Subroutine`, `EndDo`, `EndIf`, `Implicit None`)
-	- **Indentation**: 2 spaces, no tabs, max 132 chars/line
-	- **Line continuation**: `&` at both ends (`& var` on continuation line)
-	- **Modules**: always `Use module, Only: needed_items`
-	- **Arguments**: always declare `Intent(In/Out/InOut)`
-	- **All routines**: include `Implicit None` even inside modules
-	- **End routines with**: explicit `Return`
-	- **Deallocate**: explicitly deallocate local allocatable variables
-	- **No magic numbers**: use named `Parameter` constants
-	- **Comparison operators**: use `>`, `<` not `.gt.`, `.lt.`
-	- **Avoid**: post-Fortran2008 features, `While` loops
-	- **Use**: `iso_fortran_env` variables (`output_unit` not unit 6)
-	- **Use `Integer`** instead of `Logical` for execution flags
-
----
-
-## Fortran Coding Conventions [TARGET STATE]
-
-Extends [CURRENT STATE] conventions with modernization rules for new code:
-
-- **Fortran 2008 is the floor**: new code may use any F2008 feature.
-  F2018 features require explicit approval.
-- **`error stop`**: prefer `error stop 'message'` over `stop` for abnormal
-  termination. Use `stop 0` only for normal exit from a program unit.
-- **No `block` constructs**: do not use `block`/`end block`.
-- **`Integer` for flags**: retain existing convention (Integer, not Logical,
-  for on/off execution flags).
-- **Submodules**: consider for modules exceeding ~500 lines with multiple
-  independent implementation sections, to reduce recompilation cascades.
-- **`associate`**: use for long derived-type chains to improve readability,
-  but do not use as a general-purpose rename mechanism.
-- **`intent` on all arguments**: no exceptions, even for single-line wrappers.
-- **Allocatable over pointer**: prefer `allocatable` arrays over `pointer`
-  arrays unless pointer semantics (aliasing, target) are genuinely needed.
-- **`iso_fortran_env`**: use `int32`, `int64`, `real64` etc. from
-  `iso_fortran_env` in new code. Existing `dp`, `sp`, `i4` aliases in
-  `xnet_types` remain authoritative within XNet source.
-
----
-
-## Known Technical Debt (do not propagate, do not silently fix)
-
-These are **known deficiencies**. Do not silently fix them unless the task
-explicitly targets that debt. Do not propagate these patterns in new code.
-
-### Code Structure
-- Global state is extensively used via module-level allocatable arrays indexed
-  by zone. Thread safety relies on zone-batch slicing, not encapsulation.
-- ~3000 lines duplicated across 4 Jacobian variants (`xnet_jacobian_*.F90`).
-  The `jacobian_build()` physics is nearly identical; only storage format and
-  solver API calls differ.
-- `xnet_data.F90` contains two modules (`nuclear_data`, `reaction_data`) in
-  one file.
-- Many subroutines are large (500+ lines) with side effects on module globals.
-
-### I/O and Configuration
-- Runtime parameters are read via fixed-format ASCII `control` files (not namelist).
-- `xnet_output.F90` writes fixed-format `net_diag` files; format changes
-  break all legacy regression tests.
-
-### Build System
-- `make clean` does not remove executables (xnetd, xnetm, xnetp, xnse, net_setup).
-- `xnet_integrate_bd.F90` has Makefile dependency lines but is never compiled.
-
-### Testing and CI
-- The existing CI and test infrastructure (`test_xnet.sh`, `makefile_tests.yml`)
-  is effectively non-functional and will be replaced entirely. See
-  Testing [CURRENT STATE] for details.
-- `safe_exp()` is used only in `xnet_nse.F90`; other modules use bare `exp()`.
-
-### Numerics
-- Hardcoded constants without explanation in several modules (e.g., `1e-42`
-  in `xnet_nnu.F90`).
-
----
-
-## Documentation Standards [TARGET STATE]
-
-- Every module: header comment stating purpose and key references.
-- Every public subroutine/function: brief description, intent of each argument,
-  and (where applicable) the equation or algorithm being implemented with a
-  literature citation.
-- Physics routines should cite the relevant paper and equation number.
-  Example:
-  ```fortran
-  ! Coulomb screening correction using the Graboske et al. (1973) prescription.
-  ! See Eq. 4 of Hix & Thielemann (1999), ApJ 511, 862.
-  ```
-- Do NOT add boilerplate comments that restate what the code obviously does.
-- When modifying a routine, bring its documentation up to this standard.
-  Do not make documentation-only PRs for code you are not otherwise changing.
-- **FORD** (FORtran Documenter) is the target for generated HTML documentation.
-  FORD-compatible comment markup (`!>`, `!!`) should be used in new code and
-  added to existing code when it is touched for other reasons.
-
----
-
-## CI / GitHub Actions [TARGET STATE]
-
-### Pipeline Structure
-
-CI uses GitHub Actions with three tiers matching the test tiers:
-
-| Tier | Trigger | Time budget | What runs |
-|------|---------|-------------|-----------|
-| **Fast** | Every push | < 2 min | Build (debug) + all Tier 1 unit tests |
-| **Standard** | Every PR | < 10 min | Fast + Tier 2 physics tests + selected Tier 3 smoke tests |
-| **Full** | Merge to main, weekly | < 30 min | Standard + full Tier 3 regression suite |
-
-### Compiler Matrix
-
-Starting with GFortran (latest) on ubuntu-latest. Will expand to include
-Intel ifx (via oneAPI) and additional compilers/architectures over time.
-
-### Requirements
-
-- All test executables must exit nonzero on failure.
-- CI must fail if any test fails — no silent warnings.
-- Test output (diffs, logs) must be uploaded as GitHub Actions artifacts on failure.
-- Performance baselines (timestep counts, wall time) tracked as artifacts
-  for trend monitoring (alert, not fail).
-
----
-
-## Code Architecture [TARGET STATE]
-
-See `doc/target_architecture.md` for the full target directory tree.
-
----
-
-## Modernization Roadmap [TARGET STATE]
-
-See `doc/modernization_roadmap.md` for the phased checklist.
-
----
-
-## Migration Policy [MIGRATION POLICY]
-
-These rules govern how to behave when current state and target state conflict.
-They apply to both human developers and Claude Code.
-
-### General Rules
-
-- **Do not move files speculatively.** File moves (`source/` → `src/physics/`) happen only
-  as part of an explicit, planned migration step — never as a side effect of a bug fix
-  or feature addition.
-- **Current build system is authoritative.** Until the CMake migration is complete,
-  `source/Makefile` is the source of truth. Do not add `CMakeLists.txt` files that
-  contradict or duplicate it.
-- **One structural change per commit.** A commit either moves/renames files OR changes
-  logic, never both. This keeps git blame useful and reverts safe.
-
-### File Moves and Renames
-
-- When moving a file (e.g., `xnet_ffn.F90` → `src/physics/xnet_ffn.F90`), update:
-  1. Makefile `VPATH` or explicit paths
-  2. Any `Include` / `#include` directives referencing the old path
-  3. `CLAUDE.md` directory structure (both `[CURRENT STATE]` and any file lists)
-- Do NOT rename Fortran module names during a file move. Module renames are a
-  separate step.
-
-### Refactoring Boundaries
-
-- **Jacobian deduplication**: Extract shared `jacobian_build()` physics into a common
-  module (`xnet_jacobian_common.F90`) that each solver variant calls. Each variant
-  retains only its storage-format-specific code and solver API calls. A later
-  modernization step may introduce an abstract type with deferred procedures, but the
-  common-module approach comes first.
-
-- **EOS interface**: Keep compile-time selection (as today). The 3 EOS variants
-  (starkiller, helm, bahcall) remain as separate modules with a common implicit
-  interface. No abstract type unification is planned.
-
-- **xnet_data.F90 split**: Leave as-is for now. The two modules (`nuclear_data`,
-  `reaction_data`) stay in one file until a larger data-layer refactor is undertaken.
-
-- **Global state reduction**: The long-term target is a state-object pattern — one or
-  more derived types passed through the call chain instead of module-global allocatable
-  arrays. This improves thread safety and testability. However, this is a large change
-  that touches every routine signature, so it is **deferred until better infrastructure
-  and test coverage are in place**. Approach will be incremental (module by module,
-  starting from the leaves). New code should prefer explicit state passing where
-  practical, but do not refactor existing global state without explicit instruction.
-
-- **xnet_integrate_bd.F90**: This is a reference/template kept for historical purposes.
-  It should be moved to an `archive/` or `deprecated/` directory to separate it from
-  actively compiled source. Remove its dependency lines from the Makefile when moved.
-
-### What Claude Code Should Do Autonomously
-
-- Fix formatting violations (indentation, case, line length) in any file it touches
-  for other reasons. Do not make formatting-only PRs.
-- Update Makefile dependency lines when adding/removing `Use` statements.
-- Add `Implicit None` to any routine found without it.
-- Replace magic numbers with named parameters when the meaning is clear from context.
-- Use `safe_exp()` instead of bare `exp()` where the argument could overflow.
-
-### What Claude Code Should NOT Do Without Explicit Instruction
-
-- Move or rename source files
-- Change module names or public API signatures
-- Add new module-global mutable state
-- Modify the Makefile build targets or link rules
-- Delete any file, even apparently dead code
-- Change numerical algorithms or convergence criteria
-- Introduce Fortran 2018 features (stick to F2008 unless told otherwise)
-
