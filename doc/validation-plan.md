@@ -51,6 +51,7 @@ of correctness.
 | Test-drive pass/fail propagation | Runner self-test | characterized | Expected process status; nested Make target observes failure | GNU Fortran, serial | `serial-unit-tests` | Runner behavior only |
 | `dp`, `sp`, `i4`, and `i8` kind/storage contracts | Unit | characterized | `iso_fortran_env` and `storage_size` | GNU Fortran, serial | `serial-unit-tests` | Exact kind/storage bug-fix characterization only |
 | `real(dp)` evaluation of representative numerical and physical constants | Unit | characterized | Fortran kind semantics and the existing `third`, `ln_2`, and `clt` expressions and values | GNU Fortran, serial, ordinary default real kind; isolated `xnet_types` and `xnet_constants` compile | `serial-unit-tests` | Portability and implementation-correctness characterization only; not a scientific validation or update of physical values. |
+| `fd0h` order-zero identity at `eta = [-4, -1, 0, 1, 4]` | Unit analytic validation | validated | [Fukushima (2015)](https://doi.org/10.1016/j.amc.2015.03.009), equation 17; section 3.7 limits use of the direct identity, and Table 27 reports order-zero errors in `2^-53` units. The test uses `32 * EPSILON(1.0_dp)`, with Fortran `EPSILON` equal to `2^-52` in the recorded binary64 configuration, to also cover rounding in the independently evaluated intrinsic reference. | GNU Fortran, serial, normal dependency-light unit configuration | `serial-unit-tests` | Limited to these five moderate inputs; not a full approximation error envelope, FFN/EOS/network validation, compiler/project support claim, or scientific baseline. |
 | Scalar/vector `safe_exp()` ordinary and clamped behavior | Unit | characterized | Intrinsic `exp`, clamp parameters, IEEE finite check, epsilon-scaled comparisons | GNU Fortran, serial | `serial-unit-tests` | Dependency-light routine behavior only |
 | Double-precision blank/tab numeric token parsing | Unit | characterized | Literal values after `replace_tabs()` and zero with `pos = 0` for exhausted input | GNU Fortran, serial | `serial-unit-tests` | Input-token behavior only |
 | ASCII case folding before abundance-name lookup | Characterization | characterized | Exact `Fe56` to `fe56` result from `string_lc()` | GNU Fortran, serial | `serial-unit-tests` | ASCII example only; not a locale, Unicode, file, or lookup-path claim |
@@ -59,8 +60,10 @@ of correctness.
 | Legacy problem execution paths | Smoke/characterization | available | Inputs and scripts in `test/`; no tracked trusted results for exercised cases | Multiple historical configurations | Not a required gate | Historical use reported |
 | Legacy numerical comparisons | Regression | available | Mismatches do not propagate failure; reference provenance unavailable | Historical | Not a required gate | Not trusted as a scientific gate |
 
-These rows characterize only the exact configurations exercised by recorded
-local or CI runs. They are not scientific validation or support commitments.
+Except for the `fd0h` row, these rows characterize only the exact configurations
+exercised by recorded local or CI runs. The `fd0h` row validates only the stated
+analytic identity at its five moderate inputs. No row is a broad/full-domain/
+network scientific validation or support commitment.
 
 ## Commands
 

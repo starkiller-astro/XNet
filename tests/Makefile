@@ -23,6 +23,7 @@ COMPILE_FLAGS := $(F90FLAGS) -J$(MOD_DIR) -I$(MOD_DIR) -I$(SOURCE_DIR)
 
 PRODUCTION_OBJECTS := \
 	$(BUILD_DIR)/xnet_types.o \
+	$(BUILD_DIR)/xnet_fd.o \
 	$(BUILD_DIR)/xnet_parallel_stubs.o \
 	$(BUILD_DIR)/xnet_constants.o \
 	$(BUILD_DIR)/xnet_util.o
@@ -30,6 +31,7 @@ PRODUCTION_OBJECTS := \
 TESTDRIVE_OBJECT := $(BUILD_DIR)/testdrive.o
 UNIT_OBJECTS := \
 	$(BUILD_DIR)/test_types.o \
+	$(BUILD_DIR)/test_fd0h.o \
 	$(BUILD_DIR)/test_safe_exp.o \
 	$(BUILD_DIR)/test_input_parsing.o \
 	$(BUILD_DIR)/test_name_ordered.o \
@@ -100,6 +102,10 @@ $(BUILD_DIR)/testdrive.o: $(VENDOR_DIR)/src/testdrive.F90 | $(BUILD_DIR) $(MOD_D
 $(BUILD_DIR)/xnet_types.o: $(SOURCE_DIR)/xnet_types.F90 | $(BUILD_DIR) $(MOD_DIR)
 	$(FC) $(COMPILE_FLAGS) -c $< -o $@
 
+$(BUILD_DIR)/xnet_fd.o: $(SOURCE_DIR)/xnet_fd.F90 \
+		$(BUILD_DIR)/xnet_types.o | $(BUILD_DIR) $(MOD_DIR)
+	$(FC) $(COMPILE_FLAGS) -c $< -o $@
+
 $(BUILD_DIR)/xnet_parallel_stubs.o: $(SOURCE_DIR)/xnet_parallel_stubs.F90 \
 		$(BUILD_DIR)/xnet_types.o | $(BUILD_DIR) $(MOD_DIR)
 	$(FC) $(COMPILE_FLAGS) -c $< -o $@
@@ -118,6 +124,11 @@ $(BUILD_DIR)/test_types.o: unit/test_types.F90 \
 		$(TESTDRIVE_OBJECT) $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR) $(MOD_DIR)
 	$(FC) $(COMPILE_FLAGS) -c $< -o $@
 
+$(BUILD_DIR)/test_fd0h.o: unit/test_fd0h.F90 \
+		$(TESTDRIVE_OBJECT) $(BUILD_DIR)/xnet_types.o \
+		$(BUILD_DIR)/xnet_fd.o | $(BUILD_DIR) $(MOD_DIR)
+	$(FC) $(COMPILE_FLAGS) -c $< -o $@
+
 $(BUILD_DIR)/test_safe_exp.o: unit/test_safe_exp.F90 \
 		$(TESTDRIVE_OBJECT) $(BUILD_DIR)/xnet_util.o | $(BUILD_DIR) $(MOD_DIR)
 	$(FC) $(COMPILE_FLAGS) -c $< -o $@
@@ -132,7 +143,7 @@ $(BUILD_DIR)/test_name_ordered.o: unit/test_name_ordered.F90 \
 	$(FC) $(COMPILE_FLAGS) -c $< -o $@
 
 $(BUILD_DIR)/unit_test_main.o: unit/main.F90 \
-		$(TESTDRIVE_OBJECT) $(BUILD_DIR)/test_types.o \
+		$(TESTDRIVE_OBJECT) $(BUILD_DIR)/test_types.o $(BUILD_DIR)/test_fd0h.o \
 		$(BUILD_DIR)/test_safe_exp.o $(BUILD_DIR)/test_input_parsing.o \
 		$(BUILD_DIR)/test_name_ordered.o | $(BUILD_DIR) $(MOD_DIR)
 	$(FC) $(COMPILE_FLAGS) -c $< -o $@
