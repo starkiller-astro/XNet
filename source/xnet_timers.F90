@@ -79,6 +79,7 @@ Contains
     timer_scrn  = 0.0
     timer_prescrn = 0.0
     timer_eos   = 0.0
+    timer_output = 0.0_dp
     timer_nse    = 0.0
     timer_nseinit= 0.0
     timer_nsesolv= 0.0
