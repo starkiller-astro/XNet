@@ -36,15 +36,6 @@ configuration.
 | Utilities | `net_setup`, `nse_slice` | Network preprocessing and the `xnse` program |
 | Portability | `xnet_parallel*`, `xnet_gpu`, `xnet_macros.fh`, vendor binding modules | Serial/MPI selection and accelerator interfaces |
 
-## Per-timestep flow
-
-`full_net()` in `xnet_evolve.F90` coordinates timestep selection and rate
-updates. `cross_sect()` updates EOS-dependent quantities, screening, partition
-functions, and weak/neutrino rates before producing `csect1` through
-`csect4`. `yderiv()` forms abundance derivatives. The selected BE or BDF
-integrator performs Newton iterations using the selected Jacobian and linear
-solver.
-
 ## Build-time selection
 
 `source/Makefile.opt` exposes compiler environment, compile mode, EOS, matrix

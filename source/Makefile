@@ -91,10 +91,10 @@ test: test_serial test_heat test_setup test_nse
 .PHONY: clean test_unit test_unit_selfcheck
 
 test_unit:
-	$(MAKE) -C ../tests test FC="$(FC)"
+	$(MAKE) -C ../tests test
 
 test_unit_selfcheck:
-	$(MAKE) -C ../tests selfcheck FC="$(FC)"
+	$(MAKE) -C ../tests selfcheck
 
 test_serial: $(EXE)
 	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 12 53 54 55
