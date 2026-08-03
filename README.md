@@ -22,5 +22,36 @@ Supernovae and Nucleosynthesis: An Investigation of the History of Matter, from 
 
 Someday, we'll make a list of publications using XNet, but that will wait...
 
+## Characterized GNU serial build
+
+The repository records a build-smoke configuration using GNU Fortran in debug
+mode with serial execution, the dense solver, vendored NETLIB, and the
+STARKILLER EOS. Run it from the repository root:
+
+```bash
+make -C source clean
+make -C source -j2 \
+  CMODE=DEBUG PE_ENV=GNU \
+  MPI_MODE=OFF OPENMP_MODE=OFF GPU_MODE=OFF \
+  MATRIX_SOLVER=dense LAPACK_VER=NETLIB EOS=STARKILLER \
+  xnet net_setup xnse
+```
+
+The production build is in-source, so clean before changing configuration.
+A successful build is compilation and link evidence for this exact
+configuration; it is not scientific validation or a support claim.
+
+## Dependency-light unit tests
+
+The isolated GNU serial unit-test targets are:
+
+```bash
+make -C source test_unit
+make -C source test_unit_selfcheck
+```
+
+The self-check deliberately exercises a failing fixture and verifies that the
+failure propagates through Make. See [the current architecture](doc/architecture.md)
+and [the validation plan](doc/validation-plan.md) for scope and limitations.
 
 

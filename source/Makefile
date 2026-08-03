@@ -88,6 +88,14 @@ all: xnet_dense net_setup xnse
 
 test: test_serial test_heat test_setup test_nse
 
+.PHONY: clean test_unit test_unit_selfcheck
+
+test_unit:
+	$(MAKE) -C ../tests test FC="$(FC)"
+
+test_unit_selfcheck:
+	$(MAKE) -C ../tests selfcheck FC="$(FC)"
+
 test_serial: $(EXE)
 	@cd $(XNET_TEST_DIR) ; ln -sf ../tools/starkiller-helmholtz/helm_table.dat . ; ./test_xnet.sh ../source/xnet 12 53 54 55
 
@@ -199,6 +207,8 @@ $(SOLVER_OBJ_F): %.o: %.F
 
 clean:
 	rm -f core *.o *.oo *.mod *.lst *.cub *.ptx *.i *.T *.diag xref.db
+	rm -f xnet xnetd xnetd_mpi xnetm xnetm_mpi xnetp xnetp_mpi \
+	      net_setup xinab xnse xnse_mpi xnet_gpu xnet_gpu_mpi
 	rm -rf $(INLINE_DB) *.dSYM
 tar:
 	tar cvf net.tar ReadMe Changes Makefile *.f control th_const
@@ -226,7 +236,7 @@ xnet_integrate_be.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_da
 xnet_linalg.o: xnet_constants.o xnet_controls.o xnet_gpu.o xnet_types.o $(LAPACK_OBJ) $(GPU_OBJ)
 xnet_nnu.o: xnet_conditions.o xnet_controls.o xnet_types.o xnet_util.o
 xnet_nse.o: xnet_constants.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o xnet_util.o $(EOS_OBJ) $(LAPACK_OBJ)
-xnet_output.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_flux.o xnet_match.o xnet_parallel.o xnet_timers.o xnet_types.o
+xnet_output.o: xnet_abundances.o xnet_conditions.o xnet_controls.o xnet_data.o xnet_flux.o xnet_match.o $(MPI_OBJ) xnet_timers.o xnet_types.o
 xnet_preprocess.o: xnet_constants.o xnet_data.o xnet_types.o xnet_util.o $(MPI_OBJ)
 xnet_screening.o: xnet_abundances.o xnet_conditions.o xnet_constants.o xnet_controls.o xnet_data.o xnet_timers.o xnet_types.o $(EOS_OBJ)
 xnet_timers.o: xnet_types.o

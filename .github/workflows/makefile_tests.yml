@@ -1,27 +1,69 @@
-name: Makefile tests
+name: Baseline build and unit tests
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [main]
   pull_request:
-    branches: [ "master" ]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
+  serial-build-smoke:
+    name: serial-build-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
-    - name: Checkout XNet
-      uses: actions/checkout@v3
+      - name: Check out XNet
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-    - name: Setup environment
-      run: |
-        echo "XNET_DIR=${GITHUB_WORKSPACE}" >> ${GITHUB_ENV}
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          gfortran --version
+          make --version
 
-    - name: Build
-      run: |
-        cd ${XNET_DIR}/source
-        make CMODE=DEBUG test_simple
-        make CMODE=DEBUG test_setup
-        make CMODE=DEBUG test_nse
+      - name: Build GNU serial debug baseline
+        run: |
+          set -euo pipefail
+          make -C source clean
+          make -C source -j2 \
+            CMODE=DEBUG PE_ENV=GNU \
+            MPI_MODE=OFF OPENMP_MODE=OFF GPU_MODE=OFF \
+            MATRIX_SOLVER=dense LAPACK_VER=NETLIB EOS=STARKILLER \
+            xnet net_setup xnse
+          test -x source/xnet
+          test -x source/net_setup
+          test -x source/xnse
+
+  serial-unit-tests:
+    name: serial-unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out XNet
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          gfortran --version
+          make --version
+
+      - name: Run isolated public unit-test targets concurrently
+        run: |
+          set -euo pipefail
+          make -C source -j2 test_unit test_unit_selfcheck

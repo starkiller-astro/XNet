@@ -56,3 +56,6 @@ test/th*
 
 # runtime controls
 control*
+
+# isolated unit-test build
+/tests/build/
