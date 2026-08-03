@@ -1,6 +1,7 @@
 Program unit_test_main
   Use, Intrinsic :: iso_fortran_env, Only: error_unit
   Use testdrive, Only: new_testsuite, run_testsuite, testsuite_type
+  Use test_fd0h, Only: collect_fd0h
   Use test_input_parsing, Only: collect_input_parsing
   Use test_name_ordered, Only: collect_name_ordered
   Use test_safe_exp, Only: collect_safe_exp
@@ -12,6 +13,7 @@ Program unit_test_main
 
   suites = [ &
     new_testsuite("types", collect_types), &
+    new_testsuite("fd0h", collect_fd0h), &
     new_testsuite("safe_exp", collect_safe_exp), &
     new_testsuite("input parsing", collect_input_parsing), &
     new_testsuite("generated filename suffixes", collect_name_ordered) &
