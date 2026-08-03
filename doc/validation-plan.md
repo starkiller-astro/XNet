@@ -50,6 +50,7 @@ of correctness.
 | --- | --- | --- | --- | --- | --- | --- |
 | Test-drive pass/fail propagation | Runner self-test | characterized | Expected process status; nested Make target observes failure | GNU Fortran, serial | `serial-unit-tests` | Runner behavior only |
 | `dp`, `sp`, `i4`, and `i8` kind/storage contracts | Unit | characterized | `iso_fortran_env` and `storage_size` | GNU Fortran, serial | `serial-unit-tests` | Exact kind/storage bug-fix characterization only |
+| `real(dp)` evaluation of representative numerical and physical constants | Unit | characterized | Fortran kind semantics and the existing `third`, `ln_2`, and `clt` expressions and values | GNU Fortran, serial, ordinary default real kind; isolated `xnet_types` and `xnet_constants` compile | `serial-unit-tests` | Portability and implementation-correctness characterization only; not a scientific validation or update of physical values. |
 | Scalar/vector `safe_exp()` ordinary and clamped behavior | Unit | characterized | Intrinsic `exp`, clamp parameters, IEEE finite check, epsilon-scaled comparisons | GNU Fortran, serial | `serial-unit-tests` | Dependency-light routine behavior only |
 | Double-precision blank/tab numeric token parsing | Unit | characterized | Literal values after `replace_tabs()` and zero with `pos = 0` for exhausted input | GNU Fortran, serial | `serial-unit-tests` | Input-token behavior only |
 | ASCII case folding before abundance-name lookup | Characterization | characterized | Exact `Fe56` to `fe56` result from `string_lc()` | GNU Fortran, serial | `serial-unit-tests` | ASCII example only; not a locale, Unicode, file, or lookup-path claim |
@@ -79,9 +80,17 @@ Run the isolated unit and runner self-check targets with:
 ```bash
 make -C source test_unit
 make -C source test_unit_selfcheck
+make -C tests strict_kind
 ```
 
 Each unit command begins from a clean dedicated directory under
 `tests/build/`, so the targets can run concurrently without sharing compiler
-artifacts. The self-check deliberately runs a failing fixture through a nested
-Make target and succeeds only when that target returns nonzero.
+artifacts. `test_unit` runs both the promoted-default-real normal suite and the
+isolated strict-kind constants check. The direct `strict_kind` command compiles
+only vendored test-drive, `xnet_types.F90`, `xnet_constants.F90`, and the test
+program with `-g -Og -cpp -fimplicit-none -fallow-argument-mismatch
+-ffree-line-length-none`; it deliberately omits `-fdefault-real-8` and
+`-fdefault-double-8`.
+
+The self-check deliberately runs a failing fixture through a nested Make target
+and succeeds only when that target returns nonzero.
