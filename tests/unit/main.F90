@@ -5,6 +5,7 @@ Program unit_test_main
   Use test_input_parsing, Only: collect_input_parsing
   Use test_name_ordered, Only: collect_name_ordered
   Use test_safe_exp, Only: collect_safe_exp
+  Use test_timers, Only: collect_timers
   Use test_types, Only: collect_types
   Implicit None
 
@@ -13,6 +14,7 @@ Program unit_test_main
 
   suites = [ &
     new_testsuite("types", collect_types), &
+    new_testsuite("timers", collect_timers), &
     new_testsuite("fd0h", collect_fd0h), &
     new_testsuite("safe_exp", collect_safe_exp), &
     new_testsuite("input parsing", collect_input_parsing), &
