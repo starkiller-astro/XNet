@@ -1,2 +1,4 @@
-# Preserve the verified upstream bytes in the vendored test-drive source.
-tests/vendor/test-drive-v0.6.1/** whitespace=-blank-at-eol,-blank-at-eof
+# Preserve the verified upstream bytes in the vendored test-drive files.
+tests/vendor/test-drive-v0.6.1/LICENSE-Apache -text
+tests/vendor/test-drive-v0.6.1/LICENSE-MIT -text
+tests/vendor/test-drive-v0.6.1/src/testdrive.F90 -text whitespace=-blank-at-eol,-blank-at-eof
