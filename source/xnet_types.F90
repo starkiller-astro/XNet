@@ -10,7 +10,7 @@ Module xnet_types
   !-------------------------------------------------------------------------------------------------
   Use, Intrinsic :: iso_fortran_env, Only: int32, int64, real32, real64, real128
   Implicit None
-  Integer, Parameter :: i4 = int64   ! 32-bit integer
+  Integer, Parameter :: i4 = int32   ! 32-bit integer
   Integer, Parameter :: i8 = int64   ! 64-bit integer
   Integer, Parameter :: sp = real32  ! Single precision
   Integer, Parameter :: dp = real64  ! Double precision
