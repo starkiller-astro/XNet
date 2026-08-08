@@ -8,8 +8,10 @@ import pytest
 
 from parallel_zones import (
     ALPHA_SPECIES,
+    AsciiEndpoint,
     EXPECTED_ZONES,
     QualificationFailure,
+    compare_ascii_endpoints,
     compare_endpoint_states,
     normalize_worker_states,
     run_process,
@@ -75,7 +77,7 @@ def test_inventory_rejects_missing_or_off_by_one_zone(tmp_path: Path, kind: str)
     else:
         (tmp_path / "ev_parallel_zones_11").write_text("ev\n", encoding="utf-8")
     with pytest.raises(QualificationFailure, match="output inventory mismatch"):
-        validate_output_inventory(tmp_path, 1)
+        validate_output_inventory(tmp_path)
 
 
 def test_ascii_filename_association_rejects_swapped_zone_content(tmp_path: Path) -> None:
@@ -94,6 +96,23 @@ def test_expected_failure_requires_nonzero_status(tmp_path: Path) -> None:
         expect_success=False,
     )
     assert result.return_code == 3
+    with pytest.raises(QualificationFailure, match="failure probe returned zero"):
+        run_process(
+            (sys.executable, "-c", "raise SystemExit(0)"),
+            tmp_path,
+            timeout_seconds=2.0,
+            expect_success=False,
+        )
+
+
+def test_ascii_endpoint_comparison_detects_energy_leakage() -> None:
+    reference = (
+        AsciiEndpoint(1, 1.0, 2.0, 3.0),
+        AsciiEndpoint(2, 4.0, 5.0, 6.0),
+    )
+    leaked = (reference[0], replace(reference[1], energy_generation_rate=1.0))
+    with pytest.raises(QualificationFailure, match=r"zones \[2\]"):
+        compare_ascii_endpoints(leaked, reference, "mutated")
 
 
 def test_timeout_terminates_the_process_group(tmp_path: Path) -> None:

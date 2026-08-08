@@ -19,8 +19,9 @@ non-root input-failure probe, and three two-thread OpenMP runs. It requires:
 - no output for inactive zones 11-12;
 - complete diagnostic records for each zone exactly once across all workers;
 - each ASCII filename's final row to agree with that zone's diagnostic state;
-- exact serial/MPI/OpenMP equality for the normalized printed endpoints, using
-  the established `batch_alpha` endpoint policy and ignoring worker order;
+- exact serial/MPI/OpenMP equality for the normalized diagnostic endpoints and
+  final ASCII energy-generation, neutrino-loss, and timestep fields, using the
+  established `batch_alpha` endpoint policy and ignoring worker order;
 - exact equality across the three OpenMP repetitions; and
 - nonzero, bounded completion when zone 5's trajectory is removed. With the
   current three rank-strided batches and two ranks, zones 5-8 belong to rank 1.

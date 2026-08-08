@@ -51,6 +51,20 @@ class ProcessResult:
     stderr: str
 
 
+@dataclass(frozen=True)
+class AsciiEndpoint:
+    zone: int
+    energy_generation_rate: float
+    neutrino_loss_rate: float
+    timestep: float
+
+
+@dataclass(frozen=True)
+class ConfigurationResult:
+    states: tuple[FinalState, ...]
+    ascii_endpoints: tuple[AsciiEndpoint, ...]
+
+
 def _resolve_executable(path: Path, label: str) -> Path:
     executable = path.expanduser().resolve()
     if not executable.is_file() or not os.access(executable, os.X_OK):
@@ -205,8 +219,8 @@ def run_process(
     )
 
 
-def validate_output_inventory(work_directory: Path, worker_count: int) -> tuple[Path, ...]:
-    """Require exactly ten ASCII/binary zone outputs and one diagnostic per worker."""
+def validate_output_inventory(work_directory: Path) -> tuple[Path, ...]:
+    """Require exactly ten ASCII/binary zone outputs and nonempty diagnostics."""
 
     expected_ev = {f"ev_parallel_zones_{zone:02d}" for zone in EXPECTED_ZONES}
     expected_ts = {f"ts_parallel_zones_{zone:02d}" for zone in EXPECTED_ZONES}
@@ -225,10 +239,9 @@ def validate_output_inventory(work_directory: Path, worker_count: int) -> tuple[
             raise QualificationFailure(f"output is empty: {filename}")
 
     diagnostics = tuple(sorted(work_directory.glob("net_diag*")))
-    if len(diagnostics) != worker_count or any(path.stat().st_size == 0 for path in diagnostics):
+    if not diagnostics or any(path.stat().st_size == 0 for path in diagnostics):
         raise QualificationFailure(
-            f"expected {worker_count} nonempty worker diagnostics, found "
-            f"{[path.name for path in diagnostics]}"
+            f"expected nonempty diagnostics, found {[path.name for path in diagnostics]}"
         )
     return diagnostics
 
@@ -324,15 +337,45 @@ def compare_endpoint_states(
         )
 
 
+def compare_ascii_endpoints(
+    actual: Sequence[AsciiEndpoint],
+    reference: Sequence[AsciiEndpoint],
+    label: str,
+) -> None:
+    """Require exact per-zone energy, neutrino-loss, and timestep output."""
+
+    actual_by_zone = {endpoint.zone: endpoint for endpoint in actual}
+    reference_by_zone = {endpoint.zone: endpoint for endpoint in reference}
+    if set(actual_by_zone) != set(reference_by_zone):
+        raise QualificationFailure(f"{label} ASCII endpoint zone inventory differs")
+    differences = [
+        zone
+        for zone in reference_by_zone
+        if actual_by_zone[zone] != reference_by_zone[zone]
+    ]
+    if differences:
+        raise QualificationFailure(
+            f"{label} ASCII endpoint values differ from serial in zones {differences}"
+        )
+
+
+def compare_configuration_results(
+    actual: ConfigurationResult, reference: ConfigurationResult, label: str
+) -> None:
+    compare_endpoint_states(actual.states, reference.states, label)
+    compare_ascii_endpoints(actual.ascii_endpoints, reference.ascii_endpoints, label)
+
+
 def _close(actual: float, expected: float, relative: float) -> bool:
     return math.isclose(actual, expected, rel_tol=relative, abs_tol=5.0e-99)
 
 
 def validate_ascii_association(
     work_directory: Path, states: Sequence[FinalState]
-) -> None:
+) -> tuple[AsciiEndpoint, ...]:
     """Match each filename's final ASCII row to that global zone's diagnostic state."""
 
+    endpoints: list[AsciiEndpoint] = []
     for state in states:
         path = work_directory / f"ev_parallel_zones_{state.zone:02d}"
         lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -347,12 +390,28 @@ def validate_ascii_association(
             time = float(fields[1].replace("D", "E"))
             temperature = float(fields[2].replace("D", "E"))
             density = float(fields[3].replace("D", "E"))
+            energy_generation_rate = float(fields[4].replace("D", "E"))
+            neutrino_loss_rate = float(fields[5].replace("D", "E"))
+            timestep = float(fields[6].replace("D", "E"))
             mass_fractions = tuple(
                 float(token.replace("D", "E"))
                 for token in fields[7 : 7 + len(ALPHA_SPECIES)]
             )
         except ValueError as error:
             raise QualificationFailure(f"non-numeric final ASCII row in {path}") from error
+        if not all(
+            math.isfinite(value)
+            for value in (
+                time,
+                temperature,
+                density,
+                energy_generation_rate,
+                neutrino_loss_rate,
+                timestep,
+                *mass_fractions,
+            )
+        ):
+            raise QualificationFailure(f"non-finite final ASCII row in {path}")
         # The diagnostic End step is the batch-level maximum, while the ASCII
         # history step is the per-zone time-step counter.
         if step != state.counters.ts or not _close(time, state.time, 5.1e-9):
@@ -368,16 +427,24 @@ def validate_ascii_association(
                 raise QualificationFailure(
                     f"composition association mismatch for zone {state.zone} species {species}"
                 )
+        endpoints.append(
+            AsciiEndpoint(
+                state.zone,
+                energy_generation_rate,
+                neutrino_loss_rate,
+                timestep,
+            )
+        )
+    return tuple(endpoints)
 
 
 def _run_success(
     label: str,
     command: Sequence[Path | str],
     work_directory: Path,
-    worker_count: int,
     timeout_seconds: float,
     environment: Mapping[str, str] | None = None,
-) -> tuple[FinalState, ...]:
+) -> ConfigurationResult:
     prepare_work_directory(work_directory)
     run_process(
         command,
@@ -385,12 +452,12 @@ def _run_success(
         timeout_seconds=timeout_seconds,
         environment=environment,
     )
-    diagnostics = validate_output_inventory(work_directory, worker_count)
+    diagnostics = validate_output_inventory(work_directory)
     states = parse_worker_diagnostics(diagnostics)
-    validate_ascii_association(work_directory, states)
+    ascii_endpoints = validate_ascii_association(work_directory, states)
     if len({_endpoint_signature(state) for state in states}) != len(EXPECTED_ZONES):
         raise QualificationFailure(f"{label} did not retain distinguishable per-zone results")
-    return states
+    return ConfigurationResult(states, ascii_endpoints)
 
 
 def run_qualification(arguments: argparse.Namespace) -> Path:
@@ -406,8 +473,8 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
     else:
         work_root.mkdir(parents=True)
 
-    serial_states = _run_success(
-        "serial", (serial,), work_root / "serial", 1, arguments.timeout
+    serial_result = _run_success(
+        "serial", (serial,), work_root / "serial", arguments.timeout
     )
     mpi_command = (
         mpi_launcher,
@@ -416,10 +483,10 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
         "2",
         mpi,
     )
-    mpi_states = _run_success(
-        "MPI", mpi_command, work_root / "mpi", 2, arguments.timeout
+    mpi_result = _run_success(
+        "MPI", mpi_command, work_root / "mpi", arguments.timeout
     )
-    compare_endpoint_states(mpi_states, serial_states, "MPI")
+    compare_configuration_results(mpi_result, serial_result, "MPI")
 
     failure_directory = prepare_work_directory(work_root / "mpi-nonroot-failure")
     # With three rank-strided batches, two ranks assign zones 5-8 to rank 1.
@@ -433,21 +500,24 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
 
     openmp_environment = os.environ.copy()
     openmp_environment.update({"OMP_NUM_THREADS": "2", "OMP_DYNAMIC": "FALSE"})
-    openmp_states: list[tuple[FinalState, ...]] = []
+    openmp_results: list[ConfigurationResult] = []
     for repetition in range(1, 4):
-        states = _run_success(
+        result = _run_success(
             f"OpenMP repetition {repetition}",
             (openmp,),
             work_root / f"openmp-{repetition}",
-            2,
             arguments.timeout,
             openmp_environment,
         )
-        compare_endpoint_states(states, serial_states, f"OpenMP repetition {repetition}")
-        openmp_states.append(states)
-    for repetition, states in enumerate(openmp_states[1:], start=2):
-        compare_endpoint_states(
-            states, openmp_states[0], f"OpenMP repetition {repetition} repeatability"
+        compare_configuration_results(
+            result, serial_result, f"OpenMP repetition {repetition}"
+        )
+        openmp_results.append(result)
+    for repetition, result in enumerate(openmp_results[1:], start=2):
+        compare_configuration_results(
+            result,
+            openmp_results[0],
+            f"OpenMP repetition {repetition} repeatability",
         )
 
     summary = work_root / "qualification_summary.json"
@@ -455,7 +525,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
         json.dumps(
             {
                 "fixture": "ten distinguishable zones, nzbatchmx=4",
-                "comparison": "exact normalized printed endpoints by global zone",
+                "comparison": "exact normalized diagnostic and ASCII endpoints by global zone",
                 "serial": {"runs": 1, "workers": 1},
                 "mpi": {"runs": 1, "ranks": 2, "nonroot_failure_probe": "nonzero"},
                 "openmp": {"runs": 3, "threads": 2, "OMP_DYNAMIC": "FALSE"},

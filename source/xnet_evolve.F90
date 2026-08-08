@@ -79,8 +79,9 @@ Contains
     !XDIR XCOPYIN(its,mykstep,lzsolve,lzoutput) &
     !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
 
-    ! Calculate the total energy of the nuclei
-    Call benuc(y,enb,enm)
+    ! Calculate the total energy of the nuclei. The module abundance array
+    ! needs the explicit current-worker section in the bounded dummy.
+    Call benuc(y(:,zb_lo:zb_hi),enb,enm)
 
     ! Initialize trial time step abundances and conditions
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
@@ -200,8 +201,8 @@ Contains
         EndIf
       EndDo
 
-      Call benuc(yt,enb,enm,mask_in = lzoutput)
-      Call enudot(yt,sqnu,mask_in = lzoutput)
+      Call benuc(yt(:,zb_lo:zb_hi),enb,enm,mask_in = lzoutput)
+      Call enudot(yt(:,zb_lo:zb_hi),sqnu,mask_in = lzoutput)
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(its,enm,enold,en0,delta_en,edot,denu,sqnu,tdel)
