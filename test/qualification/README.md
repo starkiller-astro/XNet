@@ -70,7 +70,6 @@ python3 test/qualification/parallel_zones.py \
   --mpi-executable=/tmp/xnet-parallel-zone-bin/xnet-mpi \
   --openmp-executable=/tmp/xnet-parallel-zone-bin/xnet-openmp \
   --mpi-launcher="$(command -v mpiexec)" \
-  --mpi-launcher-argument=--oversubscribe \
   --work-root=/tmp/xnet-parallel-zone-work \
   --timeout=60
 ```
@@ -81,6 +80,9 @@ chosen work root. Record the compiler, MPI implementation, OpenMP settings,
 commands, host, date, and any untested environments in the PR; a successful
 run qualifies only that exact configuration.
 
-The `--oversubscribe` option is an Open MPI example for hosts whose launcher
-slot inventory is smaller than two. Omit it where the runtime supplies two or
-more slots, and use the equivalent option for a different MPI implementation.
+The example intentionally uses the launcher's ordinary slot and binding
+policy. If a scheduler allocation exposes fewer than two slots, request an
+allocation with enough slots rather than allowing oversubscription. On the
+Open MPI 5.0.9 verification host, allowing oversubscription disabled core
+binding even though the two ranks fit within the 16 available slots.
+`--mpi-launcher-argument` remains available for site-required launcher options.
