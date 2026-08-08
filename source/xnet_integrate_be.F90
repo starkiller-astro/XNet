@@ -86,8 +86,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Do kts = 1, ktsmx
 
-      ! Attempt Backward Euler integration over desired timestep
-      Call step_be(kstep,inr)
+      ! Attempt Backward Euler integration over desired timestep. Pass the
+      ! current worker section explicitly to preserve zb_lo:zb_hi association.
+      Call step_be(kstep,inr(zb_lo:zb_hi))
 
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
       !XDIR XPRESENT(its,inr,tdel,tt,t,yet,ye,yt,y,mykts,kmon,ktot,lzstep)
@@ -128,7 +129,7 @@ Contains
 
       ! Reset temperature and density for failed integrations
       Call t9rhofind(kstep,tt(zb_lo:zb_hi),ntt(zb_lo:zb_hi), &
-        & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep)
+        & t9t(zb_lo:zb_hi),rhot(zb_lo:zb_hi),mask_in = lzstep(zb_lo:zb_hi))
       If ( iheat > 0 ) Then
         !XDIR XLOOP_OUTER(1) XASYNC(tid) &
         !XDIR XPRESENT(lzstep,t9t,t9)
@@ -150,7 +151,7 @@ Contains
             tdelstart(izb) = 0.0
           EndIf
         EndDo
-        Call timestep(kstep,mask_in = lzstep)
+        Call timestep(kstep,mask_in = lzstep(zb_lo:zb_hi))
       EndIf
 
       ! Log the failed integration attempts
@@ -166,7 +167,7 @@ Contains
       EndIf
 
       ! Test if all zones have converged
-      If ( .not. any( lzstep ) ) Exit
+      If ( .not. any( lzstep(zb_lo:zb_hi) ) ) Exit
     EndDo
 
     ! Mark TS convergence only for zones which haven't previously failed or converged
@@ -315,11 +316,13 @@ Contains
       !XDIR XUPDATE XASYNC(tid) &
       !XDIR XDEVICE(rebuild,eval_rates)
 
-      ! Calculate the reaction rates and abundance time derivatives
-      Call cross_sect(mask_in = eval_rates)
-      Call yderiv(mask_in = iterate)
-      Call jacobian_build(diag_in = rdt,mult_in = mult,mask_in = rebuild)
-      Call jacobian_decomp(kstep,mask_in = rebuild)
+      ! Calculate the reaction rates and abundance time derivatives. These
+      ! module arrays need explicit current-worker sections in bounded dummies.
+      Call cross_sect(mask_in = eval_rates(zb_lo:zb_hi))
+      Call yderiv(mask_in = iterate(zb_lo:zb_hi))
+      Call jacobian_build(diag_in = rdt(zb_lo:zb_hi),mult_in = mult(zb_lo:zb_hi), &
+        & mask_in = rebuild(zb_lo:zb_hi))
+      Call jacobian_decomp(kstep,mask_in = rebuild(zb_lo:zb_hi))
 
       ! Calculate equation to zero
       !XDIR XLOOP_OUTER(1) XASYNC(tid) &
@@ -361,8 +364,10 @@ Contains
       EndIf
 
       ! Solve the jacobian and calculate the changes in abundances, dy
-      !Call jacobian_solve(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
-      Call jacobian_bksub(kstep,yrhs,dy,t9rhs,dt9,mask_in = iterate)
+      !Call jacobian_solve(kstep,yrhs(:,zb_lo:zb_hi),dy(:,zb_lo:zb_hi), &
+      !  & t9rhs(zb_lo:zb_hi),dt9(zb_lo:zb_hi),mask_in = iterate(zb_lo:zb_hi))
+      Call jacobian_bksub(kstep,yrhs(:,zb_lo:zb_hi),dy(:,zb_lo:zb_hi), &
+        & t9rhs(zb_lo:zb_hi),dt9(zb_lo:zb_hi),mask_in = iterate(zb_lo:zb_hi))
 
       ! Evolve the abundances and calculate convergence tests
       !-----------------------------------------------------------------------------------------
@@ -454,7 +459,7 @@ Contains
       EndIf
 
       ! Check that all zones are converged
-      If ( .not. any(iterate) ) Exit
+      If ( .not. any(iterate(zb_lo:zb_hi)) ) Exit
     EndDo
 
     If ( idiag >= 2 ) Then
