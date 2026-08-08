@@ -246,6 +246,58 @@ def validate_output_inventory(work_directory: Path) -> tuple[Path, ...]:
     return diagnostics
 
 
+def _diagnostic_topology(
+    paths: Sequence[Path],
+) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+    mpi_records: set[tuple[int, int]] = set()
+    openmp_records: set[tuple[int, int]] = set()
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as error:
+            raise QualificationFailure(f"could not read diagnostic topology {path}: {error}") from error
+        for line in lines:
+            fields = line.split()
+            try:
+                if fields and fields[0] == "MyId":
+                    if len(fields) != 3:
+                        raise ValueError
+                    mpi_records.add((int(fields[1]), int(fields[2])))
+                elif fields and fields[0] == "Thread":
+                    if len(fields) != 4 or fields[2] != "of":
+                        raise ValueError
+                    openmp_records.add((int(fields[1]), int(fields[3])))
+            except ValueError as error:
+                raise QualificationFailure(
+                    f"malformed worker-topology record in {path}: {line}"
+                ) from error
+    return mpi_records, openmp_records
+
+
+def validate_mpi_topology(paths: Sequence[Path], expected_ranks: int) -> None:
+    """Require every rank in the requested MPI launch without asserting zone ownership."""
+
+    mpi_records, _ = _diagnostic_topology(paths)
+    expected = {(rank, expected_ranks) for rank in range(expected_ranks)}
+    if mpi_records != expected:
+        raise QualificationFailure(
+            f"MPI topology mismatch: reported={sorted(mpi_records)}, expected={sorted(expected)}"
+        )
+
+
+def validate_openmp_topology(paths: Sequence[Path], expected_threads: int) -> None:
+    """Require the requested OpenMP team without asserting diagnostic ownership."""
+
+    mpi_records, openmp_records = _diagnostic_topology(paths)
+    expected = {(thread, expected_threads) for thread in range(1, expected_threads + 1)}
+    if mpi_records != {(0, 1)} or openmp_records != expected:
+        raise QualificationFailure(
+            "OpenMP topology mismatch: "
+            f"processes={sorted(mpi_records)}, threads={sorted(openmp_records)}, "
+            f"expected_processes=[(0, 1)], expected_threads={sorted(expected)}"
+        )
+
+
 def _discover_diagnostic_groups(text: str, path: Path) -> tuple[tuple[int, ...], ...]:
     groups: list[tuple[int, ...]] = []
     current: list[int] = []
@@ -444,6 +496,9 @@ def _run_success(
     work_directory: Path,
     timeout_seconds: float,
     environment: Mapping[str, str] | None = None,
+    *,
+    expected_mpi_ranks: int | None = None,
+    expected_openmp_threads: int | None = None,
 ) -> ConfigurationResult:
     prepare_work_directory(work_directory)
     run_process(
@@ -453,6 +508,10 @@ def _run_success(
         environment=environment,
     )
     diagnostics = validate_output_inventory(work_directory)
+    if expected_mpi_ranks is not None:
+        validate_mpi_topology(diagnostics, expected_mpi_ranks)
+    if expected_openmp_threads is not None:
+        validate_openmp_topology(diagnostics, expected_openmp_threads)
     states = parse_worker_diagnostics(diagnostics)
     ascii_endpoints = validate_ascii_association(work_directory, states)
     if len({_endpoint_signature(state) for state in states}) != len(EXPECTED_ZONES):
@@ -484,7 +543,11 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
         mpi,
     )
     mpi_result = _run_success(
-        "MPI", mpi_command, work_root / "mpi", arguments.timeout
+        "MPI",
+        mpi_command,
+        work_root / "mpi",
+        arguments.timeout,
+        expected_mpi_ranks=2,
     )
     compare_configuration_results(mpi_result, serial_result, "MPI")
 
@@ -508,6 +571,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
             work_root / f"openmp-{repetition}",
             arguments.timeout,
             openmp_environment,
+            expected_openmp_threads=2,
         )
         compare_configuration_results(
             result, serial_result, f"OpenMP repetition {repetition}"

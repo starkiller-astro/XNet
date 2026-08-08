@@ -16,6 +16,8 @@ from parallel_zones import (
     normalize_worker_states,
     run_process,
     validate_ascii_association,
+    validate_mpi_topology,
+    validate_openmp_topology,
     validate_output_inventory,
 )
 from xnet_regression import FinalState, SolverCounters
@@ -113,6 +115,30 @@ def test_ascii_endpoint_comparison_detects_energy_leakage() -> None:
     leaked = (reference[0], replace(reference[1], energy_generation_rate=1.0))
     with pytest.raises(QualificationFailure, match=r"zones \[2\]"):
         compare_ascii_endpoints(leaked, reference, "mutated")
+
+
+def test_parallel_topology_rejects_serial_worker_headers(tmp_path: Path) -> None:
+    serial_diagnostic = tmp_path / "net_diag"
+    serial_diagnostic.write_text(" MyId    0    1\n", encoding="utf-8")
+    with pytest.raises(QualificationFailure, match="MPI topology mismatch"):
+        validate_mpi_topology((serial_diagnostic,), 2)
+    with pytest.raises(QualificationFailure, match="OpenMP topology mismatch"):
+        validate_openmp_topology((serial_diagnostic,), 2)
+
+
+def test_parallel_topology_accepts_two_reported_workers(tmp_path: Path) -> None:
+    mpi_diagnostics = tuple(tmp_path / f"mpi-{rank}" for rank in range(2))
+    for rank, path in enumerate(mpi_diagnostics):
+        path.write_text(f" MyId{rank:5d}{2:5d}\n", encoding="utf-8")
+    validate_mpi_topology(mpi_diagnostics, 2)
+
+    openmp_diagnostics = tuple(tmp_path / f"openmp-{thread}" for thread in range(1, 3))
+    for thread, path in enumerate(openmp_diagnostics, start=1):
+        path.write_text(
+            f" MyId{0:5d}{1:5d}\nThread {thread:4d} of {2:4d}\n",
+            encoding="utf-8",
+        )
+    validate_openmp_topology(openmp_diagnostics, 2)
 
 
 def test_timeout_terminates_the_process_group(tmp_path: Path) -> None:

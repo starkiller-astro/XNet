@@ -17,6 +17,7 @@ non-root input-failure probe, and three two-thread OpenMP runs. It requires:
 
 - exactly one nonempty ASCII and binary history for each global zone 1-10;
 - no output for inactive zones 11-12;
+- runtime topology records proving ranks 0-1 or threads 1-2 actually ran;
 - complete diagnostic records for each zone exactly once across all workers;
 - each ASCII filename's final row to agree with that zone's diagnostic state;
 - exact serial/MPI/OpenMP equality for the normalized diagnostic endpoints and
