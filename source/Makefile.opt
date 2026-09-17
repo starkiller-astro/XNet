@@ -1,70 +1,28 @@
-##
-## Makefile options for different build configurations
-##
+# User-selectable defaults. Override these on the Make command line rather
+# than editing this file for a local build.
 
-## Select compile mode
+# OPT or DEBUG.
 CMODE ?= OPT
-#CMODE ?= DEBUG
+# GNU, INTEL, PGI, NVIDIA, NVHPC, LLVM, CCE, CRAY, or XL.
+PE_ENV ?= GNU
 
-## Choose executable name
-EXE = xnet
-
-## Choose compiler
-PE_ENV  ?= GNU
-#PE_ENV  ?= PGI
-#PE_ENV  ?= INTEL
-#PE_ENV  ?= CRAY
-#PE_ENV  ?= XL
-
-## SELECT MPI MODE, Default=OFF
-#MPI_MODE = ON
-
-## SELECT OPENMP MODE, Default=OFF
-#OPENMP_MODE = ON
-
-## SELECT GPU MODE, Default=OFF
-#GPU_MODE = ON
-
-## Defaults
-MPI_MODE    ?= OFF
+# MPI and host OpenMP: ON or OFF.
+MPI_MODE ?= OFF
 OPENMP_MODE ?= OFF
-GPU_MODE    ?= OFF
 
-## Choose GPU Backend
-#GPU_BACKEND = HIP
+# Accelerator libraries and directives: ON or OFF. GPU builds use CUDA with
+# CUBLAS or MAGMA, or HIP with ROCM, and exactly one directive model.
+GPU_MODE ?= OFF
 GPU_BACKEND ?= CUDA
+GPU_LAPACK_VER ?= CUBLAS
+OPENACC_MODE ?= OFF
+OPENMP_OL_MODE ?= OFF
 
-## Choose EOS for screening; HELMHOLTZ (requires separate download) or BAHCALL
-EOS = STARKILLER
-#EOS = HELMHOLTZ
-#EOS ?= BAHCALL
-
-## Choose matrix solver package 
-#MATRIX_SOLVER = PARDISO
-#MATRIX_SOLVER = MA48
+# STARKILLER, BAHCALL, or HELMHOLTZ.
+EOS ?= STARKILLER
+# dense, MA41, MA48, or the oneMKL implementation PARDISO_MKL.
 MATRIX_SOLVER ?= dense
 
-## Define alternative CPU LAPACK/BLAS package (Default is LIBSCI for Cray machines, NETLIB otherwise)
-#LAPACK_VER = MKL
-#LAPACK_VER = LIBSCIACC
-#LAPACK_VER = ACML
-#LAPACK_VER = LIBSCI
-#LAPACK_VER = ATLAS
-#LAPACK_VER = ACCEL
-#LAPACK_VER = NETLIB
-#LAPACK_VER = PGIBLAS
-
-## Define alternative GPU LAPACK/BLAS package (Default is LIBSCIACC for Cray machines, MAGMA otherwise)
-#GPU_LAPACK_VER = MAGMA
-#GPU_LAPACK_VER = CUBLAS
-#GPU_LAPACK_VER = ROCM
-
-## GPU_TARGET specifies for which GPUs you want to compile
-##    Tesla   - NVIDIA compute capability 1.x cards
-##    Fermi   - NVIDIA compute capability 2.x cards
-##    Kepler  - NVIDIA compute capability 3.x cards
-##    Maxwell - NVIDIA compute capability 5.x cards
-##    Pascal  - NVIDIA compute capability 6.x cards
-##    Volta   - NVIDIA compute capability 7.x cards
-##    Ampere  - NVIDIA compute capability 8.x cards
-GPU_TARGET ?= Volta
+# LAPACK_VER defaults to NETLIB on generic hosts and LIBSCI on the maintained
+# HPE Cray Programming Environment hosts. It may be set explicitly to NETLIB,
+# MKL, LIBSCI, ATLAS, ACCEL, PGIBLAS, or ESSL.

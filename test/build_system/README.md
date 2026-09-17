@@ -6,9 +6,9 @@ Run the focused build-system checks from the repository root:
 python3 test/build_system/test_build_system.py
 ```
 
-The script builds the three direct products in a temporary GNU build directory,
-checks generic, Perlmutter, and retired Summit/Cori host selection, verifies
-configuration-reuse protection and configuration-local cleaning, and checks
-CUDA selector resolution, Cray Programming Environment CUDA paths, and early
-rejection. The CUDA checks establish Make selector behavior only; they do not
-qualify NVIDIA hardware or a CUDA toolchain.
+The script builds the three programs in temporary GNU build directories. It
+checks generic and Perlmutter defaults, explicit machine selection, separate
+parallel builds, incremental rebuilds, configuration-reuse protection,
+configuration-specific cleaning, solver selection, CUDA path selection, and
+early rejection of incompatible options. The CUDA checks exercise Make
+selection only; they do not qualify NVIDIA hardware or a CUDA toolchain.

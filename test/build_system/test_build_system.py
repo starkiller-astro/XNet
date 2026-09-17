@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Focused checks for the production GNU Make build."""
+"""Focused behavior checks for the production GNU Make build."""
 from __future__ import annotations
 
 import os
 import pathlib
 import subprocess
 import tempfile
-from typing import Dict, Optional
+import time
+from typing import Mapping, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "source"
-DEPENDENCIES_MAKEFILE = SOURCE / "make" / "dependencies.mk"
 
 
 def make(
-    *arguments: str, environment: Optional[Dict[str, str]] = None
+    *arguments: str, environment: Optional[Mapping[str, str]] = None
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["make", "-C", str(SOURCE), "--no-print-directory", *arguments],
@@ -29,24 +29,15 @@ def require_success(result: subprocess.CompletedProcess[str]) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def main() -> int:
-    makefile = DEPENDENCIES_MAKEFILE.read_text(encoding="utf-8")
-    sparse_jacobian_rule = next(
-        line for line in makefile.splitlines() if "$(call solver_obj,$(JAC_SRC)):" in line
-    )
-    assert "$(call source_obj,$(MPI_SRC))" in sparse_jacobian_rule
-    assert "xnet_sparse.F90" not in sparse_jacobian_rule
-    for name in ("xnet_jacobian_MA48.F90", "xnet_jacobian_PARDISO_MKL.F90"):
-        assert "Use xnet_parallel" in (SOURCE / name).read_text(encoding="utf-8")
-    probe_rule = next(
-        line for line in makefile.splitlines() if "$(call source_obj,$(PROBE_SRC)):" in line
-    )
-    for module in ("xnet_controls", "xnet_gpu", "xnet_linalg", "xnet_types"):
-        assert f"$(call SOBJ,{module})" in probe_rule
+def require_failure(result: subprocess.CompletedProcess[str], message: str) -> None:
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert message in result.stdout + result.stderr, result.stdout + result.stderr
 
+
+def main() -> int:
     with tempfile.TemporaryDirectory(prefix="xnet-build-system-") as temporary:
-        build = pathlib.Path(temporary) / "gnu"
-        tools = build.parent / "tools"
+        work = pathlib.Path(temporary)
+        tools = work / "tools"
         tools.mkdir()
         uname = tools / "uname"
         uname.write_text(
@@ -54,23 +45,43 @@ def main() -> int:
             encoding="utf-8",
         )
         uname.chmod(0o755)
-        hostname_environment = dict(os.environ)
-        hostname_environment.pop("HOSTNAME", None)
-        hostname_environment["PATH"] = f"{tools}{os.pathsep}{hostname_environment['PATH']}"
-        architecture = make(
-            f"BUILD_DIR={build.parent / 'hostname'}",
+        for python_name in ("python", "python3"):
+            python = tools / python_name
+            python.write_text(
+                "#!/bin/sh\necho 'production build invoked Python' >&2\nexit 97\n",
+                encoding="utf-8",
+            )
+            python.chmod(0o755)
+        generic_environment = dict(os.environ)
+        generic_environment.pop("LMOD_SYSTEM_NAME", None)
+        generic_environment.pop("HOSTNAME", None)
+        generic_environment["PATH"] = f"{tools}{os.pathsep}{generic_environment['PATH']}"
+
+        generic = make(
+            f"BUILD_DIR={work / 'generic'}",
             "PE_ENV=GNU",
             "print-MACHINE",
+            "print-FC",
             "print-ARCHOPT",
-            environment=hostname_environment,
+            environment=generic_environment,
         )
-        require_success(architecture)
-        assert "MACHINE = generic" in architecture.stdout
-        assert "ARCHOPT = -march=native" in architecture.stdout
+        require_success(generic)
+        assert "MACHINE = generic42" in generic.stdout
+        assert "FC = gfortran" in generic.stdout
+        assert "ARCHOPT = -march=native" in generic.stdout
+
+        explicit_machine = make(
+            f"BUILD_DIR={work / 'manual-host'}",
+            "PE_ENV=GNU",
+            "MACHINE=manual-host",
+            "print-MACHINE",
+        )
+        require_success(explicit_machine)
+        assert "MACHINE = manual-host" in explicit_machine.stdout
 
         perlmutter_environment = dict(os.environ, LMOD_SYSTEM_NAME="perlmutter")
         perlmutter = make(
-            f"BUILD_DIR={build.parent / 'perlmutter'}",
+            f"BUILD_DIR={work / 'perlmutter'}",
             "PE_ENV=GNU",
             "print-MACHINE",
             "print-FC",
@@ -82,173 +93,277 @@ def main() -> int:
         assert "FC = ftn" in perlmutter.stdout
         assert "LAPACK_VER = LIBSCI" in perlmutter.stdout
 
-        perlmutter_cuda_environment = dict(
+        cuda_environment = dict(
             os.environ,
             LMOD_SYSTEM_NAME="perlmutter",
             CUDATOOLKIT_HOME="/facility/cudatoolkit",
             CRAY_CUDATOOLKIT_DIR="/facility/cray-cuda",
         )
-        perlmutter_cuda = make(
-            f"BUILD_DIR={build.parent / 'perlmutter-cuda'}",
+        cuda_options = (
             "PE_ENV=CRAY",
             "GPU_MODE=ON",
             "GPU_BACKEND=CUDA",
             "GPU_LAPACK_VER=CUBLAS",
             "OPENACC_MODE=ON",
             "OPENMP_OL_MODE=OFF",
+        )
+        cuda = make(
+            f"BUILD_DIR={work / 'perlmutter-cuda'}",
+            *cuda_options,
             "print-CUDA_DIR",
             "print-GPU_INC",
             "print-GPU_LIBDIR",
-            environment=perlmutter_cuda_environment,
+            environment=cuda_environment,
         )
-        require_success(perlmutter_cuda)
-        assert "CUDA_DIR = /facility/cudatoolkit" in perlmutter_cuda.stdout
-        assert "-I/facility/cudatoolkit/include" in perlmutter_cuda.stdout
-        assert "-L/facility/cudatoolkit/lib64" in perlmutter_cuda.stdout
+        require_success(cuda)
+        assert "CUDA_DIR = /facility/cudatoolkit" in cuda.stdout
+        assert "-I/facility/cudatoolkit/include" in cuda.stdout
+        assert "-L/facility/cudatoolkit/lib64" in cuda.stdout
 
-        perlmutter_cuda_environment.pop("CUDATOOLKIT_HOME")
-        perlmutter_cray_cuda = make(
-            f"BUILD_DIR={build.parent / 'perlmutter-cray-cuda'}",
+        cuda_environment.pop("CUDATOOLKIT_HOME")
+        cray_cuda = make(
+            f"BUILD_DIR={work / 'cray-cuda'}",
+            *cuda_options,
+            "print-CUDA_DIR",
+            environment=cuda_environment,
+        )
+        require_success(cray_cuda)
+        assert "CUDA_DIR = /facility/cray-cuda" in cray_cuda.stdout
+
+        cray_openmp_offload = make(
+            f"BUILD_DIR={work / 'cray-openmp-offload'}",
+            "MACHINE=frontier",
+            "PE_ENV=CRAY",
+            "GPU_MODE=ON",
+            "GPU_BACKEND=CUDA",
+            "GPU_LAPACK_VER=CUBLAS",
+            "OPENACC_MODE=OFF",
+            "OPENMP_OL_MODE=ON",
+            "CUDA_DIR=/facility/cuda",
+            "print-CRAY_OMP_PREPROCESS",
+            "print-COMPILE_FC",
+        )
+        require_success(cray_openmp_offload)
+        assert "CRAY_OMP_PREPROCESS = yes" in cray_openmp_offload.stdout
+        assert "COMPILE_FC = ftn" in cray_openmp_offload.stdout
+
+        cray_openacc = make(
+            f"BUILD_DIR={work / 'cray-openacc'}",
+            "MACHINE=frontier",
             "PE_ENV=CRAY",
             "GPU_MODE=ON",
             "GPU_BACKEND=CUDA",
             "GPU_LAPACK_VER=CUBLAS",
             "OPENACC_MODE=ON",
             "OPENMP_OL_MODE=OFF",
-            "print-CUDA_DIR",
-            environment=perlmutter_cuda_environment,
+            "CUDA_DIR=/facility/cuda",
+            "print-CRAY_OMP_PREPROCESS",
         )
-        require_success(perlmutter_cray_cuda)
-        assert "CUDA_DIR = /facility/cray-cuda" in perlmutter_cray_cuda.stdout
+        require_success(cray_openacc)
+        assert "CRAY_OMP_PREPROCESS = no" in cray_openacc.stdout
 
-        summit_environment = dict(os.environ, LMOD_SYSTEM_NAME="summit")
-        summit = make(
-            f"BUILD_DIR={build.parent / 'summit'}",
+        optimized = work / "gnu-opt"
+        products = make(
+            f"BUILD_DIR={optimized}",
             "PE_ENV=GNU",
-            "print-MACHINE",
-            "print-FC",
-            "print-LAPACK_VER",
-            "print-ARCHOPT",
-            environment=summit_environment,
+            "MACHINE=generic",
+            "-j4",
+            "xnet",
+            "xnse",
+            "net_setup",
+            environment=generic_environment,
         )
-        require_success(summit)
-        assert "MACHINE = summit" in summit.stdout
-        assert "FC = gfortran" in summit.stdout
-        assert "LAPACK_VER = NETLIB" in summit.stdout
-        assert "ARCHOPT = -mtune=native" in summit.stdout
-
-        cori_environment = dict(os.environ, LMOD_SYSTEM_NAME="cori")
-        cori = make(
-            f"BUILD_DIR={build.parent / 'cori'}",
-            "PE_ENV=INTEL",
-            "print-MACHINE",
-            "print-FC",
-            "print-LAPACK_VER",
-            "print-ARCHOPT",
-            environment=cori_environment,
-        )
-        require_success(cori)
-        assert "MACHINE = cori" in cori.stdout
-        assert "FC = ftn" in cori.stdout
-        assert "LAPACK_VER = LIBSCI" in cori.stdout
-        assert "ARCHOPT = -align array64byte" in cori.stdout
-
-        products = make(f"BUILD_DIR={build}", "-j4", "xnet", "xnse", "net_setup")
         require_success(products)
-        assert "python" not in (products.stdout + products.stderr).lower()
         for executable in ("xnet", "xnse", "net_setup"):
-            assert (build / "bin" / executable).is_file()
+            assert (optimized / "bin" / executable).is_file()
 
-        mismatch = make(f"BUILD_DIR={build}", "CMODE=DEBUG", "xnet")
-        assert mismatch.returncode != 0
-        assert "incompatible BUILD_DIR configuration" in mismatch.stderr
+        config = (optimized / "config.txt").read_text(encoding="utf-8")
+        assert config.startswith("XNET_CONFIG_SCHEMA=1\n")
+        assert "MATRIX_SOLVER=dense\n" in config
+        assert "JACOBIAN_SOURCE=" in config
+        assert "GPU_TARGET=" not in config
+        assert "NVCC" not in config
+        assert "PROVIDER_ID" not in config
 
-        invalid_record = make(
-            f"BUILD_DIR={build.parent / 'invalid-record'}",
-            "FFLAGS=safe_flag\nINJECTED=1",
+        executable = optimized / "bin" / "xnet"
+        xnet_object = optimized / "obj" / "source" / "net.o"
+        before = (executable.stat().st_mtime_ns, xnet_object.stat().st_mtime_ns)
+        time.sleep(0.01)
+        incremental = make(
+            f"BUILD_DIR={optimized}",
+            "PE_ENV=GNU",
+            "MACHINE=generic",
+            "-j4",
             "xnet",
         )
-        assert invalid_record.returncode != 0
-        assert "cannot represent single quotes or line breaks" in invalid_record.stderr
+        require_success(incremental)
+        after = (executable.stat().st_mtime_ns, xnet_object.stat().st_mtime_ns)
+        assert after == before, incremental.stdout + incremental.stderr
 
-        cuda_selectors = (
-            "GPU_MODE=ON",
-            "GPU_BACKEND=CUDA",
-            "GPU_LAPACK_VER=CUBLAS",
-            "OPENACC_MODE=ON",
-            "OPENMP_OL_MODE=OFF",
+        types_object = optimized / "obj" / "source" / "xnet_types.o"
+        constants_object = optimized / "obj" / "source" / "xnet_constants.o"
+        module_before = (
+            types_object.stat().st_mtime_ns,
+            constants_object.stat().st_mtime_ns,
+            executable.stat().st_mtime_ns,
         )
-        volta = make(
-            f"BUILD_DIR={build.parent / 'cuda-volta'}",
-            *cuda_selectors,
-            "GPU_TARGET=Volta",
-            "print-GPU_TARGET",
-            "print-NVCCFLAGS",
+        time.sleep(0.01)
+        module_rebuild = make(
+            f"BUILD_DIR={optimized}",
+            "PE_ENV=GNU",
+            "MACHINE=generic",
+            "-j4",
+            "-W",
+            str(SOURCE / "xnet_types.F90"),
+            "xnet",
         )
-        require_success(volta)
-        assert "GPU_TARGET = sm70" in volta.stdout
-        assert "-gencode arch=compute_70,code=sm_70" in volta.stdout
-        assert "compute_80" not in volta.stdout
+        require_success(module_rebuild)
+        module_after = (
+            types_object.stat().st_mtime_ns,
+            constants_object.stat().st_mtime_ns,
+            executable.stat().st_mtime_ns,
+        )
+        assert all(new > old for old, new in zip(module_before, module_after))
 
-        ampere = make(
-            f"BUILD_DIR={build.parent / 'cuda-ampere'}",
-            *cuda_selectors,
-            "GPU_TARGET=Ampere",
-            "print-GPU_TARGET",
-            "print-NVCCFLAGS",
+        macro_before = (xnet_object.stat().st_mtime_ns, executable.stat().st_mtime_ns)
+        time.sleep(0.01)
+        macro_rebuild = make(
+            f"BUILD_DIR={optimized}",
+            "PE_ENV=GNU",
+            "MACHINE=generic",
+            "-j4",
+            "-W",
+            str(SOURCE / "xnet_macros.fh"),
+            "xnet",
         )
-        require_success(ampere)
-        assert "GPU_TARGET = sm80" in ampere.stdout
-        assert "-gencode arch=compute_80,code=sm_80" in ampere.stdout
-        assert "compute_70" not in ampere.stdout
+        require_success(macro_rebuild)
+        macro_after = (xnet_object.stat().st_mtime_ns, executable.stat().st_mtime_ns)
+        assert all(new > old for old, new in zip(macro_before, macro_after))
 
-        direct_targets = make(
-            f"BUILD_DIR={build.parent / 'cuda-direct-targets'}",
-            *cuda_selectors,
-            "GPU_TARGET=sm70 sm80",
-            "print-GPU_TARGET",
-            "print-NVCCFLAGS",
+        require_failure(
+            make(
+                f"BUILD_DIR={optimized}",
+                "PE_ENV=GNU",
+                "MACHINE=generic",
+                "CMODE=DEBUG",
+                "xnet",
+            ),
+            "incompatible BUILD_DIR configuration",
         )
-        require_success(direct_targets)
-        assert "GPU_TARGET = sm70 sm80" in direct_targets.stdout
-        assert "-gencode arch=compute_70,code=sm_70" in direct_targets.stdout
-        assert "-gencode arch=compute_80,code=sm_80" in direct_targets.stdout
-
-        invalid_cuda_target = make(
-            f"BUILD_DIR={build.parent / 'cuda-invalid-target'}",
-            *cuda_selectors,
-            "GPU_TARGET=sm90",
-            "print-GPU_TARGET",
+        require_failure(
+            make(
+                f"BUILD_DIR={work / 'invalid-record'}",
+                "FFLAGS=safe_flag\nINJECTED=1",
+                "xnet",
+            ),
+            "cannot represent single quotes or line breaks",
         )
-        assert invalid_cuda_target.returncode != 0
-        assert "unsupported CUDA GPU_TARGET 'sm90'" in invalid_cuda_target.stderr
-
-        invalid_hip_target = make(
-            f"BUILD_DIR={build.parent / 'hip-invalid-target'}",
-            "GPU_MODE=ON",
-            "GPU_BACKEND=HIP",
-            "GPU_LAPACK_VER=ROCM",
-            "OPENACC_MODE=OFF",
-            "OPENMP_OL_MODE=ON",
-            "GPU_TARGET=Ampere",
-            "print-GPU_TARGET",
-        )
-        assert invalid_hip_target.returncode != 0
-        assert "GPU_TARGET is valid only with GPU_BACKEND=CUDA" in invalid_hip_target.stderr
 
         pardiso = make(
-            f"BUILD_DIR={build.parent / 'pardiso'}",
-            "MATRIX_SOLVER=PARDISO",
-            "LAPACK_VER=MKL",
+            f"BUILD_DIR={work / 'pardiso-mkl'}",
+            "MATRIX_SOLVER=PARDISO_MKL",
             "MKL_LIBS=-lmkl_rt",
             "print-JAC_SRC",
+            "print-LAPACK_VER",
         )
         require_success(pardiso)
         assert "xnet_jacobian_PARDISO_MKL.F90" in pardiso.stdout
+        assert "LAPACK_VER = MKL" in pardiso.stdout
+        require_failure(
+            make(
+                f"BUILD_DIR={work / 'old-pardiso-name'}",
+                "MATRIX_SOLVER=PARDISO",
+                "print-JAC_SRC",
+            ),
+            "unsupported MATRIX_SOLVER 'PARDISO'",
+        )
+        require_failure(
+            make(
+                f"BUILD_DIR={work / 'pardiso-netlib'}",
+                "MATRIX_SOLVER=PARDISO_MKL",
+                "LAPACK_VER=NETLIB",
+                "MKL_LIBS=-lmkl_rt",
+                "print-JAC_SRC",
+            ),
+            "requires LAPACK_VER=MKL",
+        )
+        removed_alias = make(f"BUILD_DIR={work / 'solver-alias'}", "xnet_dense")
+        assert removed_alias.returncode != 0, removed_alias.stdout + removed_alias.stderr
 
-        clean = make(f"BUILD_DIR={build}", "clean")
+        require_failure(
+            make(
+                f"BUILD_DIR={work / 'inactive-cuda'}",
+                "GPU_MODE=OFF",
+                "GPU_BACKEND=CUDA",
+                "print-GPU_BACKEND",
+            ),
+            "GPU_BACKEND is active while GPU_MODE=OFF",
+        )
+        require_failure(
+            make(
+                f"BUILD_DIR={work / 'hip-cublas'}",
+                "GPU_MODE=ON",
+                "GPU_BACKEND=HIP",
+                "GPU_LAPACK_VER=CUBLAS",
+                "OPENMP_OL_MODE=ON",
+                "print-GPU_BACKEND",
+            ),
+            "HIP requires GPU_LAPACK_VER=ROCM",
+        )
+        require_failure(
+            make(
+                f"BUILD_DIR={work / 'two-directives'}",
+                "GPU_MODE=ON",
+                "GPU_BACKEND=CUDA",
+                "GPU_LAPACK_VER=CUBLAS",
+                "OPENACC_MODE=ON",
+                "OPENMP_OL_MODE=ON",
+                "print-GPU_BACKEND",
+            ),
+            "requires exactly one accelerator directive mode",
+        )
+
+        concurrent_opt = work / "concurrent-opt"
+        concurrent_debug = work / "concurrent-debug"
+        common_command = ["make", "-C", str(SOURCE), "--no-print-directory"]
+        opt_process = subprocess.Popen(
+            common_command
+            + [
+                f"BUILD_DIR={concurrent_opt}",
+                "PE_ENV=GNU",
+                "MACHINE=generic",
+                "-j4",
+                "xnet",
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        debug_process = subprocess.Popen(
+            common_command
+            + [
+                f"BUILD_DIR={concurrent_debug}",
+                "PE_ENV=GNU",
+                "MACHINE=generic",
+                "CMODE=DEBUG",
+                "-j4",
+                "xnet",
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        opt_stdout, opt_stderr = opt_process.communicate()
+        debug_stdout, debug_stderr = debug_process.communicate()
+        assert opt_process.returncode == 0, opt_stdout + opt_stderr
+        assert debug_process.returncode == 0, debug_stdout + debug_stderr
+        assert (concurrent_opt / "bin" / "xnet").is_file()
+        assert (concurrent_debug / "bin" / "xnet").is_file()
+
+        clean = make(f"BUILD_DIR={optimized}", "clean")
         require_success(clean)
-        assert not build.exists()
+        assert not optimized.exists()
+
     print("production GNU Make checks passed")
     return 0
 

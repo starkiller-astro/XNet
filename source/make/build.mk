@@ -2,8 +2,11 @@
 # One top-level GNU Make invocation owns a BUILD_DIR. Do not clean that
 # directory while the build is running.
 SHELL := /bin/sh
-XNET_DIR := $(abspath .)
-ROOT_DIR := $(abspath ..)
+XNET_DIR := $(CURDIR)
+ROOT_DIR := $(abspath $(XNET_DIR)/..)
+
+# Build output. BUILD_NAME selects a readable directory below BUILD_BASE;
+# BUILD_DIR may instead name an explicit absolute or repository-relative path.
 BUILD_BASE ?= build
 ifeq ($(filter /%,$(BUILD_BASE)),)
   BUILD_BASE := $(abspath $(ROOT_DIR)/$(BUILD_BASE))
@@ -45,9 +48,6 @@ PP_DIR := $(BUILD_DIR)/pp
 BIN_DIR := $(BUILD_DIR)/bin
 CONFIG := $(BUILD_DIR)/config.txt
 
-PUBLIC_TARGETS := xnet xnse net_setup all xnet_dense xnet_MA41 xnet_MA48 xnet_PARDISO \
-                  frontier_gpu_linalg_probe xinab xnet_gpu clean clean-all \
-                  print-XNET_EXE print-XNSE_EXE print-NET_SETUP_EXE print-PROBE_EXE
 REQUESTED_GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),xnet)
 CLEAN_GOALS := $(filter clean clean-all,$(REQUESTED_GOALS))
 OTHER_GOALS := $(filter-out clean clean-all,$(REQUESTED_GOALS))
@@ -76,10 +76,10 @@ clean-all:
 
 else
 
-include $(XNET_DIR)/make/configuration.mk
-include $(XNET_DIR)/make/providers.mk
-include $(XNET_DIR)/make/sources.mk
-include $(XNET_DIR)/make/dependencies.mk
-include $(XNET_DIR)/make/rules.mk
+include make/configuration.mk
+include make/providers.mk
+include make/sources.mk
+include make/dependencies.mk
+include make/rules.mk
 
 endif
