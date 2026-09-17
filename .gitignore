@@ -1,4 +1,5 @@
 # compiler output
+/build/
 pgipar*
 *.mod
 *.o
@@ -27,6 +28,9 @@ test/build_net/new_data
 # compiled python
 *.pyc
 
+# focused Fortran test builds
+/test/unit/build/
+
 # HSL source
 MA4[18].f
 tools/HSL
@@ -44,6 +48,8 @@ sparse_ind
 # xnet output files
 ts*
 ev*
+!test/qualification/frontier/evidence/
+!test/qualification/frontier/evidence/**
 net_diag*
 nse_diag*
 
@@ -56,3 +62,5 @@ test/th*
 
 # runtime controls
 control*
+!test/regression/cases/*/control
+!test/qualification/parallel_zones/control

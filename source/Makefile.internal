@@ -1,29 +1,13 @@
 ##
-## System configurations and architecture/installation specific MACROS
+## System configuration and machine- or installation-specific macros
 ##
 
 ## Determine OS kernel (Linux or Darwin)
 UNAME_S ?= $(shell uname -s)
 
-## Define programming envionment if not set or on a Cray machine
-ifdef LMOD_SYSTEM_NAME
-    MACHINE=$(LMOD_SYSTEM_NAME)
-else
-    MACHINE=$(shell echo $${HOSTNAME%%.*} | sed 's/\(-[a-zA-Z0-9]*\)\?[0-9]*$$//')
-endif
-CRAY_MACHINE = \
-               frontier \
-               titan \
-               perlmutter \
-               edison \
-               cori \
-               chester \
-               beacon
-
-IBM_MACHINE = \
-              summit \
-              summitdev \
-              mira
+## Host detection and machine defaults are conventional, tracked fragments.
+## Compiler-family flags remain in this file.
+include $(XNET_DIR)/make/machines.mk
 
 ## Get PE_ENV from LMOD if being used
 ifndef PE_ENV
@@ -33,31 +17,6 @@ ifndef PE_ENV
           PE_ENV = GNU
       endif
   endif
-endif
-
-FC_MPI  = mpifort
-CC_MPI  = mpicc
-CXX_MPI = mpic++
-LDR_MPI = mpifort
-
-ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-    LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
-else ifeq ($(findstring $(MACHINE),$(CRAY_MACHINE)),$(MACHINE))
-    FC      = ftn
-    CC      = cc
-    CXX     = CC
-    LDR     = ftn
-    FC_MPI  = ftn
-    CC_MPI  = cc
-    CXX_MPI = CC
-    LDR_MPI = ftn
-
-    LAPACK_VER     ?= LIBSCI
-    GPU_LAPACK_VER ?= CUBLAS
-else
-    LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
 endif
 
 #-------------------------------------------------------------------------------
@@ -74,6 +33,7 @@ ifeq ($(PE_ENV),INTEL)
 
         ARCHOPT = -xHost
     else ifeq ($(MACHINE),cori)
+        # Retained legacy Cori compatibility exception; not a support claim.
         ARCHOPT = -align array64byte
     endif
     INLINE        = -ipo
@@ -118,7 +78,7 @@ else ifeq ($(PE_ENV),PGI)
 
         ARCHOPT   =
     endif
-    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+    ifneq ($(findstring $(MACHINE),$(RETIRED_IBM_HOSTS)),$(MACHINE))
         INLINE    = -Mipa=fast,inline,safe
     else
         INLINE    =
@@ -164,7 +124,7 @@ else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
 
         ARCHOPT   = -tp=pwr9
     endif
-    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+    ifneq ($(findstring $(MACHINE),$(RETIRED_IBM_HOSTS)),$(MACHINE))
         INLINE    =# -Mipa=fast,inline,safe
     else
         INLINE    =
@@ -208,7 +168,7 @@ else ifeq ($(PE_ENV),GNU)
         CXX       = g++
         LDR       = gfortran
 
-        ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
+        ifeq ($(findstring $(MACHINE),$(RETIRED_IBM_HOSTS)),$(MACHINE))
           ARCHOPT   = -mtune=native
         else
           ARCHOPT   = -march=native
@@ -247,13 +207,54 @@ else ifeq ($(PE_ENV),GNU)
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
 
+else ifeq ($(PE_ENV),LLVM)
+
+    ifneq ($(FC),ftn)
+        FC        = flang
+        CC        = clang
+        CXX       = clang++
+        LDR       = flang
+        ARCHOPT   = -march=native
+    endif
+
+    # generic flags
+    OPT_FLAGS     = -g -O3 -funroll-loops $(ARCHOPT) $(INLINE)
+    DEBUG_FLAGS   = -g -O0
+
+
+    ifeq ($(OPENMP_MODE),ON)
+        OPENMP    = -fopenmp
+    else
+        OPENMP    =# -lgomp
+    endif
+    ifeq ($(OPENACC_MODE),ON)
+        OPENACC   =# -fopenacc
+    else
+        OPENACC   =
+    endif
+
+    # Fortran-specific flags
+    OPT_FFLAGS    =
+    DEBUG_FFLAGS  =
+
+    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-folding-value-checks
+    F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-folding-value-checks
+
+    # C-specific flags
+    OPT_CFLAGS    =
+    DEBUG_CFLAGS  =
+
+    # Linker flags
+    OPT_LDFLAGS   =
+    DEBUG_LDFLAGS =
+
 else ifeq ($(findstring $(PE_ENV),CCE CRAY),$(PE_ENV))
 
     INLINE_DB     = ./$(EXE)_inline
     INLINE        = -h wp -h pl=$(INLINE_DB)
 
     # generic flags
-    OPT_FLAGS     = -O2 -G2# $(INLINE)
+    OPT_FLAGS     = -O2 -g
     DEBUG_FLAGS   = -O0 -eD
 
     ifeq ($(OPENMP_MODE),ON)
@@ -343,6 +344,16 @@ ifeq ($(MPI_MODE),ON)
     LDR = $(LDR_MPI)
 endif
 
+# Cray's Fortran preprocessor does not accept the variadic directive macros in
+# xnet_macros.fh. Select the external-preprocessing wrapper after the MPI
+# compiler override so GPU compilation retains it in both modes.
+ifeq ($(findstring $(PE_ENV),CCE CRAY),$(PE_ENV))
+    ifeq ($(GPU_MODE),ON)
+        XNET_CRAY_FTN := $(FC)
+        FC = env XNET_CRAY_FTN="$(XNET_CRAY_FTN)" $(XNET_DIR)/crayftn_cpp.sh
+    endif
+endif
+
 #-------------------------------------------------------------------------------
 # Library definitions and compile/link flags
 #-------------------------------------------------------------------------------
@@ -356,19 +367,20 @@ else
     MKL_OS = lnx
 endif
 MKLROOT    ?= $(INTEL_PATH)/mkl
-ifneq ("$(wildcard ${MKLROOT}/tools/mkl_link_tool)","")
+MKL_LINK_TOOL := $(firstword $(wildcard ${MKLROOT}/tools/mkl_link_tool ${MKLROOT}/bin/mkl_link_tool))
+ifneq ("$(MKL_LINK_TOOL)","")
     ifeq ($(PE_ENV),INTEL)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),PGI)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),GNU)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),CRAY)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
     endif
 endif
 
