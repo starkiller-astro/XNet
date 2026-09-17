@@ -1,7 +1,6 @@
-# Public build choices and validation.
-#
-# Set these variables on the Make command line. Makefile.opt contains the
-# tracked defaults and short descriptions:
+# Public build-choice validation. Set these variables on the Make command
+# line. make/build.mk reads the tracked defaults from Makefile.opt before
+# choosing BUILD_NAME:
 #   PE_ENV: GNU, INTEL, PGI, NVIDIA, NVHPC, LLVM, CCE, CRAY, XL
 #   CMODE: OPT, DEBUG
 #   MPI_MODE, OPENMP_MODE, GPU_MODE: ON, OFF
@@ -11,7 +10,6 @@
 #   EOS: STARKILLER, BAHCALL, HELMHOLTZ
 #   MATRIX_SOLVER: dense, MA41, MA48, PARDISO_MKL
 #   LAPACK_VER: NETLIB, MKL, LIBSCI, ATLAS, ACCEL, PGIBLAS, ESSL
-include Makefile.opt
 
 # XNet sources use C-preprocessor macros before Fortran compilation. This may
 # be set to another conventional C preprocessor when required by a toolchain.

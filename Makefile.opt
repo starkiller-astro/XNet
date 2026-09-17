@@ -1,5 +1,6 @@
 # User-selectable defaults. Override these on the Make command line rather
-# than editing this file for a local build.
+# than editing this file for a local build. Unless BUILD_NAME or BUILD_DIR is
+# supplied, the major choices below form a readable build-directory name.
 
 # OPT or DEBUG.
 CMODE ?= OPT

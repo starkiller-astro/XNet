@@ -5,15 +5,41 @@ SHELL := /bin/sh
 ROOT_DIR := $(CURDIR)
 SOURCE_DIR := $(ROOT_DIR)/source
 
-# Build output. BUILD_NAME selects a readable directory below BUILD_BASE;
-# BUILD_DIR may instead name an explicit absolute or repository-relative path.
+# Read the public defaults before choosing the build directory. Compiler flags,
+# machine defaults, library paths, and provider selection are resolved later.
+include Makefile.opt
+
+# Build output. Without an explicit BUILD_NAME or BUILD_DIR, use a readable
+# name derived from the major public selectors. config.txt remains responsible
+# for detecting changes to flags, library paths, and other recorded settings.
 BUILD_BASE ?= build
 ifeq ($(filter /%,$(BUILD_BASE)),)
   BUILD_BASE := $(abspath $(ROOT_DIR)/$(BUILD_BASE))
 else
   BUILD_BASE := $(abspath $(BUILD_BASE))
 endif
-BUILD_NAME ?= default
+AUTO_BUILD_NAME := $(PE_ENV)-$(CMODE)
+ifeq ($(MPI_MODE),ON)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-MPI
+endif
+ifeq ($(OPENMP_MODE),ON)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-OPENMP
+endif
+ifeq ($(GPU_MODE),ON)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-$(GPU_BACKEND)-$(GPU_LAPACK_VER)
+  ifeq ($(OPENACC_MODE),ON)
+    AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-OPENACC
+  else ifeq ($(OPENMP_OL_MODE),ON)
+    AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-OPENMP-OFFLOAD
+  endif
+endif
+ifneq ($(EOS),STARKILLER)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-$(EOS)
+endif
+ifneq ($(MATRIX_SOLVER),dense)
+  AUTO_BUILD_NAME := $(AUTO_BUILD_NAME)-$(MATRIX_SOLVER)
+endif
+BUILD_NAME ?= $(AUTO_BUILD_NAME)
 ifneq ($(words $(BUILD_NAME)),1)
   $(error BUILD_NAME must be one readable path component without whitespace)
 endif

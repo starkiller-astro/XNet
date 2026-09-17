@@ -57,6 +57,98 @@ def main() -> int:
         generic_environment.pop("HOSTNAME", None)
         generic_environment["PATH"] = f"{tools}{os.pathsep}{generic_environment['PATH']}"
 
+        auto_base = work / "automatic-names"
+        automatic_names = (
+            (("PE_ENV=GNU",), "GNU-OPT"),
+            (("PE_ENV=GNU", "CMODE=DEBUG"), "GNU-DEBUG"),
+            (("PE_ENV=GNU", "MPI_MODE=ON"), "GNU-OPT-MPI"),
+            (("PE_ENV=GNU", "OPENMP_MODE=ON"), "GNU-OPT-OPENMP"),
+            (
+                (
+                    "PE_ENV=GNU",
+                    "GPU_MODE=ON",
+                    "GPU_BACKEND=CUDA",
+                    "GPU_LAPACK_VER=CUBLAS",
+                    "OPENACC_MODE=ON",
+                ),
+                "GNU-OPT-CUDA-CUBLAS-OPENACC",
+            ),
+            (("PE_ENV=GNU", "EOS=BAHCALL"), "GNU-OPT-BAHCALL"),
+        )
+        for options, expected_name in automatic_names:
+            automatic = make(
+                f"BUILD_BASE={auto_base}",
+                *options,
+                "print-BUILD_NAME",
+                environment=generic_environment,
+            )
+            require_success(automatic)
+            assert f"BUILD_NAME = {expected_name}" in automatic.stdout
+            assert (auto_base / expected_name / "config.txt").is_file()
+
+        ma48_dir = work / "ma48"
+        ma48_dir.mkdir()
+        (ma48_dir / "MA48.f").write_text("      end\n", encoding="utf-8")
+        automatic_ma48 = make(
+            f"BUILD_BASE={auto_base}",
+            "PE_ENV=GNU",
+            "MATRIX_SOLVER=MA48",
+            f"MA48_DIR={ma48_dir}",
+            "print-BUILD_NAME",
+            environment=generic_environment,
+        )
+        require_success(automatic_ma48)
+        assert "BUILD_NAME = GNU-OPT-MA48" in automatic_ma48.stdout
+
+        explicit_name = make(
+            f"BUILD_BASE={work / 'named-builds'}",
+            "BUILD_NAME=my-debug-build",
+            "CMODE=DEBUG",
+            "print-BUILD_NAME",
+            environment=generic_environment,
+        )
+        require_success(explicit_name)
+        assert "BUILD_NAME = my-debug-build" in explicit_name.stdout
+
+        explicit_directory_path = work / "explicit-directory"
+        explicit_directory = make(
+            f"BUILD_DIR={explicit_directory_path}",
+            "CMODE=DEBUG",
+            "print-BUILD_DIR",
+            environment=generic_environment,
+        )
+        require_success(explicit_directory)
+        assert f"BUILD_DIR = {explicit_directory_path}" in explicit_directory.stdout
+
+        automatic_reuse_base = work / "automatic-reuse"
+        automatic_reuse = make(
+            f"BUILD_BASE={automatic_reuse_base}",
+            "PE_ENV=GNU",
+            "print-BUILD_NAME",
+            environment=generic_environment,
+        )
+        require_success(automatic_reuse)
+        changed_unencoded_setting = make(
+            f"BUILD_BASE={automatic_reuse_base}",
+            "PE_ENV=GNU",
+            "EXTRA_FLAGS=-fno-inline",
+            "print-BUILD_NAME",
+            environment=generic_environment,
+        )
+        require_failure(
+            changed_unencoded_setting, "incompatible BUILD_DIR configuration"
+        )
+
+        automatic_debug_clean = make(
+            f"BUILD_BASE={auto_base}",
+            "PE_ENV=GNU",
+            "CMODE=DEBUG",
+            "clean",
+            environment=generic_environment,
+        )
+        require_success(automatic_debug_clean)
+        assert not (auto_base / "GNU-DEBUG").exists()
+
         generic = make(
             f"BUILD_DIR={work / 'generic'}",
             "PE_ENV=GNU",
