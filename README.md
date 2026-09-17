@@ -9,6 +9,26 @@ execution (post-processing nucleosynthesis). However, with the appropriate
 interfaces, XNet has been used in a variety of large scale simulation
 packages, including FLASH, CHIMERA and several other codes.
 
+Building XNet
+-------------
+
+Run GNU Make from the repository root. The default build places programs under
+`build/default/bin/`:
+
+```bash
+make -j
+```
+
+Use `BUILD_NAME` for a separate, readable configuration directory:
+
+```bash
+make BUILD_NAME=gnu-debug CMODE=DEBUG -j xnet
+```
+
+The build produces object files, module files, preprocessed sources, and
+programs under `build/<BUILD_NAME>/`. See `Makefile.opt` for the principal
+compiler, parallel, solver, EOS, and accelerator choices.
+
 Before you dig deep into the source code, we suggest you learn the
 basics of how thermonuclear reaction networks function, from one of the following sources.
 
@@ -21,6 +41,5 @@ Thermonuclear Kinetics in Astrophysics by Raph Hix and Brad Meyer http://dx.doi.
 Supernovae and Nucleosynthesis: An Investigation of the History of Matter, from the Big Bang to the Present by Dave Arnett http://press.princeton.edu/titles/5859.html
 
 Someday, we'll make a list of publications using XNet, but that will wait...
-
 
 

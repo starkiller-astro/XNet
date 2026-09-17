@@ -17,7 +17,7 @@ def make(
     *arguments: str, environment: Optional[Mapping[str, str]] = None
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["make", "-C", str(SOURCE), "--no-print-directory", *arguments],
+        ["make", "-C", str(ROOT), "--no-print-directory", *arguments],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -325,7 +325,7 @@ def main() -> int:
 
         concurrent_opt = work / "concurrent-opt"
         concurrent_debug = work / "concurrent-debug"
-        common_command = ["make", "-C", str(SOURCE), "--no-print-directory"]
+        common_command = ["make", "-C", str(ROOT), "--no-print-directory"]
         opt_process = subprocess.Popen(
             common_command
             + [

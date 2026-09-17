@@ -1,15 +1,15 @@
 # Production source lists, object paths, and BUILD_DIR configuration checking.
-CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_controls.F90 xnet_data.F90 xnet_output.F90 \
+CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_controls.F90 xnet_data.F90 xnet_output.F90 \
   xnet_abundances.F90 xnet_conditions.F90 xnet_constants.F90 xnet_evolve.F90 xnet_fd.F90 \
   xnet_ffn.F90 xnet_flux.F90 xnet_gpu.F90 xnet_integrate.F90 xnet_integrate_bdf.F90 \
   xnet_integrate_be.F90 xnet_linalg.F90 xnet_match.F90 xnet_nnu.F90 xnet_nse.F90 \
   xnet_preprocess.F90 xnet_screening.F90 xnet_timers.F90 xnet_types.F90 xnet_util.F90)
-DRIVER_SRC := $(addprefix $(XNET_DIR)/,model_input_ascii.F90 net.F90)
-XNSE_MAIN_SRC := $(XNET_DIR)/nse_slice.F90
-XNSE_CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_abundances.F90 xnet_conditions.F90 xnet_controls.F90 \
+DRIVER_SRC := $(addprefix $(SOURCE_DIR)/,model_input_ascii.F90 net.F90)
+XNSE_MAIN_SRC := $(SOURCE_DIR)/nse_slice.F90
+XNSE_CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_abundances.F90 xnet_conditions.F90 xnet_controls.F90 \
   xnet_data.F90 xnet_constants.F90 xnet_fd.F90 xnet_ffn.F90 xnet_match.F90 xnet_nse.F90 \
   xnet_preprocess.F90 xnet_util.F90 xnet_nnu.F90 xnet_timers.F90 xnet_types.F90)
-SETUP_CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_conditions.F90 xnet_controls.F90 xnet_data.F90 \
+SETUP_CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_conditions.F90 xnet_controls.F90 xnet_data.F90 \
   net_setup.F90 xnet_constants.F90 xnet_fd.F90 xnet_ffn.F90 xnet_nnu.F90 \
   xnet_preprocess.F90 xnet_util.F90 xnet_types.F90)
 
@@ -56,7 +56,7 @@ ifeq ($(MPI_MODE),ON)
   MPI_INCLUDE_FLAGS := $(filter -I%,$(MPI_WRAPPER_SHOW)) $(if $(MPI_HEADER_DIR),-I$(MPI_HEADER_DIR))
 endif
 
-CPP_INCLUDE_FLAGS := -I$(XNET_DIR) $(sort $(addprefix -I,$(dir $(SOURCE_FREE_SRC) \
+CPP_INCLUDE_FLAGS := -I$(SOURCE_DIR) $(sort $(addprefix -I,$(dir $(SOURCE_FREE_SRC) \
   $(EOS_FREE_SRC) $(SOLVER_FREE_SRC) $(GPU_FREE_SRC)))) \
   $(filter -I%,$(FFLAGS) $(F90FLAGS) $(LAPACK_INC) $(SOLVER_INC)) $(MPI_INCLUDE_FLAGS)
 CPP_DEFINITION_FLAGS := $(filter -D% -U%,$(FFLAGS) $(F90FLAGS)) $(GPU_DEFINES)
@@ -71,7 +71,7 @@ ifeq ($(CRAY_OMP_PREPROCESS),)
 endif
 
 ifeq ($(CRAY_OMP_PREPROCESS),yes)
-  CRAY_PREPROCESS_INPUT := $(XNET_DIR)/crayftn_cpp.sh
+  CRAY_PREPROCESS_INPUT := $(ROOT_DIR)/make/crayftn_cpp.sh
 else
   CRAY_PREPROCESS_INPUT :=
 endif
@@ -173,17 +173,17 @@ CONFIG_RECORD_ARGUMENTS = \
 .PHONY: xnet xnse net_setup all xinab xnet_gpu FORCE
 FORCE:
 $(CONFIG): FORCE
-	@$(XNET_DIR)/make/update-config.sh '$@' $(CONFIG_RECORD_ARGUMENTS)
+	@$(ROOT_DIR)/make/update-config.sh '$@' $(CONFIG_RECORD_ARGUMENTS)
 
 $(SOURCE_OBJ_DIR) $(EOS_OBJ_DIR) $(SOLVER_OBJ_DIR) $(LAPACK_OBJ_DIR) $(GPU_OBJ_DIR) \
 $(SOURCE_PP_DIR) $(EOS_PP_DIR) $(SOLVER_PP_DIR) $(GPU_PP_DIR) $(MOD_DIR) $(BIN_DIR): | $(CONFIG)
 	@mkdir -p '$@'
 
-BUILD_LOGIC_INPUTS := $(XNET_DIR)/Makefile $(XNET_DIR)/Makefile.opt \
-  $(XNET_DIR)/Makefile.internal $(XNET_DIR)/make/build.mk \
-  $(XNET_DIR)/make/configuration.mk $(XNET_DIR)/make/providers.mk \
-  $(XNET_DIR)/make/sources.mk $(XNET_DIR)/make/dependencies.mk \
-  $(XNET_DIR)/make/rules.mk $(XNET_DIR)/make/update-config.sh \
-  $(XNET_DIR)/make/machines.mk $(XNET_DIR)/make/machines/generic.mk \
-  $(XNET_DIR)/make/machines/cray-pe.mk
-PP_STATIC_INPUTS := $(XNET_DIR)/xnet_macros.fh $(BUILD_LOGIC_INPUTS) $(CRAY_PREPROCESS_INPUT)
+BUILD_LOGIC_INPUTS := $(ROOT_DIR)/Makefile $(ROOT_DIR)/Makefile.opt \
+  $(ROOT_DIR)/Makefile.internal $(ROOT_DIR)/make/build.mk \
+  $(ROOT_DIR)/make/configuration.mk $(ROOT_DIR)/make/providers.mk \
+  $(ROOT_DIR)/make/sources.mk $(ROOT_DIR)/make/dependencies.mk \
+  $(ROOT_DIR)/make/rules.mk $(ROOT_DIR)/make/update-config.sh \
+  $(ROOT_DIR)/make/machines.mk $(ROOT_DIR)/make/machines/generic.mk \
+  $(ROOT_DIR)/make/machines/cray-pe.mk
+PP_STATIC_INPUTS := $(SOURCE_DIR)/xnet_macros.fh $(BUILD_LOGIC_INPUTS) $(CRAY_PREPROCESS_INPUT)

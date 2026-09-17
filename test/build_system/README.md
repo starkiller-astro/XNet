@@ -6,7 +6,8 @@ Run the focused build-system checks from the repository root:
 python3 test/build_system/test_build_system.py
 ```
 
-The script builds the three programs in temporary GNU build directories. It
+The script invokes the repository-root Makefile and builds the three programs
+in temporary GNU build directories. It
 checks generic and Perlmutter defaults, explicit machine selection, separate
 parallel builds, incremental rebuilds, configuration-reuse protection,
 configuration-specific cleaning, solver selection, CUDA path selection, and

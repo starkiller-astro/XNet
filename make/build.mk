@@ -2,8 +2,8 @@
 # One top-level GNU Make invocation owns a BUILD_DIR. Do not clean that
 # directory while the build is running.
 SHELL := /bin/sh
-XNET_DIR := $(CURDIR)
-ROOT_DIR := $(abspath $(XNET_DIR)/..)
+ROOT_DIR := $(CURDIR)
+SOURCE_DIR := $(ROOT_DIR)/source
 
 # Build output. BUILD_NAME selects a readable directory below BUILD_BASE;
 # BUILD_DIR may instead name an explicit absolute or repository-relative path.
@@ -35,7 +35,7 @@ endif
 ifeq ($(BUILD_DIR),$(ROOT_DIR))
   $(error BUILD_DIR may not be the repository root)
 endif
-ifeq ($(BUILD_DIR),$(XNET_DIR))
+ifeq ($(BUILD_DIR),$(SOURCE_DIR))
   $(error BUILD_DIR may not be the source directory)
 endif
 ifeq ($(BUILD_DIR),$(BUILD_BASE))
@@ -66,11 +66,11 @@ endif
 ifneq ($(CLEAN_GOALS),)
 .PHONY: clean clean-all
 clean:
-	@case '$(BUILD_DIR)' in /|'$(ROOT_DIR)'|'$(XNET_DIR)'|'$(BUILD_BASE)') echo 'refusing unsafe BUILD_DIR' >&2; exit 2;; esac; \
+	@case '$(BUILD_DIR)' in /|'$(ROOT_DIR)'|'$(SOURCE_DIR)'|'$(BUILD_BASE)') echo 'refusing unsafe BUILD_DIR' >&2; exit 2;; esac; \
 	 test ! -e '$(BUILD_DIR)' || { test ! -L '$(BUILD_DIR)' && test -f '$(CONFIG)' && test "$$(sed -n '1p' '$(CONFIG)')" = XNET_CONFIG_SCHEMA=1 || { echo 'refusing unmarked BUILD_DIR' >&2; exit 2; }; rm -rf -- '$(BUILD_DIR)'; }
 clean-all:
 	@test "$(CONFIRM_CLEAN_ALL)" = yes || { echo 'set CONFIRM_CLEAN_ALL=yes' >&2; exit 2; }
-	@case '$(BUILD_BASE)' in /|'$(ROOT_DIR)'|'$(XNET_DIR)') echo 'refusing unsafe BUILD_BASE' >&2; exit 2;; esac; \
+	@case '$(BUILD_BASE)' in /|'$(ROOT_DIR)'|'$(SOURCE_DIR)') echo 'refusing unsafe BUILD_BASE' >&2; exit 2;; esac; \
 	 test ! -L '$(BUILD_BASE)' || { echo 'refusing symlink BUILD_BASE' >&2; exit 2; }; \
 	 for d in '$(BUILD_BASE)'/*; do test -e "$$d" || continue; test -L "$$d" && continue; test -f "$$d/config.txt" && test "$$(sed -n '1p' "$$d/config.txt")" = XNET_CONFIG_SCHEMA=1 && rm -rf -- "$$d" || echo "leaving unrecognized $$d" >&2; done
 

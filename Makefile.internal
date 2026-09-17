@@ -7,7 +7,7 @@ UNAME_S ?= $(shell uname -s)
 
 ## Host detection and machine defaults are conventional, tracked fragments.
 ## Compiler-family flags remain in this file.
-include $(XNET_DIR)/make/machines.mk
+include make/machines.mk
 
 ## Get PE_ENV from LMOD if being used
 ifndef PE_ENV
@@ -328,7 +328,7 @@ ATLAS_LIBDIR   = -L$(ATLAS_DIR)/lib
 ATLAS_LIBS     = -llapack -lf77blas -lcblas -latlas
 
 ## NETLIB
-NETLIB_DIR    ?= ../tools/LAPACK
+NETLIB_DIR    ?= $(ROOT_DIR)/tools/LAPACK
 BLAS_LVL1_SRC  = dcopy.f ddot.f dlamch.f dnrm2.f dscal.f dswap.f idamax.f lsame.f xerbla.f
 BLAS_LVL2_SRC  = daxpy.f dger.f dgemv.f dtrmv.f dtrsv.f
 BLAS_LVL3_SRC  = dgemm.f dtrmm.f dtrsm.f

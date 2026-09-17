@@ -10,7 +10,7 @@ define compile_free_form
 $(3): $(1) $(PP_STATIC_INPUTS) $(CONFIG) | $(call parent_dir,$(3))
 ifeq ($(CRAY_OMP_PREPROCESS),yes)
 	@XNET_CPP_OUTPUT='$$@.$$$$.tmp' XNET_CPP='$(XNET_CPP)' \
-	  $(XNET_DIR)/crayftn_cpp.sh $(CPP_EFFECTIVE_FLAGS) '$(1)' && mv '$$@.$$$$.tmp' '$$@'
+	  $(ROOT_DIR)/make/crayftn_cpp.sh $(CPP_EFFECTIVE_FLAGS) '$(1)' && mv '$$@.$$$$.tmp' '$$@'
 else
 	@$(XNET_CPP) $(CPP_EFFECTIVE_FLAGS) '$(1)' > '$$@.$$$$.tmp' && mv '$$@.$$$$.tmp' '$$@'
 endif
