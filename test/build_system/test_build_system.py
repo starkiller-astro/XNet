@@ -35,8 +35,14 @@ def main() -> int:
         line for line in makefile.splitlines() if "$(call solver_obj,$(JAC_SRC)):" in line
     )
     assert "$(call source_obj,$(MPI_SRC))" in sparse_jacobian_rule
+    assert "xnet_sparse.F90" not in sparse_jacobian_rule
     for name in ("xnet_jacobian_MA48.F90", "xnet_jacobian_PARDISO_MKL.F90"):
         assert "Use xnet_parallel" in (SOURCE / name).read_text(encoding="utf-8")
+    probe_rule = next(
+        line for line in makefile.splitlines() if "$(call source_obj,$(PROBE_SRC)):" in line
+    )
+    for module in ("xnet_controls", "xnet_gpu", "xnet_linalg", "xnet_types"):
+        assert f"$(call SOBJ,{module})" in probe_rule
 
     with tempfile.TemporaryDirectory(prefix="xnet-build-system-") as temporary:
         build = pathlib.Path(temporary) / "gnu"
@@ -75,6 +81,45 @@ def main() -> int:
         assert "MACHINE = perlmutter" in perlmutter.stdout
         assert "FC = ftn" in perlmutter.stdout
         assert "LAPACK_VER = LIBSCI" in perlmutter.stdout
+
+        perlmutter_cuda_environment = dict(
+            os.environ,
+            LMOD_SYSTEM_NAME="perlmutter",
+            CUDATOOLKIT_HOME="/facility/cudatoolkit",
+            CRAY_CUDATOOLKIT_DIR="/facility/cray-cuda",
+        )
+        perlmutter_cuda = make(
+            f"BUILD_DIR={build.parent / 'perlmutter-cuda'}",
+            "PE_ENV=CRAY",
+            "GPU_MODE=ON",
+            "GPU_BACKEND=CUDA",
+            "GPU_LAPACK_VER=CUBLAS",
+            "OPENACC_MODE=ON",
+            "OPENMP_OL_MODE=OFF",
+            "print-CUDA_DIR",
+            "print-GPU_INC",
+            "print-GPU_LIBDIR",
+            environment=perlmutter_cuda_environment,
+        )
+        require_success(perlmutter_cuda)
+        assert "CUDA_DIR = /facility/cudatoolkit" in perlmutter_cuda.stdout
+        assert "-I/facility/cudatoolkit/include" in perlmutter_cuda.stdout
+        assert "-L/facility/cudatoolkit/lib64" in perlmutter_cuda.stdout
+
+        perlmutter_cuda_environment.pop("CUDATOOLKIT_HOME")
+        perlmutter_cray_cuda = make(
+            f"BUILD_DIR={build.parent / 'perlmutter-cray-cuda'}",
+            "PE_ENV=CRAY",
+            "GPU_MODE=ON",
+            "GPU_BACKEND=CUDA",
+            "GPU_LAPACK_VER=CUBLAS",
+            "OPENACC_MODE=ON",
+            "OPENMP_OL_MODE=OFF",
+            "print-CUDA_DIR",
+            environment=perlmutter_cuda_environment,
+        )
+        require_success(perlmutter_cray_cuda)
+        assert "CUDA_DIR = /facility/cray-cuda" in perlmutter_cray_cuda.stdout
 
         summit_environment = dict(os.environ, LMOD_SYSTEM_NAME="summit")
         summit = make(
@@ -190,6 +235,16 @@ def main() -> int:
         )
         assert invalid_hip_target.returncode != 0
         assert "GPU_TARGET is valid only with GPU_BACKEND=CUDA" in invalid_hip_target.stderr
+
+        pardiso = make(
+            f"BUILD_DIR={build.parent / 'pardiso'}",
+            "MATRIX_SOLVER=PARDISO",
+            "LAPACK_VER=MKL",
+            "MKL_LIBS=-lmkl_rt",
+            "print-JAC_SRC",
+        )
+        require_success(pardiso)
+        assert "xnet_jacobian_PARDISO_MKL.F90" in pardiso.stdout
 
         clean = make(f"BUILD_DIR={build}", "clean")
         require_success(clean)

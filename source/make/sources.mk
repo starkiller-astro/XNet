@@ -7,7 +7,6 @@ CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_controls.F90 xnet_data.F90 xnet_output
 DRIVER_SRC := $(addprefix $(XNET_DIR)/,model_input_ascii.F90 net.F90)
 XNSE_MAIN_SRC := $(XNET_DIR)/nse_slice.F90
 PROBE_SRC := $(ROOT_DIR)/test/qualification/frontier/gpu_linalg_probe.F90
-SPARSE_SRC := $(if $(filter MA48 PARDISO,$(MATRIX_SOLVER)),$(XNET_DIR)/xnet_sparse.F90)
 XNSE_CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_abundances.F90 xnet_conditions.F90 xnet_controls.F90 \
   xnet_data.F90 xnet_constants.F90 xnet_fd.F90 xnet_ffn.F90 xnet_match.F90 xnet_nse.F90 \
   xnet_preprocess.F90 xnet_util.F90 xnet_nnu.F90 xnet_timers.F90 xnet_types.F90)
@@ -17,7 +16,7 @@ SETUP_CORE_SRC := $(addprefix $(XNET_DIR)/,xnet_conditions.F90 xnet_controls.F90
 SOURCE_FREE_SRC := $(sort $(CORE_SRC) $(DRIVER_SRC) $(XNSE_CORE_SRC) $(SETUP_CORE_SRC) \
                    $(XNSE_MAIN_SRC) $(MPI_SRC) $(PROBE_SRC))
 EOS_FREE_SRC := $(sort $(EOS_SRC))
-SOLVER_FREE_SRC := $(sort $(JAC_SRC) $(SPARSE_SRC) $(filter %.F90 %.f90,$(SOLVER_SRC)))
+SOLVER_FREE_SRC := $(sort $(JAC_SRC) $(filter %.F90 %.f90,$(SOLVER_SRC)))
 LAPACK_FREE_SRC := $(sort $(filter %.F90 %.f90,$(LAPACK_SRC)))
 GPU_FREE_SRC := $(sort $(GPU_PROVIDER_SRC))
 SOLVER_FIXED_SRC := $(sort $(filter %.F %.f,$(SOLVER_SRC)))

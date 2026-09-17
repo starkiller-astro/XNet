@@ -11,7 +11,21 @@ override GPU_LAPACK_LIBS :=
 SELECTED_EXTERNAL_MODULE_DIRS := $(XNET_EXTERNAL_MODULE_DIRS)
 ifeq ($(GPU_MODE),ON)
   ifeq ($(GPU_BACKEND),CUDA)
-    CUDA_DIR ?= /usr/local/cuda
+    ifeq ($(findstring $(MACHINE),$(CRAY_PE_COMPAT_HOSTS)),$(MACHINE))
+      ifdef CUDATOOLKIT_HOME
+        CUDA_DIR ?= $(CUDATOOLKIT_HOME)
+      else ifdef CRAY_CUDATOOLKIT_DIR
+        CUDA_DIR ?= $(CRAY_CUDATOOLKIT_DIR)
+      else
+        CUDA_DIR ?= /opt/nvidia/cudatoolkit/default
+      endif
+    else
+      ifdef OLCF_CUDA_ROOT
+        CUDA_DIR ?= $(OLCF_CUDA_ROOT)
+      else
+        CUDA_DIR ?= /usr/local/cuda
+      endif
+    endif
     override GPU_DEFINES += -DXNET_GPU -DXNET_CUDA
     override GPU_INC += -I$(CUDA_DIR)/include
     override GPU_LIBDIR += -L$(CUDA_DIR)/lib64
