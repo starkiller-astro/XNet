@@ -70,19 +70,39 @@ Contains
     ! Reads in data necessary to use sparse solver and initializes the Jacobian data.
     !-----------------------------------------------------------------------------------------------
     Use nuclear_data, Only: ny
+    Use reaction_data, Only: n10, n11, n20, n21, n22, n30, n31, n32, n33, &
+      & n40, n41, n42, n43, n44, nan
     Use xnet_controls, Only: idiag, iheat, lun_diag, nzevolve, zb_lo, zb_hi
     Use xnet_parallel, Only: parallel_bcast, parallel_IOProcessor
+    Use xnet_sparse, Only: read_sparse_ind, sparse_data, sparse_ind_invalid, &
+      & sparse_ind_open_error, sparse_ind_read_error
+    Use xnet_util, Only: xnet_terminate
     Implicit None
 
     ! Input variables
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: i, ierr, lun_sparse, lun_solver
+    Type(sparse_data) :: sparse_ind
+    Character(256) :: sparse_message
+    Integer :: i, ierr, io_status, lun_solver, sparse_status
 
     If ( parallel_IOProcessor() ) Then
-      Open(newunit=lun_sparse, file=trim(data_dir)//"/sparse_ind", status='old', form='unformatted')
-      Read(lun_sparse) lval
+      Call read_sparse_ind(trim(data_dir)//'/sparse_ind',ny,nan,n10,n11,n20,n21,n22, &
+        & n30,n31,n32,n33,n40,n41,n42,n43,n44,sparse_ind,sparse_status,io_status,sparse_message)
+      Select Case (sparse_status)
+      Case (sparse_ind_open_error)
+        Call xnet_terminate('Failed to open sparse_ind file',io_status)
+      Case (sparse_ind_read_error)
+        Call xnet_terminate('Error reading sparse_ind '//trim(sparse_message),io_status)
+      Case (sparse_ind_invalid)
+        Call xnet_terminate('Invalid sparse_ind: '//trim(sparse_message))
+      End Select
+      lval = sparse_ind%lval
+      l1s = sparse_ind%l1s
+      l2s = sparse_ind%l2s
+      l3s = sparse_ind%l3s
+      l4s = sparse_ind%l4s
     EndIf
     Call parallel_bcast(lval)
 
@@ -98,7 +118,9 @@ Contains
     ! Allocate, read, and broadcast CRS arrays
     Allocate (ridx(nnz),cidx(nnz),sident(nnz),pb(msize+1))
     If ( parallel_IOProcessor() ) Then
-      Read(lun_sparse) ridx(1:lval), cidx(1:lval), pb(1:ny+1)
+      ridx(1:lval) = sparse_ind%ridx
+      cidx(1:lval) = sparse_ind%cidx
+      pb(1:ny+1) = sparse_ind%pb
       If ( iheat > 0 ) Then
         ! Add indices for self-heating
         Do i = 1, ny
@@ -110,7 +132,6 @@ Contains
         cidx(nnz) = ny + 1          ! dT9dot/dT9 term
         ridx(nnz) = ny + 1
       EndIf
-      Read(lun_sparse) l1s, l2s, l3s, l4s
     EndIf
     Call parallel_bcast(ridx)
     Call parallel_bcast(cidx)
@@ -126,15 +147,20 @@ Contains
     Allocate (ns31(l3s),ns32(l3s),ns33(l3s))
     Allocate (ns41(l4s),ns42(l4s),ns43(l4s),ns44(l4s))
     If ( parallel_IOProcessor() ) Then
-      Read(lun_sparse) ns11, ns21, ns22
-      Read(lun_sparse) ns31
-      Read(lun_sparse) ns32
-      Read(lun_sparse) ns33
-      Read(lun_sparse) ns41
-      Read(lun_sparse) ns42
-      Read(lun_sparse) ns43
-      Read(lun_sparse) ns44
-      Close(lun_sparse)
+      ns11 = sparse_ind%ns11
+      ns21 = sparse_ind%ns21
+      ns22 = sparse_ind%ns22
+      ns31 = sparse_ind%ns31
+      ns32 = sparse_ind%ns32
+      ns33 = sparse_ind%ns33
+      ns41 = sparse_ind%ns41
+      ns42 = sparse_ind%ns42
+      ns43 = sparse_ind%ns43
+      ns44 = sparse_ind%ns44
+      Deallocate (sparse_ind%ridx,sparse_ind%cidx,sparse_ind%pb)
+      Deallocate (sparse_ind%ns11,sparse_ind%ns21,sparse_ind%ns22)
+      Deallocate (sparse_ind%ns31,sparse_ind%ns32,sparse_ind%ns33)
+      Deallocate (sparse_ind%ns41,sparse_ind%ns42,sparse_ind%ns43,sparse_ind%ns44)
     EndIf
     Call parallel_bcast(ns11)
     Call parallel_bcast(ns21)
@@ -179,10 +205,14 @@ Contains
         icntl(5) = 256
       EndIf
 
-      ! Unit numbers for MA48 error/diagnostic output will be set to XNet diagnostic file by default,
-      ! but we put in random values here so we can later check for user-defined input
-      icntl(1) = -99
-      icntl(2) = -99
+      ! MA48 suppresses native output for nonpositive unit numbers. XNet's NEWUNIT may be negative,
+      ! so use it only when positive; wrapper diagnostics continue to use lun_diag in either case.
+      icntl(1) = 0
+      icntl(2) = 0
+      If ( lun_diag > 0 ) Then
+        icntl(1) = lun_diag
+        icntl(2) = lun_diag
+      EndIf
 
       ! Override defaults with user-defined inputs
       Open(newunit=lun_solver, file="sparse_controls.nml", action='read', status='old', iostat=ierr)
@@ -199,6 +229,9 @@ Contains
     Allocate (jobA(nzevolve))
     Allocate (jobB(nzevolve))
     Allocate (jobC(nzevolve))
+    jobA = 3
+    jobB = 1
+    jobC = 1
 
     !$omp parallel default(shared) copyin(cntl,icntl)
 

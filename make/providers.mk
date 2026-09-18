@@ -104,6 +104,12 @@ endif
 # Jacobian filenames follow MATRIX_SOLVER directly, including PARDISO_MKL.
 JAC_SRC := $(SOURCE_DIR)/xnet_jacobian_$(MATRIX_SOLVER).F90
 
+# MA48 and oneMKL PARDISO share the persisted sparse-index reader.
+SPARSE_SRC :=
+ifneq ($(filter MA48 PARDISO_MKL,$(MATRIX_SOLVER)),)
+  SPARSE_SRC := $(SOURCE_DIR)/xnet_sparse.F90
+endif
+
 SOLVER_SRC :=
 ifeq ($(MATRIX_SOLVER),MA41)
   SOLVER_SRC := $(MA41_SRC)
