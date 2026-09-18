@@ -23,6 +23,7 @@
 #define XEND_HOST_DATA     end host_data
 #define XDEV_PTR(...)      use_device(__VA_ARGS__)
 #define XDECLARE_VAR(...)  declare create(__VA_ARGS__)
+#define XDECLARE_ALLOC(...) declare create(__VA_ARGS__)
 #define XROUTINE_SEQ       routine seq
 #define XROUTINE_VECTOR    routine vector
 #define XASYNC(N)          async(N)
@@ -53,9 +54,10 @@
 #define XEND_HOST_DATA     end target data
 #define XDEV_PTR(...)      use_device_ptr(__VA_ARGS__)
 #define XDECLARE_VAR(...)  declare target to(__VA_ARGS__)
+#define XDECLARE_ALLOC(...) declare target link(__VA_ARGS__)
 #define XROUTINE_SEQ       declare target
 #define XROUTINE_VECTOR    declare target
-#define XASYNC(N)          nowait
-#define XWAIT(N)           barrier
+#define XASYNC(N)
+#define XWAIT(N)
 #define XATOMIC            atomic
 #endif

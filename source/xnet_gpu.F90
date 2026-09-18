@@ -44,7 +44,7 @@ Module xnet_gpu
     hipGetDeviceCount, &
     hipSetDevice, &
     hipStreamCreate, &
-    hipStreamDestroy &
+    hipStreamDestroy, &
     hipStreamSynchronize, &
     hipCheck, &
     hipblasCheck, &
@@ -96,7 +96,8 @@ Module xnet_gpu
     omp_is_initial_device, &
     omp_target_is_present
   Use omp_lib, Only : &
-    omp_get_num_devices
+    omp_get_num_devices, &
+    omp_get_mapped_ptr
 #endif
 
 #if defined(XNET_OACC)
@@ -252,7 +253,7 @@ Contains
 #elif defined(XNET_HIP)
     Call hipCheck( hipStreamDestroy( stream ) )
     Call hipblasCheck( hipblasDestroy( hipblas_handle ) )
-    Call rocblasCheck( rocblas_destroy_handle( rocsolver_handle )
+    Call rocblasCheck( rocblas_destroy_handle( rocsolver_handle ) )
 #endif
     !$omp end parallel
 #endif
@@ -315,26 +316,38 @@ Contains
 
   Type(C_PTR) Function dev_ptr_int( a )
     Integer, Target, Intent(in) :: a
+#if defined(XNET_OMP_OL)
+    dev_ptr_int = omp_get_mapped_ptr( C_LOC( a ), omp_get_default_device() )
+#else
     !XDIR XHOST_DATA &
     !XDIR XDEV_PTR(a)
     dev_ptr_int = C_LOC( a )
     !XDIR XEND_HOST_DATA
+#endif
   End Function dev_ptr_int
 
   Type(C_PTR) Function dev_ptr_dp( a )
     Real(dp), Target, Intent(in) :: a
+#if defined(XNET_OMP_OL)
+    dev_ptr_dp = omp_get_mapped_ptr( C_LOC( a ), omp_get_default_device() )
+#else
     !XDIR XHOST_DATA &
     !XDIR XDEV_PTR(a)
     dev_ptr_dp = C_LOC( a )
     !XDIR XEND_HOST_DATA
+#endif
   End Function dev_ptr_dp
 
   Type(C_PTR) Function dev_ptr_cptr( a )
     Type(C_PTR), Target, Intent(in) :: a
+#if defined(XNET_OMP_OL)
+    dev_ptr_cptr = omp_get_mapped_ptr( C_LOC( a ), omp_get_default_device() )
+#else
     !XDIR XHOST_DATA &
     !XDIR XDEV_PTR(a)
     dev_ptr_cptr = C_LOC( a )
     !XDIR XEND_HOST_DATA
+#endif
   End Function dev_ptr_cptr
 
 End Module xnet_gpu

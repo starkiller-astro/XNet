@@ -65,7 +65,6 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine interfaces with and calls the underlying EoS.
     !-----------------------------------------------------------------------------------------------
-    !XDIR XROUTINE_SEQ
     Use xnet_constants, Only: amu
     Use xnet_controls, Only: iheat, iscrn
     Use xnet_types, Only: dp
@@ -73,6 +72,7 @@ Contains
     Use actual_eos_module, Only: xnet_actual_eos
     Use eos_type_module, Only: eos_input_rt, eos_t
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: t9, rho, ye, abar, zbar
@@ -331,11 +331,11 @@ Contains
     ! Calculation uses Fermi function relation d/dx f_(k+1) = (k+1) f_k and the rational function
     ! expansions of Fukushima (2015; AMC 259 708) for the F-D integrals of order 1/2, -1/2, and -3/2.
     !-----------------------------------------------------------------------------------------------
-    !XDIR XROUTINE_SEQ
     Use fd, Only: fdm1h, fd1h, fdm3h
     Use xnet_controls, Only: iheat
     Use xnet_types, Only: dp
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: eta

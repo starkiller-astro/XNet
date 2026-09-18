@@ -1017,6 +1017,7 @@ def run_xnet(
     work_directory: Path,
     *,
     timeout_seconds: float,
+    environment: Mapping[str, str] | None = None,
 ) -> ProcessResult:
     """Run XNet once and require fresh output from the isolated directory."""
 
@@ -1028,6 +1029,7 @@ def run_xnet(
         completed = subprocess.run(
             [str(executable)],
             cwd=work_directory,
+            env=None if environment is None else dict(environment),
             capture_output=True,
             text=True,
             timeout=timeout_seconds,

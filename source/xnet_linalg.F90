@@ -78,11 +78,7 @@ Module xnet_linalg
   Use rocsolverf, Only: &
     rocsolver_handle, &
     rocsolver_dgeqrf, &
-    rocsolver_dormqr, &
-    rocsolver_dgetrf, &
-    rocsolver_dgetrf_batched, &
-    rocsolver_dgetrs, &
-    rocsolver_dgetrs_batched
+    rocsolver_dormqr
   Use rocsparsef, Only: &
     rocsparse_handle, &
     rocsparse_dgthr, &
@@ -94,9 +90,9 @@ Module xnet_linalg
     hipblasDgemm, &
     hipblasDgemmStridedBatched, &
     hipblasDgetrf, &
-    hipblasDgetrfBatched, &
+    hipblasDgetrfStridedBatched, &
     hipblasDgetrs, &
-    hipblasDgetrsBatched, &
+    hipblasDgetrsStridedBatched, &
     hipblasDgemv, &
     hipblasDtrsv, &
     hipblasDtrsm, &
@@ -106,10 +102,6 @@ Module xnet_linalg
     HIPBLAS_SIDE_LEFT, &
     HIPBLAS_FILL_MODE_UPPER, &
     HIPBLAS_DIAG_NON_UNIT
-  Use hipsparsef, Only: &
-    hipsparse_handle, &
-    hipsparseDgthr, &
-    HIPSPARSE_INDEX_BASE_ONE
 #elif defined(XNET_LA_ONEMKL)
   Use onemkl_blas_omp_offload_lp64
 #elif defined(XNET_LA_MAGMA)
@@ -1714,6 +1706,10 @@ Contains
 
     If ( data_on_device ) Then
 
+#if defined(XNET_LA_ROCM)
+      Call LinearSolveBatched_ROCM_Strided &
+        & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+#else
       Do i = 1, batchcount
         osa = (i-1) * n + 1
         osb = (i-1) * nrhs + 1
@@ -1726,12 +1722,15 @@ Contains
 
       Call LinearSolveBatched_GPU &
         &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
+#endif
 #if defined(XNET_OMP_OL)
       Call stream_sync( stream )
 #endif
 
+#if !defined(XNET_LA_ROCM)
       !XDIR XEXIT_DATA XASYNC(tid) &
       !XDIR XDELETE(da,db,dipiv)
+#endif
 
     Else
 
@@ -1754,6 +1753,88 @@ Contains
     End If
 
   End Subroutine LinearSolveBatched
+
+
+#if defined(XNET_LA_ROCM)
+  Subroutine LinearSolveBatched_ROCM_Strided &
+    & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+    !-----------------------------------------------------------------------------------------------
+    ! Solve a contiguous ROCm batch through explicit device base addresses and element strides,
+    ! without constructing device arrays of pointers.
+    !-----------------------------------------------------------------------------------------------
+    Character, Intent(in)                             :: trans
+    Integer, Intent(in)                               :: n, nrhs, lda, ldb, batchcount
+    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
+    Real(dp), Dimension(ldb,*), Target, Intent(inout) :: b
+    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
+
+    Call LUDecompBatched_ROCM_Strided &
+      & ( n, n, a, lda, ipiv, info, batchcount )
+    Call LUBksubBatched_ROCM_Strided &
+      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+
+    Return
+  End Subroutine LinearSolveBatched_ROCM_Strided
+
+
+  Subroutine LUDecompBatched_ROCM_Strided &
+    & ( m, n, a, lda, ipiv, info, batchcount )
+    !-----------------------------------------------------------------------------------------------
+    ! Factor a contiguous batch through device base addresses and element strides.
+    !-----------------------------------------------------------------------------------------------
+    Integer, Intent(in)                               :: m, n, lda, batchcount
+    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
+    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
+
+    Integer(C_INT64_T) :: stridea, stridep
+    Type(C_PTR) :: da, dipiv, dinfo
+
+    stridea = Int( lda * n, C_INT64_T )
+    stridep = Int( n, C_INT64_T )
+
+    da = dev_ptr( a(1,1) )
+    dipiv = dev_ptr( ipiv(1) )
+    dinfo = dev_ptr( info(1) )
+
+    Call hipblasCheck( hipblasDgetrfStridedBatched &
+      & ( hipblas_handle, n, da, lda, stridea, dipiv, stridep, dinfo, batchcount ) )
+
+    Return
+  End Subroutine LUDecompBatched_ROCM_Strided
+
+
+  Subroutine LUBksubBatched_ROCM_Strided &
+    & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+    !-----------------------------------------------------------------------------------------------
+    ! Back-substitute a contiguous batch through device base addresses and element strides.
+    !-----------------------------------------------------------------------------------------------
+    Character, Intent(in)                             :: trans
+    Integer, Intent(in)                               :: n, nrhs, lda, ldb, batchcount
+    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
+    Real(dp), Dimension(ldb,*), Target, Intent(inout) :: b
+    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
+
+    Integer(C_INT) :: itrans
+    Integer(C_INT64_T) :: stridea, strideb, stridep
+    Type(C_PTR) :: da, db, dipiv, hinfo
+
+    stridea = Int( lda * n, C_INT64_T )
+    strideb = Int( ldb * nrhs, C_INT64_T )
+    stridep = Int( n, C_INT64_T )
+    itrans = itrans_from_char( trans )
+
+    da = dev_ptr( a(1,1) )
+    db = dev_ptr( b(1,1) )
+    dipiv = dev_ptr( ipiv(1) )
+    hinfo = C_LOC( info(1) )
+
+    Call hipblasCheck( hipblasDgetrsStridedBatched &
+      & ( hipblas_handle, itrans, n, nrhs, da, lda, stridea, dipiv, stridep, db, ldb, strideb, &
+      & hinfo, batchcount ) )
+
+    Return
+  End Subroutine LUBksubBatched_ROCM_Strided
+#endif
 
 
   Subroutine LinearSolveBatched_CPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
@@ -1820,8 +1901,7 @@ Contains
     Type(C_PTR), Dimension(*),  Target :: da, dipiv
     Logical, Optional                  :: pivot
 
-    Integer                         :: ierr, i, stridea, strideipiv
-    Integer(C_INT64_T)              :: strideP_64
+    Integer                         :: ierr, stridea, strideipiv
     Integer,  Dimension(:), Pointer :: pinfo
     Type(C_PTR)                     :: da_array, dipiv_array, dinfo
     Logical                         :: lpiv
@@ -1838,9 +1918,11 @@ Contains
 
     pinfo => info(1:batchcount)
 
+#if !defined(XNET_LA_ROCM)
     da_array = dev_ptr( da(1) )
     dipiv_array = dev_ptr( dipiv(1) )
     dinfo = dev_ptr( pinfo(1) )
+#endif
 
 #if defined(XNET_LA_CUBLAS)
     If ( lpiv ) Then
@@ -1852,11 +1934,8 @@ Contains
              ( cublas_handle, n, da_array, lda, dipiv0, dinfo, batchcount )
     EndIf
 #elif defined(XNET_LA_ROCM)
-    !strideP_64 = n
-    !Call rocsolverCheck( rocsolver_dgetrf_batched &
-    !       ( rocsolver_handle, n, n, da_array, lda, dipiv(1), strideP_64, dinfo, batchcount ) )
-    Call hipblasCheck( hipblasDgetrfBatched &
-           ( hipblas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount ) )
+    Call LUDecompBatched_ROCM_Strided &
+      & ( m, n, a, lda, ipiv, info, batchcount )
 #elif defined(XNET_LA_ONEMKL)
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, ipiv )
     Call DGETRF_BATCH_STRIDED &
@@ -1903,9 +1982,8 @@ Contains
     Type(C_PTR), Dimension(*),  Target :: da, dipiv, db
     Logical, Optional                  :: pivot
 
-    Integer                         :: ierr, i, stridea, strideb, strideipiv
+    Integer                         :: ierr, stridea, strideb, strideipiv
     Integer(C_INT)                  :: itrans
-    Integer(C_INT64_T)              :: strideP_64
     Integer,  Dimension(:), Pointer :: pinfo
     Type(C_PTR)                     :: hinfo
     Type(C_PTR)                     :: da_array, db_array, dipiv_array, dinfo
@@ -1926,10 +2004,12 @@ Contains
 
     hinfo = C_LOC( pinfo )
 
+#if !defined(XNET_LA_ROCM)
     da_array = dev_ptr( da(1) )
     db_array = dev_ptr( db(1) )
     dipiv_array = dev_ptr( dipiv(1) )
     dinfo = dev_ptr( pinfo(1) )
+#endif
 
     itrans = itrans_from_char( trans )
 
@@ -1943,11 +2023,9 @@ Contains
              ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv0, db_array, ldb, hinfo, batchcount )
     EndIf
 #elif defined(XNET_LA_ROCM)
-    !strideP_64 = n
-    !Call rocsolverCheck( rocsolver_dgetrs_batched &
-    !       ( rocsolver_handle, itrans, n, nrhs, da_array, lda, dipiv(1), strideP_64, db_array, ldb, batchcount ) )
-    Call hipblasCheck( hipblasDgetrsBatched &
-           ( hipblas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount ) )
+    Call LUBksubBatched_ROCM_Strided &
+      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+    Call stream_sync( stream )
 #elif defined(XNET_LA_ONEMKL)
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, ipiv )
     Call dgetrs_batch_strided &

@@ -1,0 +1,24 @@
+{
+  "schema": "xnet-frontier-comparison-v1",
+  "status": "accepted after review of Frontier job 5230609",
+  "target_time_exact": true,
+  "scalar_fields": {
+    "achieved_time": {"atol": 5e-12, "rtol": 5e-8},
+    "temperature_gk": {"atol": 5e-10, "rtol": 5e-7},
+    "density": {"atol": 5e-3, "rtol": 5e-7},
+    "electron_fraction": {"atol": 5e-10, "rtol": 5e-7}
+  },
+  "ascii_fields": {
+    "neutrino_loss_rate": {"atol": 5e-10, "rtol": 5e-6},
+    "timestep": {"atol": 5e-12, "rtol": 5e-6}
+  },
+  "reported_ascii_fields": ["energy_generation_rate"],
+  "mass_fractions": {
+    "material_threshold": 0.0001,
+    "anchors": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "selected": {"atol": 5e-10, "rtol": 5e-5},
+    "complete_vector_l1_limit": 5e-5,
+    "complete_vector_linf_limit": 1e-5,
+    "normalization_atol": 2e-6
+  }
+}

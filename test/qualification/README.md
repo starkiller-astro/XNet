@@ -76,6 +76,10 @@ chosen work root. Record the compiler, MPI implementation, OpenMP settings,
 commands, host, date, and any untested environments in the PR; a successful
 run qualifies only that exact configuration.
 
+The manual Frontier HIP/ROCm qualification that reuses this fixture is
+documented in [`frontier/README.md`](frontier/README.md). It is a separate GPU
+check and does not change this CPU/MPI/OpenMP comparison policy.
+
 The example intentionally uses the launcher's ordinary slot and binding
 policy. If a scheduler allocation exposes fewer than two slots, request an
 allocation with enough slots rather than allowing oversubscription. Allowing

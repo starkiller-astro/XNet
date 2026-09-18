@@ -420,9 +420,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This function linearly blends screening prescriptions
     !-----------------------------------------------------------------------------------------------
-    !XDIR XROUTINE_SEQ
     Use xnet_types, Only: dp
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: lambda, hw, hi, hs, dhwdt9, dhidt9, dhsdt9
