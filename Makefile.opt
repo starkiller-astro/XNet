@@ -1,0 +1,29 @@
+# User-selectable defaults. Override these on the Make command line rather
+# than editing this file for a local build. Unless BUILD_NAME or BUILD_DIR is
+# supplied, the major choices below form a readable build-directory name.
+
+# OPT or DEBUG.
+CMODE ?= OPT
+# GNU, INTEL, PGI, NVIDIA, NVHPC, LLVM, CCE, CRAY, or XL.
+PE_ENV ?= GNU
+
+# MPI and host OpenMP: ON or OFF.
+MPI_MODE ?= OFF
+OPENMP_MODE ?= OFF
+
+# Accelerator libraries and directives: ON or OFF. GPU builds use CUDA with
+# CUBLAS or MAGMA, or HIP with ROCM, and exactly one directive model.
+GPU_MODE ?= OFF
+GPU_BACKEND ?= CUDA
+GPU_LAPACK_VER ?= CUBLAS
+OPENACC_MODE ?= OFF
+OPENMP_OL_MODE ?= OFF
+
+# STARKILLER, BAHCALL, or HELMHOLTZ.
+EOS ?= STARKILLER
+# dense, MA41, MA48, or the oneMKL implementation PARDISO_MKL.
+MATRIX_SOLVER ?= dense
+
+# LAPACK_VER defaults to NETLIB on generic hosts and LIBSCI on the maintained
+# HPE Cray Programming Environment hosts. It may be set explicitly to NETLIB,
+# MKL, LIBSCI, ATLAS, ACCEL, PGIBLAS, or ESSL.

@@ -1,29 +1,13 @@
 ##
-## System configurations and architecture/installation specific MACROS
+## System configuration and machine- or installation-specific macros
 ##
 
 ## Determine OS kernel (Linux or Darwin)
 UNAME_S ?= $(shell uname -s)
 
-## Define programming envionment if not set or on a Cray machine
-ifdef LMOD_SYSTEM_NAME
-    MACHINE=$(LMOD_SYSTEM_NAME)
-else
-    MACHINE=$(shell echo $${HOSTNAME%%.*} | sed 's/\(-[a-zA-Z0-9]*\)\?[0-9]*$$//')
-endif
-CRAY_MACHINE = \
-               frontier \
-               titan \
-               perlmutter \
-               edison \
-               cori \
-               chester \
-               beacon
-
-IBM_MACHINE = \
-              summit \
-              summitdev \
-              mira
+## Host detection and machine defaults are conventional, tracked fragments.
+## Compiler-family flags remain in this file.
+include make/machines.mk
 
 ## Get PE_ENV from LMOD if being used
 ifndef PE_ENV
@@ -35,31 +19,6 @@ ifndef PE_ENV
   endif
 endif
 
-FC_MPI  = mpifort
-CC_MPI  = mpicc
-CXX_MPI = mpic++
-LDR_MPI = mpifort
-
-ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-    LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
-else ifeq ($(findstring $(MACHINE),$(CRAY_MACHINE)),$(MACHINE))
-    FC      = ftn
-    CC      = cc
-    CXX     = CC
-    LDR     = ftn
-    FC_MPI  = ftn
-    CC_MPI  = cc
-    CXX_MPI = CC
-    LDR_MPI = ftn
-
-    LAPACK_VER     ?= LIBSCI
-    GPU_LAPACK_VER ?= CUBLAS
-else
-    LAPACK_VER     ?= NETLIB
-    GPU_LAPACK_VER ?= CUBLAS
-endif
-
 #-------------------------------------------------------------------------------
 # Define compiler specific variables
 #-------------------------------------------------------------------------------
@@ -68,13 +27,9 @@ ifeq ($(PE_ENV),INTEL)
 
     ifneq ($(FC),ftn)
         FC      = ifort
-        CC      = icc
-        CXX     = icpc
         LDR     = ifort
 
         ARCHOPT = -xHost
-    else ifeq ($(MACHINE),cori)
-        ARCHOPT = -align array64byte
     endif
     INLINE        = -ipo
 
@@ -100,10 +55,6 @@ ifeq ($(PE_ENV),INTEL)
     F77FLAGS      = -fpp -real-size 64 -integer-size 32
     F90FLAGS      = -fpp -real-size 64 -integer-size 32
 
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  = -check all
-
     # Linker flags
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
@@ -112,17 +63,11 @@ else ifeq ($(PE_ENV),PGI)
 
     ifneq ($(FC),ftn)
         FC        = pgfortran
-        CC        = pgcc
-        CXX       = pgc++
         LDR       = pgfortran
 
         ARCHOPT   =
     endif
-    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-        INLINE    = -Mipa=fast,inline,safe
-    else
-        INLINE    =
-    endif
+    INLINE    = -Mipa=fast,inline,safe
 
     # generic flags
     OPT_FLAGS     = -g -gopt -fast $(ARCHOPT) $(INLINE)
@@ -146,29 +91,19 @@ else ifeq ($(PE_ENV),PGI)
     F77FLAGS      = -Mpreprocess -r8 -i4 -Mfixed
     F90FLAGS      = -Mpreprocess -r8 -i4
 
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
-
     # Linker flags
     OPT_LDFLAGS   = -pgc++libs
     DEBUG_LDFLAGS = -pgc++libs
 
-else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
+else ifneq ($(filter NVIDIA NVHPC,$(PE_ENV)),)
 
     ifneq ($(FC),ftn)
         FC        = nvfortran
-        CC        = nvcc
-        CXX       = nvc++
         LDR       = nvfortran
 
         ARCHOPT   = -tp=pwr9
     endif
-    ifneq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-        INLINE    =# -Mipa=fast,inline,safe
-    else
-        INLINE    =
-    endif
+    INLINE    =# -Mipa=fast,inline,safe
 
     # generic flags
     OPT_FLAGS     = -g -gopt -O2 $(ARCHOPT) $(INLINE)
@@ -192,10 +127,6 @@ else ifeq ($(findstring $(PE_ENV),NVIDIA NVHPC),$(PE_ENV))
     F77FLAGS      = -Mpreprocess -r8 -i4 -Mfixed
     F90FLAGS      = -Mpreprocess -r8 -i4
 
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
-
     # Linker flags
     OPT_LDFLAGS   = -pgc++libs
     DEBUG_LDFLAGS = -pgc++libs
@@ -204,15 +135,9 @@ else ifeq ($(PE_ENV),GNU)
 
     ifneq ($(FC),ftn)
         FC        = gfortran
-        CC        = gcc
-        CXX       = g++
         LDR       = gfortran
 
-        ifeq ($(findstring $(MACHINE),$(IBM_MACHINE)),$(MACHINE))
-          ARCHOPT   = -mtune=native
-        else
-          ARCHOPT   = -march=native
-        endif
+        ARCHOPT   = -march=native
     endif
 
     # generic flags
@@ -239,21 +164,52 @@ else ifeq ($(PE_ENV),GNU)
     F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -Wno-compare-reals
     F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -fallow-argument-mismatch -ffree-line-length-none
 
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
+    # Linker flags
+    OPT_LDFLAGS   =
+    DEBUG_LDFLAGS =
+
+else ifeq ($(PE_ENV),LLVM)
+
+    ifneq ($(FC),ftn)
+        FC        = flang
+        LDR       = flang
+        ARCHOPT   = -march=native
+    endif
+
+    # generic flags
+    OPT_FLAGS     = -g -O3 -funroll-loops $(ARCHOPT) $(INLINE)
+    DEBUG_FLAGS   = -g -O0
+
+
+    ifeq ($(OPENMP_MODE),ON)
+        OPENMP    = -fopenmp
+    else
+        OPENMP    =# -lgomp
+    endif
+    ifeq ($(OPENACC_MODE),ON)
+        OPENACC   =# -fopenacc
+    else
+        OPENACC   =
+    endif
+
+    # Fortran-specific flags
+    OPT_FFLAGS    =
+    DEBUG_FFLAGS  =
+
+    F77FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-folding-value-checks
+    F90FLAGS      = -cpp -fdefault-real-8 -fdefault-double-8 -fimplicit-none -Wno-folding-value-checks
 
     # Linker flags
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
 
-else ifeq ($(findstring $(PE_ENV),CCE CRAY),$(PE_ENV))
+else ifneq ($(filter CCE CRAY,$(PE_ENV)),)
 
-    INLINE_DB     = ./$(EXE)_inline
+    INLINE_DB     = $(BUILD_DIR)/xnet_inline
     INLINE        = -h wp -h pl=$(INLINE_DB)
 
     # generic flags
-    OPT_FLAGS     = -O2 -G2# $(INLINE)
+    OPT_FLAGS     = -O2 -g
     DEBUG_FLAGS   = -O0 -eD
 
     ifeq ($(OPENMP_MODE),ON)
@@ -279,10 +235,6 @@ else ifeq ($(findstring $(PE_ENV),CCE CRAY),$(PE_ENV))
     F77FLAGS      = -eZ -s real64 -s integer32
     F90FLAGS      = -eZ -s real64 -s integer32
 
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
-
     # Linker flags
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
@@ -291,8 +243,6 @@ else ifeq ($(PE_ENV),XL)
 
     ifneq ($(FC),ftn)
         FC        = xlf2008_r
-        CC        = xlc_r
-        CXX       = xlc++_r
         LDR       = xlf90_r
 
         ARCHOPT   = -qarch=pwr9 -qtune=pwr9
@@ -321,10 +271,6 @@ else ifeq ($(PE_ENV),XL)
     F77FLAGS      = -qpreprocess -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg -qfixed
     F90FLAGS      = -qpreprocess -qintsize=4 -qrealsize=8 -qzerosize -qport=c_loc -qundef -qsuppress=cmpmsg
 
-    # C-specific flags
-    OPT_CFLAGS    =
-    DEBUG_CFLAGS  =
-
     # Linker flags
     OPT_LDFLAGS   =
     DEBUG_LDFLAGS =
@@ -338,8 +284,6 @@ endif
 ## Override compiler for MPI
 ifeq ($(MPI_MODE),ON)
     FC  = $(FC_MPI)
-    CC  = $(CC_MPI)
-    CXX = $(CXX_MPI)
     LDR = $(LDR_MPI)
 endif
 
@@ -356,19 +300,20 @@ else
     MKL_OS = lnx
 endif
 MKLROOT    ?= $(INTEL_PATH)/mkl
-ifneq ("$(wildcard ${MKLROOT}/tools/mkl_link_tool)","")
+MKL_LINK_TOOL := $(firstword $(wildcard ${MKLROOT}/tools/mkl_link_tool ${MKLROOT}/bin/mkl_link_tool))
+ifneq ("$(MKL_LINK_TOOL)","")
     ifeq ($(PE_ENV),INTEL)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=intel_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),PGI)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=pgi_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),GNU)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
     else ifeq ($(PE_ENV),CRAY)
-        MKL_INC  ?= $(shell ${MKLROOT}/tools/mkl_link_tool -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
-        MKL_LIBS ?= $(shell ${MKLROOT}/tools/mkl_link_tool -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_INC  ?= $(shell ${MKL_LINK_TOOL} -opts --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
+        MKL_LIBS ?= $(shell ${MKL_LINK_TOOL} -libs --quiet --parallel=no --compiler=gnu_f --os=${MKL_OS} --linking=static)
     endif
 endif
 
@@ -383,13 +328,10 @@ ATLAS_LIBDIR   = -L$(ATLAS_DIR)/lib
 ATLAS_LIBS     = -llapack -lf77blas -lcblas -latlas
 
 ## NETLIB
-NETLIB_DIR    ?= ../tools/LAPACK
+NETLIB_DIR    ?= $(ROOT_DIR)/tools/LAPACK
 BLAS_LVL1_SRC  = dcopy.f ddot.f dlamch.f dnrm2.f dscal.f dswap.f idamax.f lsame.f xerbla.f
-BLAS_LVL2_SRC  = daxpy.f dger.f dgemv.f dtrmv.f
+BLAS_LVL2_SRC  = daxpy.f dger.f dgemv.f dtrmv.f dtrsv.f
 BLAS_LVL3_SRC  = dgemm.f dtrmm.f dtrsm.f
-ifeq ($(MATRIX_SOLVER),MA48)
-BLAS_LVL2_SRC += dtrsv.f
-endif
 LAPACK_UTL_SRC = ieeeck.f iparmq.f ilaenv.f iladlc.f iladlr.f
 LAPACK_AUX_SRC = dgetrf2.f dlaswp.f dlapy2.f \
                  dlaisnan.f dlarf.f dlarfg.f \
@@ -399,7 +341,6 @@ NETLIB_SRC     = $(addprefix $(NETLIB_DIR)/, \
 		 $(BLAS_LVL1_SRC) $(BLAS_LVL2_SRC) $(BLAS_LVL3_SRC) \
 		 $(LAPACK_UTL_SRC) $(LAPACK_AUX_SRC) \
 		 dgels.f dgetrf.f dgetrs.f dgesv.f)
-NETLIB_OBJ     = $(addsuffix .o,$(basename $(NETLIB_SRC)))
 
 ## ESSL
 ESSL_DIR    ?= $(OLCF_ESSL_ROOT)
@@ -414,66 +355,20 @@ LAPACK_INC    = $($(LAPACK_VER)_INC)
 LAPACK_LIBDIR = $($(LAPACK_VER)_LIBDIR)
 LAPACK_LIBS   = $($(LAPACK_VER)_LIBS)
 LAPACK_SRC    = $($(LAPACK_VER)_SRC)
-LAPACK_OBJ    = $(addsuffix .o,$(basename $(LAPACK_SRC)))
-
-LAPACK_OBJ_f90 = $(addsuffix .o,$(basename $(filter %.f90,$(LAPACK_SRC))))
-LAPACK_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.F90,$(LAPACK_SRC))))
-LAPACK_OBJ_f   = $(addsuffix .o,$(basename $(filter %.f,$(LAPACK_SRC))))
-LAPACK_OBJ_F   = $(addsuffix .o,$(basename $(filter %.F,$(LAPACK_SRC))))
-LAPACK_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(LAPACK_SRC))))
-LAPACK_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp %.cxx,$(LAPACK_SRC))))
-
-## PARDISO
-ifneq ($(LAPACK_VER),MKL)
-    PARDISO        = PARDISO
-    PARDISO_DIR   ?= /usr/local/pardiso
-    PARDISO_INC    =
-    PARDISO_LIBDIR = -L$(PARDISO_DIR)/lib
-    ifeq ($(UNAME_S),Darwin)
-        PARDISO_LIBS = -lpardiso600-MACOS-X86-64
-    else ifeq ($(PE_ENV),GNU)
-        PARDISO_LIBS = -lpardiso600-GNU720-X86-64
-    endif
-else
-    PARDISO        = PARDISO_MKL
-endif
 
 ## MA48
-MA48           = MA48
 MA48_DIR      ?= .
-MA48_SRC       = $(addprefix $(MA48_DIR)/, \
-		 MA48.f)
-MA48_OBJ       = $(addsuffix .o,$(basename $(MA48_SRC)))
+MA48_SRC       = $(MA48_DIR)/MA48.f
 
 ## MA41
-MA41           = MA41
 MA41_DIR      ?= .
-MA41_SRC       = $(addprefix $(MA41_DIR)/, \
-		 MA41.f)
-MA41_OBJ       = $(addsuffix .o,$(basename $(MA41_SRC)))
-
-SOLVER         = $($(MATRIX_SOLVER))
-ifeq ($(SOLVER),)
-    SOLVER     = $(MATRIX_SOLVER)
-endif
-JAC_OBJ        = xnet_jacobian_$(SOLVER).o
+MA41_SRC       = $(MA41_DIR)/MA41.f
 
 SOLVER_INC     = $($(MATRIX_SOLVER)_INC)
 SOLVER_LIBDIR  = $($(MATRIX_SOLVER)_LIBDIR)
 SOLVER_LIBS    = $($(MATRIX_SOLVER)_LIBS)
-SOLVER_SRC     = $($(MATRIX_SOLVER)_SRC)
-SOLVER_OBJ     = $(addsuffix .o,$(basename $(SOLVER_SRC)))
-
-SOLVER_OBJ_f90 = $(addsuffix .o,$(basename $(filter %.f90,$(SOLVER_SRC))))
-SOLVER_OBJ_F90 = $(addsuffix .o,$(basename $(filter %.F90,$(SOLVER_SRC))))
-SOLVER_OBJ_f   = $(addsuffix .o,$(basename $(filter %.f,$(SOLVER_SRC))))
-SOLVER_OBJ_F   = $(addsuffix .o,$(basename $(filter %.F,$(SOLVER_SRC))))
-SOLVER_OBJ_C   = $(addsuffix .o,$(basename $(filter %.c,$(SOLVER_SRC))))
-SOLVER_OBJ_CPP = $(addsuffix .o,$(basename $(filter %.cpp,$(SOLVER_SRC))))
 
 ## Define compiler flags
 FLAGS     = $($(CMODE)_FLAGS) $(EXTRA_FLAGS)
 FFLAGS   += $(FLAGS) $($(CMODE)_FFLAGS) $(OPENMP)
-CFLAGS   += $(FLAGS) $($(CMODE)_CFLAGS) $(OPENMP)
-CXXFLAGS += $(FLAGS) $($(CMODE)_CXXFLAGS) $(OPENMP)
 LDFLAGS  += $(FLAGS) $($(CMODE)_LDFLAGS) $(OPENMP)
