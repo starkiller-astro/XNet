@@ -285,7 +285,7 @@ def submit(arguments: argparse.Namespace) -> Path:
         "sbatch",
         "--parsable",
         "--wait",
-        "--job-name=xnet-issue46",
+        "--job-name=xnet-frontier-qualification",
         "--nodes=1",
         "--ntasks=1",
         f"--cpus-per-task={arguments.cpus_per_task}",

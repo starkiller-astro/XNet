@@ -44,6 +44,7 @@ from xnet_regression import (  # noqa: E402
 
 MANIFEST_SCHEMA = "xnet-frontier-qualification-v2"
 POLICY_SCHEMA = "xnet-frontier-comparison-v1"
+GPU_LINALG_RESIDUAL_LIMIT = 1.0e-12
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SOURCE_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 SLURM_TIME_PATTERN = re.compile(r"^(?:\d+-)?\d{1,2}:\d{2}:\d{2}$")
@@ -477,7 +478,9 @@ def compare_ascii_endpoints(
     }
 
 
-def parse_linalg_probe(text: str, residual_limit: float = 1.0e-12) -> dict[str, object]:
+def parse_linalg_probe(
+    text: str, residual_limit: float = GPU_LINALG_RESIDUAL_LIMIT
+) -> dict[str, object]:
     """Require real device execution, two successful factors, and small residuals."""
 
     device_count: int | None = None
@@ -1806,6 +1809,12 @@ def validate_manifest(document: object, *, require_pass: bool = True) -> None:
         "GPU linear-algebra evidence",
     )
     residual_limit = _manifest_number(linalg["residual_limit"], "residual limit", positive=True)
+    if residual_limit != GPU_LINALG_RESIDUAL_LIMIT:
+        raise FrontierFailure(
+            "test",
+            "manifest",
+            f"GPU residual limit must be {GPU_LINALG_RESIDUAL_LIMIT:.1e}",
+        )
     if linalg["status"] != "passed" or type(linalg["device_count"]) is not int or linalg["device_count"] < 1 or linalg["offloaded"] is not True or linalg["data_present"] is not True:
         raise FrontierFailure("test", "manifest", "GPU linear-algebra evidence failed")
     batches = linalg["batches"]

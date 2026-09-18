@@ -399,6 +399,9 @@ def test_manifest_validator_rejects_controlled_false_success_mutants() -> None:
     mutations = (
         lambda manifest: manifest["builds"]["cpu"].update({"executables": {}}),
         lambda manifest: manifest["checks"]["gpu_linalg"].update({"device_count": 0}),
+        lambda manifest: manifest["checks"]["gpu_linalg"].update(
+            {"residual_limit": 1.0}
+        ),
         lambda manifest: manifest["checks"]["gpu_linalg"]["batches"][0].update(
             {"info": 2}
         ),
