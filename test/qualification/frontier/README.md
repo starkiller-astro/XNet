@@ -70,8 +70,9 @@ runtime histories, raw environment paths, or account data.
 Use an explicitly recorded Frontier module set and consult the current OLCF
 documentation before a future rerun. OLCF's Frontier guide requires the
 `craype-accel-amd-gfx90a` module for HPE Cray Programming Environment OpenMP
-offload and documents hipfort as an OLCF module. PR #31 was successfully
-qualified with CPE 25.09, Cray Fortran 20.0.0, ROCm 6.4.2, and hipfort 6.4.2.
+offload and documents hipfort as an OLCF module. The last successfully
+recorded qualification used CPE 25.09, Cray Fortran 20.0.0, ROCm 6.4.2, and
+hipfort 6.4.2.
 
 After authenticating interactively on Frontier:
 
@@ -92,12 +93,12 @@ python3 test/qualification/frontier/submit_frontier.py \
   --expected-sha="$(git rev-parse HEAD)"
 ```
 
-This block records the stack that passed for PR #31; it is not a requirement
-to retain those versions indefinitely. A CPE 26.03 / ROCm 7.0.2 attempt made
-during PR #31 currently encounters a hipfort/rocBLAS link incompatibility and
-is not qualified. For a later current-stack run, update the module versions,
-keep the same explicit recording and validation, and report the exact tested
-stack with the result.
+This block records the last stack that passed; it is not a requirement to
+retain those versions indefinitely. A newer CPE 26.03 / ROCm 7.0.2 attempt
+currently encounters a hipfort/rocBLAS link incompatibility and is not
+qualified. For a later current-stack run, update the module versions, keep the
+same explicit recording and validation, and report the exact tested stack with
+the result.
 
 Use `--qos` or `--reservation` only when the facility requires it. The default
 request is one node, one task, seven CPUs, one GPU, and 20 minutes. The script
