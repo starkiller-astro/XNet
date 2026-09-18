@@ -59,29 +59,29 @@ The policy never creates or updates a canonical GPU result.
 - `comparison_policy.json` is the reviewed numerical policy, not a reference
   result.
 
-Generated run files are deliberately outside the repository. A completed
-qualification retains a compact, path-neutral manifest under `evidence/`;
-executables, object/module files, runtime histories, raw environment paths,
-and account data remain in the external run directory.
+Generated run files, including the validated manifest, remain outside the
+repository. Record the source commit, tested software configuration, job,
+numerical results, review outcome, and limitations concisely with the pull
+request or release record. Do not commit executables, object/module files,
+runtime histories, raw environment paths, or account data.
 
 ## Human login and submission
 
-Use the current Frontier defaults unless the qualification is intentionally
-testing another recorded module set. OLCF's Frontier guide requires the
+Use an explicitly recorded Frontier module set and consult the current OLCF
+documentation before a future rerun. OLCF's Frontier guide requires the
 `craype-accel-amd-gfx90a` module for HPE Cray Programming Environment OpenMP
-offload and documents hipfort as an OLCF module. The checked configuration uses
-the Cray compiler wrappers,
-ROCm, OpenMP target offload, and HIP/rocBLAS bindings.
+offload and documents hipfort as an OLCF module. PR #31 was successfully
+qualified with CPE 25.09, Cray Fortran 20.0.0, ROCm 6.4.2, and hipfort 6.4.2.
 
 After authenticating interactively on Frontier:
 
 ```bash
 module purge
 module load PrgEnv-cray
-module load cpe/26.03
-module load rocm/7.0.2
+module load cpe/25.09
+module load rocm/6.4.2
 module load craype-accel-amd-gfx90a
-module load hipfort
+module load hipfort/6.4.2
 module load cray-python/3.12.12
 export LD_LIBRARY_PATH="${CRAY_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
@@ -91,6 +91,13 @@ python3 test/qualification/frontier/submit_frontier.py \
   --artifact-root=<fresh-external-directory> \
   --expected-sha="$(git rev-parse HEAD)"
 ```
+
+This block records the stack that passed for PR #31; it is not a requirement
+to retain those versions indefinitely. A CPE 26.03 / ROCm 7.0.2 attempt made
+during PR #31 currently encounters a hipfort/rocBLAS link incompatibility and
+is not qualified. For a later current-stack run, update the module versions,
+keep the same explicit recording and validation, and report the exact tested
+stack with the result.
 
 Use `--qos` or `--reservation` only when the facility requires it. The default
 request is one node, one task, seven CPUs, one GPU, and 20 minutes. The script
@@ -182,10 +189,11 @@ change requires a numerical explanation, a controlled perturbation that the
 new limit still rejects, and a final rerun from the exact source commit.
 Do not derive limits automatically from the current output.
 
-To retain a successful run, copy only the validated, path-neutral manifest and
-concise review note into a dated directory below `evidence/`. Do not copy raw
-histories, binaries, build products, absolute link paths, source archives, or
-allocation identifiers other than the required Slurm job ID.
+Keep the validated manifest and full run directory outside the repository.
+Record concise, path-neutral source, configuration, job, numerical, and review
+results with the pull request or release record. Do not publish raw histories,
+binaries, build products, absolute link paths, source archives, or private
+allocation information.
 
 ## Focused local checks
 
