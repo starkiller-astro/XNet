@@ -75,7 +75,7 @@ MODULE partf_module
     CHARACTER(LEN=72) :: line_read
     CHARACTER(LEN=5)  :: nname_read
     CHARACTER(LEN=11) :: source_read
-    REAL(8) :: aa_read, sp_read, mex_read, g_read(24)
+    REAL(8) :: aa_read, sp_read, mex_read, mex_output, g_read(24)
     INTEGER :: iz_read, in_read
 
     REAL(8) :: ame03_mex(0:max_iz,0:max_in)
@@ -100,7 +100,7 @@ MODULE partf_module
     READ(lun_netwinv_in,'(i5)') nwinv
     IF ( nwinv > max_nwinv ) THEN
       WRITE(*,'(a)') 'ERROR: '//TRIM(ADJUSTL(netwinv_in_fname))//' contains too mannet species'
-      STOP
+      STOP 1
     END IF
     READ(lun_netwinv_in,'(a72)') line_read
 
@@ -109,17 +109,29 @@ MODULE partf_module
     WRITE(lun_netwinv_out,'(a72)') line_read
 
     jnuc = 1
+    inuc_winv = 0
     DO inuc = 1, max_nwinv
-      READ(lun_netwinv_in,'(a5)') nname_read
+      READ(lun_netwinv_in,'(a5)',IOSTAT=ierr) nname_read
+      IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Cannot read partition-function species list'
+        STOP 1
+      END IF
       nname_winv(inuc) = ADJUSTR( nname_read )
       IF ( inuc > 1 ) THEN
         IF ( nname_winv(inuc) == nname_winv(inuc-1) ) EXIT
       END IF
 
-      IF ( nname_winv(inuc) == nname_net(jnuc) ) THEN
+      IF ( jnuc <= nnet .and. nname_winv(inuc) == nname_net(jnuc) ) THEN
         WRITE(lun_netwinv_out,'(a5)') nname_winv(inuc)
         inuc_winv(jnuc) = inuc
         jnuc = jnuc + 1
+      END IF
+    END DO
+
+    DO jnuc = 1, nnet
+      IF ( inuc_winv(jnuc) == 0 ) THEN
+        WRITE(*,'(2a)') 'ERROR: Requested species is unavailable: ',TRIM(ADJUSTL(nname_net(jnuc)))
+        STOP 1
       END IF
     END DO
     
@@ -128,33 +140,40 @@ MODULE partf_module
       knuc = inuc_winv(jnuc) - inuc + 1
       DO k = 1, knuc
         READ(lun_netwinv_in,netwinv_in_fmt1,IOSTAT=ierr) nname_read,aa_read,iz_read,in_read,sp_read,mex_read,source_read
-        READ(lun_netwinv_in,*) (g_read(m),m=1,24)
+        IF ( ierr /= 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: Cannot read partition-function nuclear record'
+          STOP 1
+        END IF
+        READ(lun_netwinv_in,*,IOSTAT=ierr) (g_read(m),m=1,24)
+        IF ( ierr /= 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: Cannot read partition-function values'
+          STOP 1
+        END IF
       END DO
 
+      mex_output = mex_read
       IF ( TRIM(ADJUSTL(source_read)) == 'ame11' ) THEN
-        WRITE(lun_netwinv_out,'(a5,f12.3,2i4,f6.1,f15.8)') &
-        & nname_read,aa_read,iz_read,in_read,sp_read,ame11_mex(iz_read,in_read)
+        mex_output = ame11_mex(iz_read,in_read)
       ELSE IF ( TRIM(ADJUSTL(source_read)) == 'reac1' ) THEN
-        WRITE(lun_netwinv_out,'(a5,f12.3,2i4,f6.1,f15.8)') &
-        & nname_read,aa_read,iz_read,in_read,sp_read,reac1_mex(iz_read,in_read)
+        mex_output = reac1_mex(iz_read,in_read)
       ELSE IF ( TRIM(ADJUSTL(source_read)) == 'ame11extrap' ) THEN
-        WRITE(lun_netwinv_out,'(a5,f12.3,2i4,f6.1,f15.8)') &
-        & nname_read,aa_read,iz_read,in_read,sp_read,ame11extrap_mex(iz_read,in_read)
+        mex_output = ame11extrap_mex(iz_read,in_read)
       ELSE IF ( TRIM(ADJUSTL(source_read)) == 'ame03extrap' ) THEN
-        WRITE(lun_netwinv_out,'(a5,f12.3,2i4,f6.1,f15.8)') &
-        & nname_read,aa_read,iz_read,in_read,sp_read,ame03extrap_mex(iz_read,in_read)
+        mex_output = ame03extrap_mex(iz_read,in_read)
       ELSE IF ( TRIM(ADJUSTL(source_read)) == 'ame03' ) THEN
-        WRITE(lun_netwinv_out,'(a5,f12.3,2i4,f6.1,f15.8)') &
-        & nname_read,aa_read,iz_read,in_read,sp_read,ame03_mex(iz_read,in_read)
+        mex_output = ame03_mex(iz_read,in_read)
       ELSE IF ( TRIM(ADJUSTL(source_read)) == 'frdm' ) THEN
-        WRITE(lun_netwinv_out,'(a5,f12.3,2i4,f6.1,f15.8)') &
-        & nname_read,aa_read,iz_read,in_read,sp_read,frdm_mex(iz_read,in_read)
-      ELSE
-        WRITE(lun_netwinv_out,netwinv_out_fmt1) &
-        & nname_read,aa_read,iz_read,in_read,sp_read,mex_read
+        mex_output = frdm_mex(iz_read,in_read)
       END IF
+
+      IF ( ABS(mex_output) >= 1.0d98 ) THEN
+        WRITE(*,'(2a)') 'ERROR: Mass source has no value for ',TRIM(ADJUSTL(nname_read))
+        STOP 1
+      END IF
+      WRITE(lun_netwinv_out,netwinv_out_fmt1) &
+      & nname_read,aa_read,iz_read,in_read,sp_read,mex_output
       WRITE(lun_netwinv_out,netwinv_out_fmt2) (g_read(m),m=1,24)
-      mex_list(jnuc) = mex_read
+      mex_list(jnuc) = mex_output
       inuc = inuc_winv(jnuc) + 1
     END DO
       
@@ -182,13 +201,21 @@ MODULE partf_module
 
     ! Skip header
     DO i = 1, 15
-      READ(lun_mass,*) 
+      READ(lun_mass,*,IOSTAT=ierr)
+      IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Mass source has an incomplete header'
+        STOP 1
+      END IF
     END DO
 
     DO 
 !     READ(lun_mass,'(2(1x,i3),1x,a15,1x,f12.5)',IOSTAT=ierr) &
       READ(lun_mass,*,IOSTAT=ierr) iz_read, ia_read, eval_read, mex_read
       IF ( ierr < 0 ) EXIT
+      IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Cannot read mass source record'
+        STOP 1
+      END IF
 
       mex(iz_read,ia_read-iz_read) = mex_read * 1.0d-3
     END DO

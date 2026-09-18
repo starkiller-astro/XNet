@@ -5,7 +5,7 @@ Tools for creating customized reaction networks for XNet from JINA REACLIB rates
 
 ## Getting started
 
-The file `input` contains controls for incorporating non-REACLIB rates and the path for the new `netsu`, `netwinv`, `netweak`, and `netneutr` files to be used by XNet.
+The file `input.namelist` contains controls for incorporating non-REACLIB rates and the path for the new `netsu`, `netwinv`, `netweak`, and `netneutr` files to be used by XNet.
 
 The `./*_data` directories contain the rate databases:
 * `./reaclib_data`: ReaclibVX.X rates in slightly modified Reaclib2 format w/o ch. 9/10/11
@@ -46,7 +46,7 @@ The `./*_data` directories contain the rate databases:
   * `make`
 2. Create a list of nuclei in the file `sunet` in the run directory that is a subset of nuclei in the REACLIB database
   * see `sunet.example` for correct format
-3. Configure `input` file
+3. Configure `input.namelist`
 4. Run the code:
   * `./build_net`
 

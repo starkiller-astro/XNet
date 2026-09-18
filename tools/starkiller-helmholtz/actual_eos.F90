@@ -145,8 +145,8 @@ contains
 
 
 
-    !  Frank Timmes Helmholtz based Equation of State
-    !  http://cococubed.asu.edu/
+    !  Timmes-Swesty tabular Helmholtz Equation of State
+    !  https://cococubed.com/code_pages/eos.shtml
 
     !..given a temperature temp [K], density den [g/cm**3], and a composition
     !..characterized by abar and zbar, this routine returns most of the other
@@ -164,7 +164,7 @@ contains
     !..is used to return the electron-positron thermodynamic quantities.
     !..all other derivatives are analytic.
     !..
-    !..references: cox & giuli chapter 24 ; timmes & swesty apj 1999
+    !..references: cox & giuli chapter 24; timmes & swesty, apjs 126, 501, 2000
 
     subroutine actual_eos(input, state)
 

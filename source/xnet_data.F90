@@ -13,6 +13,7 @@ Module nuclear_data
   !-------------------------------------------------------------------------------------------------
   Use xnet_types, Only: dp
   Implicit None
+  Private :: check_nuclear_inputs
   Integer                   :: ny                  ! The number of nuclear species evolved by the network
   Character(5), Allocatable :: nname(:)            ! Nuclei names (e.g. he4) (nname(0) is placeholder for non-nuclei)
   Real(dp), Allocatable     :: aa(:), zz(:), nn(:) ! Mass (aa), proton (zz), and neutron (nn) numbers
@@ -282,6 +283,69 @@ Contains
     Return
   End Subroutine partf
 
+  Subroutine check_nuclear_inputs(data_dir)
+    !-----------------------------------------------------------------------------------------------
+    ! Check that sunet and netwinv contain the same number and order of nuclei before installing
+    ! nuclear data in module state.
+    !-----------------------------------------------------------------------------------------------
+    Use, Intrinsic :: iso_fortran_env, Only: iostat_end
+    Use xnet_util, Only: xnet_terminate
+    Implicit None
+
+    ! Input variables
+    Character(*), Intent(in) :: data_dir
+
+    ! Local variables
+    Character(128) :: diagnostic
+    Character(5), Allocatable :: nname_sunet(:), nname_netwinv(:)
+    Character(80) :: t9_line
+    Integer :: lun_sunet, lun_winv, inuc, ierr, ny_sunet, ny_netwinv
+
+    Open(newunit=lun_sunet, file=trim(data_dir)//'/sunet', status='old', action='read', iostat=ierr)
+    If ( ierr /= 0 ) Call xnet_terminate('Failed to open sunet file',ierr)
+    ny_sunet = 0
+    Do
+      Read(lun_sunet,*,iostat=ierr)
+      If ( ierr == iostat_end ) Then
+        Exit
+      ElseIf ( ierr /= 0 ) Then
+        Call xnet_terminate('Error reading sunet file',ierr)
+      EndIf
+      ny_sunet = ny_sunet + 1
+    EndDo
+    Allocate (nname_sunet(ny_sunet))
+    Rewind(lun_sunet)
+    Do inuc = 1, ny_sunet
+      Read(lun_sunet,"(a5)",iostat=ierr) nname_sunet(inuc)
+      If ( ierr /= 0 ) Call xnet_terminate('Error reading sunet file',ierr)
+    EndDo
+    Close(lun_sunet)
+
+    Open(newunit=lun_winv, file=trim(data_dir)//'/netwinv', status='old', action='read', iostat=ierr)
+    If ( ierr /= 0 ) Call xnet_terminate('Failed to open netwinv file',ierr)
+    Read(lun_winv,"(i5)",iostat=ierr) ny_netwinv
+    If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
+    If ( ny_netwinv /= ny_sunet ) Then
+      Call xnet_terminate('sunet and netwinv nuclei counts do not match')
+    EndIf
+    Read(lun_winv,"(a)",iostat=ierr) t9_line
+    If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
+    Allocate (nname_netwinv(ny_netwinv))
+    Do inuc = 1, ny_netwinv
+      Read(lun_winv,"(a5)",iostat=ierr) nname_netwinv(inuc)
+      If ( ierr /= 0 ) Call xnet_terminate('Error reading netwinv file',ierr)
+      If ( adjustl(nname_netwinv(inuc)) /= adjustl(nname_sunet(inuc)) ) Then
+        Write(diagnostic,'(a,i0)') 'sunet and netwinv nuclei order does not match for inuc=',inuc
+        Call xnet_terminate(trim(diagnostic))
+      EndIf
+    EndDo
+    Close(lun_winv)
+
+    Deallocate (nname_sunet,nname_netwinv)
+
+    Return
+  End Subroutine check_nuclear_inputs
+
   Subroutine read_sunet(data_dir)
     Use, Intrinsic :: iso_fortran_env, Only: iostat_end
     Use xnet_util, Only: xnet_terminate
@@ -426,7 +490,10 @@ Contains
     Call parallel_bcast(data_desc)
 
     ! Read the size of the network and partition function data
-    If ( parallel_IOProcessor() ) Call read_sunet(data_dir)
+    If ( parallel_IOProcessor() ) Then
+      Call check_nuclear_inputs(data_dir)
+      Call read_sunet(data_dir)
+    EndIf
     Call parallel_bcast(ny)
 
     ! Set size of nuclear data arrays and read in nuclear data and partition function interpolation table.
@@ -537,7 +604,8 @@ Contains
     Integer :: i, n, l, m, ntest, ierr
     Integer :: lun_data, lun_sunet, lun_winv
 
-    ! Read in sunet
+    ! Check and read sunet
+    Call check_nuclear_inputs(data_dir)
     Call read_sunet(data_dir)
     Write(lun_out,*) ny
     Allocate (nname_test(0:ny))
@@ -670,19 +738,40 @@ Contains
     Character(*), Intent(in) :: data_dir
 
     ! Local variables
-    Integer :: i, j, n, l, ierr
+    Character(128) :: diagnostic
+    Character(5), Allocatable :: nname_nets4(:)
+    Integer :: i, j, n, l, ierr, ny_nets4
     Integer :: nr1, nr2, nr3, nr4
     Integer :: lun_s3, lun_s4
 
     ! Read in nuclear set, numbers of reactions, and extents of extended reaction arrays
-    Allocate (la(4,ny),le(4,ny))
     If ( parallel_IOProcessor() ) Then
       Open(newunit=lun_s4, file=trim(data_dir)//"/nets4", form='unformatted', status='old', action='read', iostat=ierr)
       If ( ierr /= 0 ) Call xnet_terminate('Failed to open nets4 file',ierr)
-      Read(lun_s4) ny
-      Read(lun_s4) (nname(i), i=1,ny)
-      Read(lun_s4) nffn, nnnu
-      Read(lun_s4) (nreac(i), i=1,4)
+      Read(lun_s4,iostat=ierr) ny_nets4
+      If ( ierr /= 0 ) Call xnet_terminate('Error reading nets4 file',ierr)
+      If ( ny_nets4 /= ny ) Call xnet_terminate('nets4 nuclei count does not match nuclear data')
+      Allocate (nname_nets4(ny_nets4))
+      Read(lun_s4,iostat=ierr) nname_nets4
+      If ( ierr /= 0 ) Call xnet_terminate('Error reading nets4 file',ierr)
+      Do i = 1, ny
+        If ( adjustl(nname_nets4(i)) /= adjustl(nname(i)) ) Then
+          Write(diagnostic,'(a,i0)') 'nets4 nuclei order does not match nuclear data for inuc=',i
+          Call xnet_terminate(trim(diagnostic))
+        EndIf
+      EndDo
+      Deallocate (nname_nets4)
+      Read(lun_s4,iostat=ierr) nffn, nnnu
+      If ( ierr /= 0 ) Call xnet_terminate('Error reading nets4 file',ierr)
+      Read(lun_s4,iostat=ierr) (nreac(i), i=1,4)
+      If ( ierr /= 0 ) Call xnet_terminate('Error reading nets4 file',ierr)
+    EndIf
+    Call parallel_bcast(nffn)
+    Call parallel_bcast(nnnu)
+    Call parallel_bcast(nreac)
+
+    Allocate (la(4,ny),le(4,ny))
+    If ( parallel_IOProcessor() ) Then
       Do i = 1, ny
         Read(lun_s4) n, (la(j,i), le(j,i), j=1,4)
         If ( n /= i ) Then
@@ -692,9 +781,6 @@ Contains
       EndDo
       Close(lun_s4)
     EndIf
-    Call parallel_bcast(nffn)
-    Call parallel_bcast(nnnu)
-    Call parallel_bcast(nreac)
     Call parallel_bcast(la)
     Call parallel_bcast(le)
 

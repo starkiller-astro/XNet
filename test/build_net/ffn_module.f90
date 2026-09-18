@@ -28,7 +28,8 @@ MODULE ffn_module
     netweak_flag, &
     netweak_data_dir, &
     netweak_in_fname, &
-    netweak_out_fname
+    netweak_out_fname, &
+    element_list_fname
 
 !  namelist /partf_input/ &
 !    netwinv_in_fname
@@ -182,7 +183,6 @@ MODULE ffn_module
     INTEGER :: ii, jj, inucmin, inucmax, ierr
     LOGICAL :: keep_rate, is_sorted
 
-    INTEGER,PARAMETER  :: num_reac = 7677
     CHARACTER(LEN=5)   :: sunet_list(nnet),s1,s2
     INTEGER            :: z_list(119),z
     CHARACTER(LEN=2)   :: element_list(119),el,el_min1
@@ -204,12 +204,25 @@ MODULE ffn_module
       CALL build_element_list(element_list_fname, lun_element_in, z_list, element_list)
 
       READ(lun_netweak_in,*, IOSTAT=ierr)
+      IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Weak-rate source is missing its header'
+        STOP 1
+      END IF
 
-      DO i = 1, num_reac
+      DO
         !read first line from each block of data
-        READ(lun_netweak_in,'(1x,a3,1x,i3)', advance = 'no') a, z
-        READ(lun_netweak_in, '(33x,f8.3,1x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
-                                          beta_minus, leps_plus, nubar
+        READ(lun_netweak_in,'(1x,a3,1x,i3)',ADVANCE='no',IOSTAT=ierr) a, z
+        IF ( ierr < 0 ) EXIT
+        IF ( ierr /= 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: Cannot read weak-rate species header'
+          STOP 1
+        END IF
+        READ(lun_netweak_in,'(33x,f8.3,1x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3)',IOSTAT=ierr) &
+        & beta_plus,leps_minus,nu,beta_minus,leps_plus,nubar
+        IF ( ierr /= 0 ) THEN
+          WRITE(*,'(a)') 'ERROR: Cannot read weak-rate source values'
+          STOP 1
+        END IF
         a = trim(adjustl(a))
                 
         !determine if all species are in our network
@@ -265,8 +278,12 @@ MODULE ffn_module
           END IF
                         
           DO j = 2,143
-            READ(lun_netweak_in, '(41x, f8.3,1x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3)') beta_plus, leps_minus, nu, &
-                    beta_minus, leps_plus, nubar
+            READ(lun_netweak_in,'(41x,f8.3,1x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3,2x,f8.3)',IOSTAT=ierr) &
+            & beta_plus,leps_minus,nu,beta_minus,leps_plus,nubar
+            IF ( ierr /= 0 ) THEN
+              WRITE(*,'(a)') 'ERROR: Weak-rate source is truncated'
+              STOP 1
+            END IF
             
             lsum_plus(j) = log10(10.d0**beta_plus + 10.d0**leps_minus)
             lsum_minus(j) = log10(10.d0**beta_minus + 10.d0**leps_plus)
@@ -296,7 +313,11 @@ MODULE ffn_module
           
           !skip reaction that is not in our network
           DO j = 2,143
-            READ(lun_netweak_in,*)
+            READ(lun_netweak_in,*,IOSTAT=ierr)
+            IF ( ierr /= 0 ) THEN
+              WRITE(*,'(a)') 'ERROR: Weak-rate source is truncated'
+              STOP 1
+            END IF
           END DO
         END IF
         

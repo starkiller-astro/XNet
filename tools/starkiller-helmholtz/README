@@ -1,2 +1,7 @@
-These are the Helmholtz EOS routines and table from starkiller-astro/Microphysics (https://github.com/starkiller-astro/Microphysics).
-The routines have been slightly tweaked to interface with standalone-XNet with minimal dependencies.
+These are the tabular Helmholtz EOS routines and table from
+starkiller-astro/Microphysics (https://github.com/starkiller-astro/Microphysics).
+The routines have been slightly tweaked to interface with standalone-XNet with
+minimal dependencies. This Helmholtz implementation interpolates a tabulated
+free energy and is distinct from the direct Timmes EOS. The tracked
+helm_table.dat is byte-for-byte identical to the table distributed in
+https://cococubed.com/codes/eos/helmholtz.tbz.

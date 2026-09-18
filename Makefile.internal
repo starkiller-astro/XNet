@@ -7,7 +7,7 @@ UNAME_S ?= $(shell uname -s)
 
 ## Host detection and machine defaults are conventional, tracked fragments.
 ## Compiler-family flags remain in this file.
-include make/machines.mk
+include $(ROOT_DIR)/make/machines.mk
 
 ## Get PE_ENV from LMOD if being used
 ifndef PE_ENV
