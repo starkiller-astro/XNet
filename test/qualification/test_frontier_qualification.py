@@ -443,6 +443,7 @@ def test_manifest_validator_rejects_controlled_false_success_mutants() -> None:
         lambda manifest: manifest["checks"]["partial_batch"]["endpoint_comparison"][
             "zones"
         ][0].update({"selected_species": ["bogus"]}),
+        lambda manifest: manifest["environment"]["modules"].pop(),
         lambda manifest: manifest["environment"]["compiler"].update(
             {"sha256": "c" * 64}
         ),
