@@ -149,7 +149,9 @@ Contains
         If ( tf <= ts(n) ) Exit
       EndDo
       nf = n
-      rdt = ( tf - ts(nf-1)) / ( ts(nf) - ts(nf-1) )
+      If ( nf > 1 .and. nf <= ns ) Then
+        rdt = ( tf - ts(nf-1)) / ( ts(nf) - ts(nf-1) )
+      EndIf
     EndIf
 
     Do j = 1, nnuspec

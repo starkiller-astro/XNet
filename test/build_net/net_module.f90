@@ -186,19 +186,40 @@ MODULE net_module
     IMPLICIT NONE
 
     ! Local variables
-    INTEGER :: inuc, ierr
+    INTEGER :: inuc, ierr, jnuc
 
     inuc = 1
     DO
       READ(lun_sunet_in,'(a5)',IOSTAT=ierr) nname_net(inuc)
-      IF ( ierr /= 0 ) EXIT
+      IF ( ierr < 0 ) EXIT
+      IF ( ierr /= 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Cannot read requested species'
+        STOP 1
+      END IF
+      IF ( LEN_TRIM(nname_net(inuc)) == 0 ) THEN
+        WRITE(*,'(a)') 'ERROR: Requested species name is blank'
+        STOP 1
+      END IF
+
+      CALL nuc_rename( nname_net(inuc) )
+      DO jnuc = 1, inuc-1
+        IF ( nname_net(jnuc) == nname_net(inuc) ) THEN
+          WRITE(*,'(2a)') 'ERROR: Duplicate requested species: ',TRIM(ADJUSTL(nname_net(inuc)))
+          STOP 1
+        END IF
+      END DO
+
       inuc = inuc + 1
       IF ( inuc > max_nnet ) THEN
         WRITE(*,'(a)') 'ERROR: sunet contains too many species'
-        STOP
+        STOP 1
       END IF
     END DO
     nnet = inuc - 1
+    IF ( nnet == 0 ) THEN
+      WRITE(*,'(a)') 'ERROR: No species were requested'
+      STOP 1
+    END IF
 !   WRITE(*,'(15a5)') (nname_net(inuc),inuc=1,nnet)
     WRITE(*,'(a,i5)') '# species: ',nnet
     

@@ -110,7 +110,7 @@ Contains
 
   End Subroutine eosx
 
-  Subroutine eos_interface_scalar(rho,t9,y,ye,cv,efermkt,defermktdt9,xext,aext,zext)
+  Subroutine eos_interface_scalar(t9,rho,y,ye,cv,efermkt,defermktdt9,xext,aext,zext)
     !-----------------------------------------------------------------------------------------------
     ! This routine updates the Equation of State for changes in temperature and density.
     !
@@ -177,9 +177,9 @@ Contains
     Real(dp), Intent(in) :: t9(zb_lo:zb_hi), rho(zb_lo:zb_hi), y(ny,zb_lo:zb_hi)
     Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
 
-    ! Ouput variables
-    Real(dp), Intent(out) :: ye(zb_lo:zb_hi), cv(zb_lo:zb_hi)
-    Real(dp), Intent(out) :: efermkt(zb_lo:zb_hi), defermktdt9(zb_lo:zb_hi)
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: ye(zb_lo:zb_hi), cv(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: efermkt(zb_lo:zb_hi), defermktdt9(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -282,10 +282,10 @@ Contains
     Real(dp), Intent(in) :: efermkt(zb_lo:zb_hi), defermktdt9(zb_lo:zb_hi)
     Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
 
-    ! Output variables
-    Real(dp), Intent(out) :: ztilde(zb_lo:zb_hi), zinter(zb_lo:zb_hi)
-    Real(dp), Intent(out) :: lambda0(zb_lo:zb_hi), gammae(zb_lo:zb_hi)
-    Real(dp), Intent(out) :: dztildedt9(zb_lo:zb_hi)
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: ztilde(zb_lo:zb_hi), zinter(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: lambda0(zb_lo:zb_hi), gammae(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: dztildedt9(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -385,8 +385,8 @@ Contains
     ! Input variables
     Real(dp), Intent(in) :: efmkt(zb_lo:zb_hi)
 
-    ! Output variables
-    Real(dp), Intent(out) :: ratio(zb_lo:zb_hi), dratiodefmkt(zb_lo:zb_hi)
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: ratio(zb_lo:zb_hi), dratiodefmkt(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)

@@ -558,7 +558,8 @@ Contains
     nnew_desc = 1
     desc_new(1) = '    '
 
-    Open(newunit=lun_su, file=trim(data_dir)//'/netsu')
+    Open(newunit=lun_su, file=trim(data_dir)//'/netsu', status='old', action='read', iostat=ierr)
+    If ( ierr /= 0 ) Call xnet_terminate('Failed to open netsu file',ierr)
     Open(newunit=lun_s3, file=trim(data_dir)//'/nets3', form='unformatted')
     Open(newunit=lun_ndiag, file=trim(data_dir)//'/net_diag')
 
@@ -592,7 +593,8 @@ Contains
       EndIf
       Read(lun_su,"(4e13.6)",iostat=ierr) (p(j),j=1,7)
       If ( ierr == iostat_end ) Then
-        Exit
+        Write(lun_out,*) 'Truncated reaction ',jj
+        Call xnet_terminate('Truncated reaction',jj)
       ElseIf ( ierr /= 0 ) Then
         Write(lun_out,*) 'Problem reading reaction ',jj
         Call xnet_terminate('Problem reading reaction',jj)
@@ -601,6 +603,16 @@ Contains
       ! If the entry is a reaction
       ni(:) = 0
       If ( k == 0 ) Then
+
+        ! A reaction record must contain exactly the participant count defined by its chapter.
+        If ( krt < 1 .or. krt > nchap ) Then
+          Write(lun_out,*) 'Invalid reaction chapter ',krt,' for entry ',jj
+          Call xnet_terminate('Invalid reaction chapter',jj)
+        ElseIf ( any(nucname(1:nnucr(krt)) == blank5) .or. &
+          & any(nucname(nnucr(krt)+1:nmax) /= blank5) ) Then
+          Write(lun_out,*) 'Inconsistent reaction participants for entry ',jj
+          Call xnet_terminate('Inconsistent reaction participants',jj)
+        EndIf
 
         ! Convert nuclear names to indicies
         Do i = 1, nmax

@@ -150,9 +150,9 @@ Contains
     Real(dp), Intent(in) :: t9(zb_lo:zb_hi), rho(zb_lo:zb_hi), y(ny,zb_lo:zb_hi)
     Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
 
-    ! Ouput variables
-    Real(dp), Intent(out) :: ye(zb_lo:zb_hi), cv(zb_lo:zb_hi)
-    Real(dp), Intent(out) :: etae(zb_lo:zb_hi), detaedt9(zb_lo:zb_hi)
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: ye(zb_lo:zb_hi), cv(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: etae(zb_lo:zb_hi), detaedt9(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -169,7 +169,7 @@ Contains
     If ( .not. any(mask) ) Return
 
     !XDIR XENTER_DATA XASYNC(tid) &
-    !XDIR XCREATE(ye,cv,etae,detaedt9) &
+    !XDIR XCOPYIN(ye,cv,etae,detaedt9) &
     !XDIR XCOPYIN(mask,t9,rho,y,xext,aext,zext)
 
     ! Calculate Ye
@@ -258,10 +258,10 @@ Contains
     Real(dp), Intent(in) :: etae(zb_lo:zb_hi), detaedt9(zb_lo:zb_hi)
     Real(dp), Intent(in) :: xext(zb_lo:zb_hi), aext(zb_lo:zb_hi), zext(zb_lo:zb_hi)
 
-    ! Output variables
-    Real(dp), Intent(out) :: ztilde(zb_lo:zb_hi), zinter(zb_lo:zb_hi)
-    Real(dp), Intent(out) :: lambda0(zb_lo:zb_hi), gammae(zb_lo:zb_hi)
-    Real(dp), Intent(out) :: dztildedt9(zb_lo:zb_hi)
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: ztilde(zb_lo:zb_hi), zinter(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: lambda0(zb_lo:zb_hi), gammae(zb_lo:zb_hi)
+    Real(dp), Intent(inout) :: dztildedt9(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -278,7 +278,7 @@ Contains
     If ( .not. any(mask) ) Return
 
     !XDIR XENTER_DATA XASYNC(tid) &
-    !XDIR XCREATE(ztilde,zinter,lambda0,gammae,dztildedt9) &
+    !XDIR XCOPYIN(ztilde,zinter,lambda0,gammae,dztildedt9) &
     !XDIR XCOPYIN(mask,t9,rho,y,etae,detaedt9,xext,aext,zext)
 
     ! Calculate Ye
@@ -380,8 +380,8 @@ Contains
     ! Input variables
     Real(dp), Intent(in) :: eta(zb_lo:zb_hi)
 
-    ! Output variables
-    Real(dp), Intent(out) :: ratio(zb_lo:zb_hi), dratiodeta(zb_lo:zb_hi)
+    ! Input/Output variables
+    Real(dp), Intent(inout) :: ratio(zb_lo:zb_hi), dratiodeta(zb_lo:zb_hi)
 
     ! Optional variables
     Logical, Optional, Target, Intent(in) :: mask_in(zb_lo:zb_hi)
@@ -398,7 +398,7 @@ Contains
     If ( .not. any(mask) ) Return
 
     !XDIR XENTER_DATA XASYNC(tid) &
-    !XDIR XCREATE(ratio,dratiodeta) &
+    !XDIR XCOPYIN(ratio,dratiodeta) &
     !XDIR XCOPYIN(mask,eta)
 
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &

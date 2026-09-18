@@ -5,7 +5,7 @@ MACHINE ?= $(if $(LMOD_SYSTEM_NAME),$(LMOD_SYSTEM_NAME),$(shell uname -n | sed '
 CRAY_PE_HOSTS := frontier perlmutter
 
 ifneq ($(filter $(MACHINE),$(CRAY_PE_HOSTS)),)
-  include make/machines/cray-pe.mk
+  include $(ROOT_DIR)/make/machines/cray-pe.mk
 else
-  include make/machines/generic.mk
+  include $(ROOT_DIR)/make/machines/generic.mk
 endif
