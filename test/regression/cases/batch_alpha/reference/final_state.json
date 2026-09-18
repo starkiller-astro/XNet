@@ -1,0 +1,770 @@
+{
+  "comparison_schema": "xnet-comparison-v1",
+  "reference_schema": "xnet-characterization-v1",
+  "baseline_kind": "characterization",
+  "baseline_status": "characterization-only; not independently validated scientific truth",
+  "generated_from_revision": "47befd90fff3c05828bf2f1b528cd74d7aa6a36c",
+  "generated_on": "2026-08-07",
+  "platform": "macOS 26.6 arm64",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "python": "Python 3.13.0",
+  "pytest": "pytest 9.1.1",
+  "build": {
+    "executable": "source/xnet",
+    "CMODE": "OPT",
+    "PE_ENV": "GNU",
+    "MPI_MODE": "OFF",
+    "OPENMP_MODE": "OFF",
+    "GPU_MODE": "OFF",
+    "EOS": "STARKILLER",
+    "MATRIX_SOLVER": "dense",
+    "LAPACK_VER": "NETLIB"
+  },
+  "legacy_provenance": {
+    "legacy_id": 61,
+    "assembly": [
+      "test/test_settings_batch",
+      "test/Test_Problems/setup_batch_alpha"
+    ],
+    "maintained_solver": "Backward Euler (isolv = 1)",
+    "normalized_changes": [
+      "remove Test_Results/ from ASCII and binary output roots",
+      "preserve nested abundance and trajectory prefixes in isolated staging"
+    ],
+    "effective_runtime_controls": {}
+  },
+  "case": "batch_alpha",
+  "inputs": {
+    "control": "test/regression/cases/batch_alpha/control",
+    "network_data": "test/Data_alpha",
+    "network_source_inputs": [
+      "sunet",
+      "netsu",
+      "netweak",
+      "netwinv"
+    ],
+    "staged_inputs": [
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_01",
+        "destination": "Data_alpha/ab_batch/ab_batch_01"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_02",
+        "destination": "Data_alpha/ab_batch/ab_batch_02"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_03",
+        "destination": "Data_alpha/ab_batch/ab_batch_03"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_04",
+        "destination": "Data_alpha/ab_batch/ab_batch_04"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_05",
+        "destination": "Data_alpha/ab_batch/ab_batch_05"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_06",
+        "destination": "Data_alpha/ab_batch/ab_batch_06"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_07",
+        "destination": "Data_alpha/ab_batch/ab_batch_07"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_08",
+        "destination": "Data_alpha/ab_batch/ab_batch_08"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_09",
+        "destination": "Data_alpha/ab_batch/ab_batch_09"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_10",
+        "destination": "Data_alpha/ab_batch/ab_batch_10"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_11",
+        "destination": "Data_alpha/ab_batch/ab_batch_11"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_12",
+        "destination": "Data_alpha/ab_batch/ab_batch_12"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_13",
+        "destination": "Data_alpha/ab_batch/ab_batch_13"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_14",
+        "destination": "Data_alpha/ab_batch/ab_batch_14"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_15",
+        "destination": "Data_alpha/ab_batch/ab_batch_15"
+      },
+      {
+        "source": "test/Data_alpha/ab_batch/ab_batch_16",
+        "destination": "Data_alpha/ab_batch/ab_batch_16"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_01",
+        "destination": "Test_Problems/th_batch/th_batch_01"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_02",
+        "destination": "Test_Problems/th_batch/th_batch_02"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_03",
+        "destination": "Test_Problems/th_batch/th_batch_03"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_04",
+        "destination": "Test_Problems/th_batch/th_batch_04"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_05",
+        "destination": "Test_Problems/th_batch/th_batch_05"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_06",
+        "destination": "Test_Problems/th_batch/th_batch_06"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_07",
+        "destination": "Test_Problems/th_batch/th_batch_07"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_08",
+        "destination": "Test_Problems/th_batch/th_batch_08"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_09",
+        "destination": "Test_Problems/th_batch/th_batch_09"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_10",
+        "destination": "Test_Problems/th_batch/th_batch_10"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_11",
+        "destination": "Test_Problems/th_batch/th_batch_11"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_12",
+        "destination": "Test_Problems/th_batch/th_batch_12"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_13",
+        "destination": "Test_Problems/th_batch/th_batch_13"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_14",
+        "destination": "Test_Problems/th_batch/th_batch_14"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_15",
+        "destination": "Test_Problems/th_batch/th_batch_15"
+      },
+      {
+        "source": "test/Test_Problems/th_batch/th_batch_16",
+        "destination": "Test_Problems/th_batch/th_batch_16"
+      }
+    ],
+    "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
+  },
+  "input_sha256": {
+    "test/regression/cases/batch_alpha/control": "46548e24236344f8f3c456f930eb4664bdb2971ba07486d004214f467bc3d46d",
+    "test/Data_alpha/sunet": "cee68d91608fbe3212b177c13c0a89cf003f158044a35e78b009b4db12efb4b1",
+    "test/Data_alpha/netsu": "d8db4febcd495b29075039deabd84217d962cf11b868aac68f9e43ac7e716131",
+    "test/Data_alpha/netweak": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "test/Data_alpha/netwinv": "679b59567a95076ba771e38b0bff999ca94c21f8b1784025748197774c93cf95",
+    "test/Data_alpha/ab_batch/ab_batch_01": "464e7b45f465a8cb55ec2654588437c068b2cbb9ee867dbede1976f604889e46",
+    "test/Data_alpha/ab_batch/ab_batch_02": "d9003ac9e217a47dea9e070f9fad105291bbe89a245a5d62d9c2ecd00cbe16ce",
+    "test/Data_alpha/ab_batch/ab_batch_03": "f0de4848a9bea72ad8c1a51c2051da101019487d7da1154261523ab798cbeb32",
+    "test/Data_alpha/ab_batch/ab_batch_04": "cf0a412f0a92e48660d95257689f5577386515bf8814e6d274848c06e825f964",
+    "test/Data_alpha/ab_batch/ab_batch_05": "464e7b45f465a8cb55ec2654588437c068b2cbb9ee867dbede1976f604889e46",
+    "test/Data_alpha/ab_batch/ab_batch_06": "d9003ac9e217a47dea9e070f9fad105291bbe89a245a5d62d9c2ecd00cbe16ce",
+    "test/Data_alpha/ab_batch/ab_batch_07": "f0de4848a9bea72ad8c1a51c2051da101019487d7da1154261523ab798cbeb32",
+    "test/Data_alpha/ab_batch/ab_batch_08": "cf0a412f0a92e48660d95257689f5577386515bf8814e6d274848c06e825f964",
+    "test/Data_alpha/ab_batch/ab_batch_09": "464e7b45f465a8cb55ec2654588437c068b2cbb9ee867dbede1976f604889e46",
+    "test/Data_alpha/ab_batch/ab_batch_10": "d9003ac9e217a47dea9e070f9fad105291bbe89a245a5d62d9c2ecd00cbe16ce",
+    "test/Data_alpha/ab_batch/ab_batch_11": "f0de4848a9bea72ad8c1a51c2051da101019487d7da1154261523ab798cbeb32",
+    "test/Data_alpha/ab_batch/ab_batch_12": "cf0a412f0a92e48660d95257689f5577386515bf8814e6d274848c06e825f964",
+    "test/Data_alpha/ab_batch/ab_batch_13": "464e7b45f465a8cb55ec2654588437c068b2cbb9ee867dbede1976f604889e46",
+    "test/Data_alpha/ab_batch/ab_batch_14": "d9003ac9e217a47dea9e070f9fad105291bbe89a245a5d62d9c2ecd00cbe16ce",
+    "test/Data_alpha/ab_batch/ab_batch_15": "f0de4848a9bea72ad8c1a51c2051da101019487d7da1154261523ab798cbeb32",
+    "test/Data_alpha/ab_batch/ab_batch_16": "cf0a412f0a92e48660d95257689f5577386515bf8814e6d274848c06e825f964",
+    "test/Test_Problems/th_batch/th_batch_01": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_02": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_03": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_04": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_05": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_06": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_07": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_08": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_09": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_10": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_11": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_12": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_13": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_14": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_15": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "test/Test_Problems/th_batch/th_batch_16": "7e340cfbd095a50a85571c956e51e0248ae1c12916a697f0c1ebbf9a501ecb0e",
+    "tools/starkiller-helmholtz/helm_table.dat": "c9a57c26c6fd2b2b378b9d5295ca1214022f6fec6289d038b47bf8c8938881a1"
+  },
+  "expected_zones": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "final_step": {
+    "1": 605,
+    "2": 605,
+    "3": 605,
+    "4": 605,
+    "5": 605,
+    "6": 605,
+    "7": 605,
+    "8": 605,
+    "9": 605,
+    "10": 605,
+    "11": 605,
+    "12": 605,
+    "13": 605,
+    "14": 605,
+    "15": 605,
+    "16": 605
+  },
+  "solver_counters": {
+    "ts": {
+      "1": 553,
+      "2": 605,
+      "3": 1,
+      "4": 573,
+      "5": 553,
+      "6": 605,
+      "7": 1,
+      "8": 573,
+      "9": 553,
+      "10": 605,
+      "11": 1,
+      "12": 573,
+      "13": 553,
+      "14": 605,
+      "15": 1,
+      "16": 573
+    },
+    "nr": {
+      "1": 1063,
+      "2": 1172,
+      "3": 1,
+      "4": 993,
+      "5": 1063,
+      "6": 1172,
+      "7": 1,
+      "8": 993,
+      "9": 1063,
+      "10": 1172,
+      "11": 1,
+      "12": 993,
+      "13": 1063,
+      "14": 1172,
+      "15": 1,
+      "16": 993
+    },
+    "jacobian": {
+      "1": 1063,
+      "2": 1172,
+      "3": 1,
+      "4": 993,
+      "5": 1063,
+      "6": 1172,
+      "7": 1,
+      "8": 993,
+      "9": 1063,
+      "10": 1172,
+      "11": 1,
+      "12": 993,
+      "13": 1063,
+      "14": 1172,
+      "15": 1,
+      "16": 993
+    },
+    "derivative": {
+      "1": 1064,
+      "2": 1173,
+      "3": 2,
+      "4": 994,
+      "5": 1064,
+      "6": 1173,
+      "7": 2,
+      "8": 994,
+      "9": 1064,
+      "10": 1173,
+      "11": 2,
+      "12": 994,
+      "13": 1064,
+      "14": 1173,
+      "15": 2,
+      "16": 994
+    },
+    "cross_section": {
+      "1": 1064,
+      "2": 1173,
+      "3": 2,
+      "4": 994,
+      "5": 1064,
+      "6": 1173,
+      "7": 2,
+      "8": 994,
+      "9": 1064,
+      "10": 1173,
+      "11": 2,
+      "12": 994,
+      "13": 1064,
+      "14": 1173,
+      "15": 2,
+      "16": 994
+    }
+  },
+  "fields": {
+    "target_time": {
+      "value": {
+        "1": 0.1,
+        "2": 0.1,
+        "3": 0.1,
+        "4": 0.1,
+        "5": 0.1,
+        "6": 0.1,
+        "7": 0.1,
+        "8": 0.1,
+        "9": 0.1,
+        "10": 0.1,
+        "11": 0.1,
+        "12": 0.1,
+        "13": 0.1,
+        "14": 0.1,
+        "15": 0.1,
+        "16": 0.1
+      },
+      "atol": 0,
+      "rtol": 0,
+      "exact": true
+    },
+    "achieved_time": {
+      "value": {
+        "1": 0.1,
+        "2": 0.1,
+        "3": 0.1,
+        "4": 0.1,
+        "5": 0.1,
+        "6": 0.1,
+        "7": 0.1,
+        "8": 0.1,
+        "9": 0.1,
+        "10": 0.1,
+        "11": 0.1,
+        "12": 0.1,
+        "13": 0.1,
+        "14": 0.1,
+        "15": 0.1,
+        "16": 0.1
+      },
+      "atol": 0,
+      "rtol": 0,
+      "exact": true
+    },
+    "temperature_gk": {
+      "value": {
+        "1": 6.5116809,
+        "2": 7.1244757,
+        "3": 1.7,
+        "4": 6.334223,
+        "5": 6.5116809,
+        "6": 7.1244757,
+        "7": 1.7,
+        "8": 6.334223,
+        "9": 6.5116809,
+        "10": 7.1244757,
+        "11": 1.7,
+        "12": 6.334223,
+        "13": 6.5116809,
+        "14": 7.1244757,
+        "15": 1.7,
+        "16": 6.334223
+      },
+      "atol": 0,
+      "rtol": 0,
+      "exact": true
+    },
+    "density": {
+      "value": {
+        "1": 100000000.0,
+        "2": 100000000.0,
+        "3": 100000000.0,
+        "4": 100000000.0,
+        "5": 100000000.0,
+        "6": 100000000.0,
+        "7": 100000000.0,
+        "8": 100000000.0,
+        "9": 100000000.0,
+        "10": 100000000.0,
+        "11": 100000000.0,
+        "12": 100000000.0,
+        "13": 100000000.0,
+        "14": 100000000.0,
+        "15": 100000000.0,
+        "16": 100000000.0
+      },
+      "atol": 0,
+      "rtol": 0,
+      "exact": true
+    },
+    "electron_fraction": {
+      "value": {
+        "1": 0.5,
+        "2": 0.5,
+        "3": 0.5,
+        "4": 0.5,
+        "5": 0.5,
+        "6": 0.5,
+        "7": 0.5,
+        "8": 0.5,
+        "9": 0.5,
+        "10": 0.5,
+        "11": 0.5,
+        "12": 0.5,
+        "13": 0.5,
+        "14": 0.5,
+        "15": 0.5,
+        "16": 0.5
+      },
+      "atol": 0,
+      "rtol": 0,
+      "exact": true
+    }
+  },
+  "mass_fraction_selection": {
+    "1": ["he4", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "2": ["he4", "o16", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "3": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "4": ["he4", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "5": ["he4", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "6": ["he4", "o16", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "7": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "8": ["he4", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "9": ["he4", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "10": ["he4", "o16", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "11": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "12": ["he4", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "13": ["he4", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "14": ["he4", "o16", "mg24", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"],
+    "15": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "16": ["he4", "si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56", "zn60"]
+  },
+  "mass_fraction_tolerances": {
+    "all_selected": {
+      "atol": 0,
+      "rtol": 0,
+      "exact": true
+    }
+  },
+  "mass_fraction_printed_sum": {
+    "value": {
+      "1": 1.0000000106818,
+      "2": 0.9999999970983,
+      "3": 1.0,
+      "4": 0.9999999909783399,
+      "5": 1.0000000106818,
+      "6": 0.9999999970983,
+      "7": 1.0,
+      "8": 0.9999999909783399,
+      "9": 1.0000000106818,
+      "10": 0.9999999970983,
+      "11": 1.0,
+      "12": 0.9999999909783399,
+      "13": 1.0000000106818,
+      "14": 0.9999999970983,
+      "15": 1.0,
+      "16": 0.9999999909783399
+    },
+    "atol": 0,
+    "rtol": 0,
+    "exact": true
+  },
+  "composition_norm_limits": {
+    "l1": 0,
+    "linf": 0
+  },
+  "mass_fractions": {
+    "he4": {
+      "1": 0.16967105,
+      "2": 0.48922835,
+      "3": 5.6335458e-26,
+      "4": 0.11918428,
+      "5": 0.16967105,
+      "6": 0.48922835,
+      "7": 5.6335458e-26,
+      "8": 0.11918428,
+      "9": 0.16967105,
+      "10": 0.48922835,
+      "11": 5.6335458e-26,
+      "12": 0.11918428,
+      "13": 0.16967105,
+      "14": 0.48922835,
+      "15": 5.6335458e-26,
+      "16": 0.11918428
+    },
+    "c12": {
+      "1": 1.2881418e-05,
+      "2": 7.7837712e-05,
+      "3": 0.0,
+      "4": 7.0225476e-06,
+      "5": 1.2881418e-05,
+      "6": 7.7837712e-05,
+      "7": 0.0,
+      "8": 7.0225476e-06,
+      "9": 1.2881418e-05,
+      "10": 7.7837712e-05,
+      "11": 0.0,
+      "12": 7.0225476e-06,
+      "13": 1.2881418e-05,
+      "14": 7.7837712e-05,
+      "15": 0.0,
+      "16": 7.0225476e-06
+    },
+    "o16": {
+      "1": 3.2450366e-05,
+      "2": 0.00016703577,
+      "3": 0.0,
+      "4": 1.8632684e-05,
+      "5": 3.2450366e-05,
+      "6": 0.00016703577,
+      "7": 0.0,
+      "8": 1.8632684e-05,
+      "9": 3.2450366e-05,
+      "10": 0.00016703577,
+      "11": 0.0,
+      "12": 1.8632684e-05,
+      "13": 3.2450366e-05,
+      "14": 0.00016703577,
+      "15": 0.0,
+      "16": 1.8632684e-05
+    },
+    "ne20": {
+      "1": 1.1965378e-06,
+      "2": 7.7185063e-06,
+      "3": 0.0,
+      "4": 6.3143174e-07,
+      "5": 1.1965378e-06,
+      "6": 7.7185063e-06,
+      "7": 0.0,
+      "8": 6.3143174e-07,
+      "9": 1.1965378e-06,
+      "10": 7.7185063e-06,
+      "11": 0.0,
+      "12": 6.3143174e-07,
+      "13": 1.1965378e-06,
+      "14": 7.7185063e-06,
+      "15": 0.0,
+      "16": 6.3143174e-07
+    },
+    "mg24": {
+      "1": 0.00012760823,
+      "2": 0.00048466664,
+      "3": 7.3069831e-21,
+      "4": 7.8926085e-05,
+      "5": 0.00012760823,
+      "6": 0.00048466664,
+      "7": 7.3069831e-21,
+      "8": 7.8926085e-05,
+      "9": 0.00012760823,
+      "10": 0.00048466664,
+      "11": 7.3069831e-21,
+      "12": 7.8926085e-05,
+      "13": 0.00012760823,
+      "14": 0.00048466664,
+      "15": 7.3069831e-21,
+      "16": 7.8926085e-05
+    },
+    "si28": {
+      "1": 0.031791833,
+      "2": 0.061771994,
+      "3": 1.0,
+      "4": 0.024085107,
+      "5": 0.031791833,
+      "6": 0.061771994,
+      "7": 1.0,
+      "8": 0.024085107,
+      "9": 0.031791833,
+      "10": 0.061771994,
+      "11": 1.0,
+      "12": 0.024085107,
+      "13": 0.031791833,
+      "14": 0.061771994,
+      "15": 1.0,
+      "16": 0.024085107
+    },
+    "s32": {
+      "1": 0.037179582,
+      "2": 0.058648765,
+      "3": 9.7421935e-21,
+      "4": 0.029697308,
+      "5": 0.037179582,
+      "6": 0.058648765,
+      "7": 9.7421935e-21,
+      "8": 0.029697308,
+      "9": 0.037179582,
+      "10": 0.058648765,
+      "11": 9.7421935e-21,
+      "12": 0.029697308,
+      "13": 0.037179582,
+      "14": 0.058648765,
+      "15": 9.7421935e-21,
+      "16": 0.029697308
+    },
+    "ar36": {
+      "1": 0.028782272,
+      "2": 0.039501588,
+      "3": 0.0,
+      "4": 0.023700611,
+      "5": 0.028782272,
+      "6": 0.039501588,
+      "7": 0.0,
+      "8": 0.023700611,
+      "9": 0.028782272,
+      "10": 0.039501588,
+      "11": 0.0,
+      "12": 0.023700611,
+      "13": 0.028782272,
+      "14": 0.039501588,
+      "15": 0.0,
+      "16": 0.023700611
+    },
+    "ca40": {
+      "1": 0.037202731,
+      "2": 0.039454535,
+      "3": 0.0,
+      "4": 0.032720298,
+      "5": 0.037202731,
+      "6": 0.039454535,
+      "7": 0.0,
+      "8": 0.032720298,
+      "9": 0.037202731,
+      "10": 0.039454535,
+      "11": 0.0,
+      "12": 0.032720298,
+      "13": 0.037202731,
+      "14": 0.039454535,
+      "15": 0.0,
+      "16": 0.032720298
+    },
+    "ti44": {
+      "1": 0.0036911734,
+      "2": 0.0047450637,
+      "3": 0.0,
+      "4": 0.0030110124,
+      "5": 0.0036911734,
+      "6": 0.0047450637,
+      "7": 0.0,
+      "8": 0.0030110124,
+      "9": 0.0036911734,
+      "10": 0.0047450637,
+      "11": 0.0,
+      "12": 0.0030110124,
+      "13": 0.0036911734,
+      "14": 0.0047450637,
+      "15": 0.0,
+      "16": 0.0030110124
+    },
+    "cr48": {
+      "1": 0.022760165,
+      "2": 0.020367525,
+      "3": 0.0,
+      "4": 0.02049851,
+      "5": 0.022760165,
+      "6": 0.020367525,
+      "7": 0.0,
+      "8": 0.02049851,
+      "9": 0.022760165,
+      "10": 0.020367525,
+      "11": 0.0,
+      "12": 0.02049851,
+      "13": 0.022760165,
+      "14": 0.020367525,
+      "15": 0.0,
+      "16": 0.02049851
+    },
+    "fe52": {
+      "1": 0.14058616,
+      "2": 0.085180886,
+      "3": 0.0,
+      "4": 0.14118966,
+      "5": 0.14058616,
+      "6": 0.085180886,
+      "7": 0.0,
+      "8": 0.14118966,
+      "9": 0.14058616,
+      "10": 0.085180886,
+      "11": 0.0,
+      "12": 0.14118966,
+      "13": 0.14058616,
+      "14": 0.085180886,
+      "15": 0.0,
+      "16": 0.14118966
+    },
+    "ni56": {
+      "1": 0.52744485,
+      "2": 0.19990598,
+      "3": 0.0,
+      "4": 0.60512556,
+      "5": 0.52744485,
+      "6": 0.19990598,
+      "7": 0.0,
+      "8": 0.60512556,
+      "9": 0.52744485,
+      "10": 0.19990598,
+      "11": 0.0,
+      "12": 0.60512556,
+      "13": 0.52744485,
+      "14": 0.19990598,
+      "15": 0.0,
+      "16": 0.60512556
+    },
+    "zn60": {
+      "1": 0.00071605773,
+      "2": 0.00045805177,
+      "3": 0.0,
+      "4": 0.00068243183,
+      "5": 0.00071605773,
+      "6": 0.00045805177,
+      "7": 0.0,
+      "8": 0.00068243183,
+      "9": 0.00071605773,
+      "10": 0.00045805177,
+      "11": 0.0,
+      "12": 0.00068243183,
+      "13": 0.00071605773,
+      "14": 0.00045805177,
+      "15": 0.0,
+      "16": 0.00068243183
+    }
+  },
+  "mass_fraction_sum_atol": 2.2e-08
+}

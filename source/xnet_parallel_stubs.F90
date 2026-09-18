@@ -298,11 +298,7 @@ contains
     else
        print*, 'parallel_abort() !!!'
     end if
-    if ( present(errorcode) ) then
-       stop
-    else
-       stop
-    end if
+    stop 1
   end subroutine parallel_abort
 
   subroutine parallel_set_comm(comm)

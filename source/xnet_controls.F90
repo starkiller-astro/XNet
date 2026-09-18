@@ -41,7 +41,7 @@ Module xnet_controls
   !$omp threadprivate(nzbatch,szbatch,zb_offset,zb_lo,zb_hi)
 
   ! Integration Controls
-  Integer  :: isolv                 ! Sets the integration method (1=BE, 2=BD)
+  Integer  :: isolv                 ! Sets the integration method (1=BE, 3=BDF; 2=obsolete BD)
   Integer  :: kstmx                 ! Max # of timesteps before exit
   Integer  :: kitmx                 ! Max # of iterations or substeps within a timestep
   Integer  :: ijac                  ! Rebuild the Jacobian every ijac iterations after the first
@@ -429,7 +429,8 @@ Contains
       Call write_controls_line(lun_out,t9nse       ,'Temperature in GK to use NSE initial conditions instead of file')
 
       Write(lun_out,"(a)") '## Integration Controls'
-      Call write_controls_line(lun_out,isolv       ,'Choice of integration Scheme (1=Backward Euler, 2= Bader-Deufelhard)')
+      Call write_controls_line(lun_out,isolv       ,'Choice of integration Scheme (1=Backward Euler, 3=Backward Differentiation'// &
+      & ' Formula, 2=obsolete Bader-Deuflhard)')
       Call write_controls_line(lun_out,kstmx       ,'Max. number of timesteps before quit')
       Call write_controls_line(lun_out,kitmx       ,'Max. iterations per step')
       Call write_controls_line(lun_out,ijac        ,'Rebuild the jacobian every ijac iterations after the first')
