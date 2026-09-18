@@ -40,8 +40,10 @@ from xnet_regression import (
     nse_sn160_case,
     parse_diagnostic,
     prepare_work_directory,
+    reanchor_reference_to_states,
     run_and_compare,
     run_xnet,
+    scale_comparison_tolerances,
     strip_timer_sections,
     tnsn_alpha_case,
     tnsn_torch47_case,
@@ -292,6 +294,62 @@ def test_known_good_comparison_passes() -> None:
         _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
     )
     compare_final_states(states, _matching_unit_reference())
+
+
+def test_same_source_reference_reuses_policy_with_generated_values() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    policy = _matching_unit_reference()
+    baseline = replace(state, temperature_gk=2.25, step=99)
+
+    reference = reanchor_reference_to_states(
+        policy,
+        (baseline,),
+        case_name="fake dense versus sparse",
+    )
+
+    assert reference.case_name == "fake dense versus sparse"
+    assert reference.fields[1]["temperature_gk"] == replace(
+        policy.fields[1]["temperature_gk"], value=2.25
+    )
+    assert reference.final_steps == {1: 99}
+    assert reference.mass_fraction_tolerances == policy.mass_fraction_tolerances
+    compare_final_states((baseline,), reference)
+    with pytest.raises(ComparisonFailure, match="temperature_gk"):
+        compare_final_states(
+            (replace(baseline, temperature_gk=2.25001),), reference
+        )
+
+
+def test_same_source_reference_rejects_incomplete_composition() -> None:
+    state = parse_diagnostic(
+        _fabricated_final_diagnostic(), (1,), ALPHA_SPECIES
+    )[0]
+    incomplete = dict(state.mass_fractions)
+    incomplete.pop("zn60")
+
+    with pytest.raises(SetupFailure, match="species for zone 1"):
+        reanchor_reference_to_states(
+            _matching_unit_reference(),
+            (replace(state, mass_fractions=incomplete),),
+            case_name="incomplete",
+        )
+
+
+def test_cross_solver_factor_scales_only_nonexact_difference_bounds() -> None:
+    policy = _matching_unit_reference()
+    fields = {1: dict(policy.fields[1])}
+    fields[1]["density"] = Tolerance(4.0e6, 0.0, 0.0, exact=True)
+    scaled = scale_comparison_tolerances(replace(policy, fields=fields), 2.0)
+
+    assert scaled.fields[1]["temperature_gk"].atol == 2.0e-6
+    assert scaled.fields[1]["temperature_gk"].rtol == 2.0e-6
+    assert scaled.fields[1]["density"] == fields[1]["density"]
+    assert scaled.mass_fraction_tolerances[1]["si28"].atol == 2.0e-8
+    assert scaled.mass_fraction_sum_atols == policy.mass_fraction_sum_atols
+    with pytest.raises(SetupFailure, match="finite and >= 1"):
+        scale_comparison_tolerances(policy, 0.5)
 
 
 def test_mass_fraction_expectation_comes_from_complete_reference() -> None:

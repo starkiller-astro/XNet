@@ -351,15 +351,51 @@ def main() -> int:
             "cannot represent single quotes or line breaks",
         )
 
+        dense_sparse_selection = make(
+            f"BUILD_DIR={work / 'dense-sparse-selection'}",
+            "MATRIX_SOLVER=dense",
+            "print-SPARSE_SRC",
+        )
+        require_success(dense_sparse_selection)
+        assert "SPARSE_SRC = " in dense_sparse_selection.stdout
+        assert "xnet_sparse.F90" not in dense_sparse_selection.stdout
+
+        ma41_dir = work / "ma41"
+        ma41_dir.mkdir()
+        (ma41_dir / "MA41.f").write_text("      end\n", encoding="utf-8")
+        # Isolate sparse-source selection from the separately supplied MA41
+        # Jacobian implementation, which is not part of this staged PR.
+        ma41_sparse_selection = make(
+            f"BUILD_DIR={work / 'ma41-sparse-selection'}",
+            "MATRIX_SOLVER=MA41",
+            f"MA41_DIR={ma41_dir}",
+            f"JAC_SRC={ROOT / 'source' / 'xnet_jacobian_dense.F90'}",
+            "print-SPARSE_SRC",
+        )
+        require_success(ma41_sparse_selection)
+        assert "SPARSE_SRC = " in ma41_sparse_selection.stdout
+        assert "xnet_sparse.F90" not in ma41_sparse_selection.stdout
+
+        ma48_sparse_selection = make(
+            f"BUILD_DIR={work / 'ma48-sparse-selection'}",
+            "MATRIX_SOLVER=MA48",
+            f"MA48_DIR={ma48_dir}",
+            "print-SPARSE_SRC",
+        )
+        require_success(ma48_sparse_selection)
+        assert "xnet_sparse.F90" in ma48_sparse_selection.stdout
+
         pardiso = make(
             f"BUILD_DIR={work / 'pardiso-mkl'}",
             "MATRIX_SOLVER=PARDISO_MKL",
             "MKL_LIBS=-lmkl_rt",
             "print-JAC_SRC",
             "print-LAPACK_VER",
+            "print-SPARSE_SRC",
         )
         require_success(pardiso)
         assert "xnet_jacobian_PARDISO_MKL.F90" in pardiso.stdout
+        assert "xnet_sparse.F90" in pardiso.stdout
         assert "LAPACK_VER = MKL" in pardiso.stdout
         require_failure(
             make(

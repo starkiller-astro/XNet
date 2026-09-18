@@ -45,6 +45,32 @@ The test programs use shared module state, so Test Drive runs them serially.
 This restriction applies only to the test process; production sources are
 compiled with the selected OpenMP options.
 
+## Sparse matrix and solver interfaces
+
+The sparse-data checks exercise the production `xnet_sparse` reader directly.
+They cover the persisted `sparse_ind` dimensions, one-based ordered CRS
+topology, required diagonal entries, reaction maps, malformed and truncated
+records, and the self-heating CRS augmentation and remapping.
+
+The sparse solver checks compare dense, MA48 coordinate, standalone PARDISO,
+and oneMKL PARDISO compressed-row representations produced from the same small
+reaction network. Test-only solver routines record calls and solve a known
+system with the bundled NETLIB code. These checks cover XNet's matrix
+construction, controls, status handling, and result association; they do not
+qualify the external solver libraries. Standalone PARDISO remains unsupported
+for production builds.
+
+Real-library checks are available when the external software is installed:
+
+```text
+make -C test/unit clean real-ma48-test HSL_MA48_SOURCE=/approved/path/MA48.f
+make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
+```
+
+The first requires maintainer-licensed HSL source outside the repository; the
+second requires an initialized oneMKL environment. Commands and evidence
+requirements are under `test/qualification/sparse_backends/`.
+
 ## Network preprocessing
 
 The preprocessing checks use the synthetic public fixture under

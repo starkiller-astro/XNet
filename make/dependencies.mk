@@ -31,6 +31,9 @@ $(call eos_obj,$(SOURCE_DIR)/xnet_eos_starkiller.F90): $(call EOBJ,actual_eos) $
 $(call eos_obj,$(SOURCE_DIR)/xnet_eos_bahcall.F90): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
 $(call eos_obj,$(SOURCE_DIR)/xnet_eos_helm.F90): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_fd) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
 $(call solver_obj,$(JAC_SRC)): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_linalg) $(if $(filter MA48 PARDISO_MKL,$(MATRIX_SOLVER)),$(call source_obj,$(MPI_SRC))) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types)
+ifneq ($(SPARSE_SRC),)
+$(call solver_obj,$(JAC_SRC)): $(call SOBJ,xnet_sparse)
+endif
 $(call SOBJ,net_setup): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_preprocess)
 $(call SOBJ,nse_slice): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_match) $(call SOBJ,xnet_nse) $(call SOBJ,xnet_preprocess) $(call SOBJ,xnet_types) $(call SOBJ,xnet_data) $(call SOBJ,xnet_timers) $(EOS_OBJ)
 $(call SOBJ,xnet_nse): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(EOS_OBJ) $(LAPACK_OBJ)

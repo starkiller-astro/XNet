@@ -16,7 +16,7 @@ SETUP_CORE_SRC := $(addprefix $(SOURCE_DIR)/,xnet_conditions.F90 xnet_controls.F
 # XNet, EOS, Jacobian, and accelerator bindings are free-form Fortran. The
 # optional MA41/MA48 and bundled NETLIB sources are fixed-form Fortran.
 SOURCE_FREE_SRC := $(sort $(CORE_SRC) $(DRIVER_SRC) $(XNSE_CORE_SRC) \
-                   $(SETUP_CORE_SRC) $(XNSE_MAIN_SRC) $(MPI_SRC))
+                   $(SETUP_CORE_SRC) $(XNSE_MAIN_SRC) $(MPI_SRC) $(SPARSE_SRC))
 EOS_FREE_SRC := $(sort $(EOS_SRC))
 SOLVER_FREE_SRC := $(JAC_SRC)
 GPU_FREE_SRC := $(sort $(GPU_PROVIDER_SRC))
@@ -105,7 +105,7 @@ SOLVER_FIXED_OBJ := $(foreach source,$(SOLVER_FIXED_SRC),$(call solver_obj,$(sou
 LAPACK_OBJ := $(foreach source,$(LAPACK_FIXED_SRC),$(call lapack_obj,$(source)))
 SOLVER_OBJ := $(SOLVER_FREE_OBJ) $(SOLVER_FIXED_OBJ)
 
-XNET_SOURCE_OBJ := $(foreach source,$(sort $(CORE_SRC) $(DRIVER_SRC) $(MPI_SRC)),$(call source_obj,$(source)))
+XNET_SOURCE_OBJ := $(foreach source,$(sort $(CORE_SRC) $(DRIVER_SRC) $(MPI_SRC) $(SPARSE_SRC)),$(call source_obj,$(source)))
 XNSE_SOURCE_OBJ := $(foreach source,$(sort $(XNSE_CORE_SRC) $(XNSE_MAIN_SRC) $(MPI_SRC)),$(call source_obj,$(source)))
 SETUP_SOURCE_OBJ := $(foreach source,$(sort $(SETUP_CORE_SRC) $(MPI_SRC)),$(call source_obj,$(source)))
 XNET_OBJ := $(XNET_SOURCE_OBJ) $(EOS_OBJ) $(SOLVER_OBJ) $(LAPACK_OBJ) $(GPU_OBJ)
