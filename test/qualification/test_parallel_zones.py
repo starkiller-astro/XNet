@@ -1,8 +1,11 @@
 """Focused tests for the parallel-zone qualification runner."""
 
 from dataclasses import replace
+import os
 from pathlib import Path
+import signal
 import sys
+import time
 
 import pytest
 
@@ -142,10 +145,59 @@ def test_parallel_topology_accepts_two_reported_workers(tmp_path: Path) -> None:
 
 
 def test_timeout_terminates_the_process_group(tmp_path: Path) -> None:
-    with pytest.raises(QualificationFailure, match="timed out"):
-        run_process(
-            (sys.executable, "-c", "import time; time.sleep(10)"),
-            tmp_path,
-            timeout_seconds=0.1,
-        )
+    child_script = tmp_path / "child.py"
+    child_script.write_text(
+        """\
+import os
+from pathlib import Path
+import signal
+import sys
+import time
+
+marker = Path(sys.argv[1])
+pid_file = Path(sys.argv[2])
+
+def terminate(signum, frame):
+    marker.write_text("terminated\\n", encoding="utf-8")
+    raise SystemExit(0)
+
+signal.signal(signal.SIGTERM, terminate)
+pid_file.write_text(str(os.getpid()), encoding="utf-8")
+while True:
+    time.sleep(1)
+""",
+        encoding="utf-8",
+    )
+    marker = tmp_path / "child-terminated.txt"
+    pid_file = tmp_path / "child.pid"
+    leader = (
+        "import subprocess, sys, time; "
+        f"subprocess.Popen([sys.executable, {str(child_script)!r}, "
+        f"{str(marker)!r}, {str(pid_file)!r}], "
+        "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+        "time.sleep(10)"
+    )
+
+    child_pid: int | None = None
+    try:
+        with pytest.raises(QualificationFailure, match="timed out"):
+            run_process(
+                (sys.executable, "-c", leader),
+                tmp_path,
+                timeout_seconds=0.5,
+            )
+        deadline = time.monotonic() + 2.0
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert marker.read_text(encoding="utf-8") == "terminated\n"
+    finally:
+        if pid_file.exists():
+            child_pid = int(pid_file.read_text(encoding="utf-8"))
+        if child_pid is not None:
+            try:
+                os.kill(child_pid, 0)
+            except ProcessLookupError:
+                pass
+            else:
+                os.kill(child_pid, signal.SIGKILL)
     assert (tmp_path / "xnet.status.txt").read_text(encoding="utf-8") == "timeout\n"
