@@ -80,7 +80,7 @@ Contains
     !XDIR XCREATE(enm,enb,enold,en0,delta_en,edot,denu,sqnu)
 
     ! Calculate the total energy of the nuclei. The module abundance array
-    ! needs the explicit current-worker section in the bounded dummy.
+    ! needs the explicit current-worker section for the zb_lo:zb_hi dummy bounds.
     Call benuc(y(:,zb_lo:zb_hi),enb,enm)
 
     ! Initialize trial time step abundances and conditions

@@ -316,8 +316,8 @@ Contains
       !XDIR XUPDATE XASYNC(tid) &
       !XDIR XDEVICE(rebuild,eval_rates)
 
-      ! Calculate the reaction rates and abundance time derivatives. These
-      ! module arrays need explicit current-worker sections in bounded dummies.
+      ! Calculate the reaction rates and abundance time derivatives. These module arrays
+      ! need explicit current-worker sections for the zb_lo:zb_hi dummy bounds.
       Call cross_sect(mask_in = eval_rates(zb_lo:zb_hi))
       Call yderiv(mask_in = iterate(zb_lo:zb_hi))
       Call jacobian_build(diag_in = rdt(zb_lo:zb_hi),mult_in = mult(zb_lo:zb_hi), &
