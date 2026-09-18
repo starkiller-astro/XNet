@@ -37,7 +37,7 @@ with identical SHA-256 hashes before staging or running the problem.
 ## HSL MA48
 
 Use only MA48 source obtained by the maintainer under an applicable HSL
-licence. The historical fork qualification used the archived Fortran 77 MA48
+licence. The recorded qualification used the archived Fortran 77 MA48
 2.2.0 source identified by the
 [HSL catalogue](https://www.hsl.rl.ac.uk/catalogue/ma48.html). HSL source is
 non-redistributable in this repository: keep it outside the worktree and never
@@ -66,7 +66,7 @@ redistribution rights.
 
 ## Intel oneMKL PARDISO
 
-The historical fork qualification used oneMKL PARDISO, not the distinct
+The recorded qualification used oneMKL PARDISO, not the distinct
 standalone PARDISO ABI. Intel documents oneMKL licensing in its
 [oneMKL License FAQ](https://www.intel.com/content/www/us/en/developer/articles/tool/onemkl-license-faq.html).
 The oneMKL adapter keeps one solver handle per local batch slot. This preserves
@@ -74,10 +74,11 @@ each concurrently evolved zone's analysis/refactorization state independently;
 sharing one handle across the two test zones corrupted the first
 stored factorization under oneMKL 2026.1 even though both solver calls returned
 success.
-On `etacar`, initialize the installed oneAPI environment before each build:
+Initialize the locally installed oneAPI environment before each build. For
+example, when using Intel's standard `setvars.sh` installation:
 
 ```bash
-source /opt/intel/oneapi/setvars.sh
+source /path/to/oneapi/setvars.sh
 
 make -C test/unit clean real-pardiso-mkl-test LAPACK_VER=MKL
 
@@ -93,9 +94,9 @@ python3 test/qualification/sparse_backends/compare_heat_sn160.py \
 
 `Makefile.internal` accepts the legacy
 `$MKLROOT/tools/mkl_link_tool` location and the current
-`$MKLROOT/bin/mkl_link_tool` location. Preserve the emitted compile/link lines
-in the PR evidence so the selected interface, sequential threading layer, and
-library version remain reviewable.
+`$MKLROOT/bin/mkl_link_tool` location. Record the emitted compile/link lines so
+the selected interface, sequential threading layer, and library version remain
+reviewable.
 
 ## Standalone PARDISO support
 
