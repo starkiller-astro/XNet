@@ -1,0 +1,142 @@
+{
+  "comparison_schema": "xnet-comparison-v1",
+  "baseline_kind": "characterization",
+  "case": "tnsn_torch47",
+  "generated_from_revision": "5e7e1543d432f3c2792e40e271816ecaf8184fad",
+  "generated_on": "2026-08-05",
+  "platform": "macOS arm64",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "build": {
+    "executable": "source/xnet",
+    "CMODE": "OPT",
+    "PE_ENV": "GNU",
+    "MPI_MODE": "OFF",
+    "OPENMP_MODE": "OFF",
+    "GPU_MODE": "OFF",
+    "EOS": "STARKILLER",
+    "MATRIX_SOLVER": "dense",
+    "LAPACK_VER": "NETLIB"
+  },
+  "inputs": {
+    "control": "test/regression/cases/tnsn_torch47/control",
+    "network_data": "test/Data_torch47",
+    "network_source_inputs": [
+      "sunet",
+      "netsu",
+      "netweak",
+      "netwinv",
+      "ab_co"
+    ],
+    "initial_abundance": "test/Data_torch47/ab_co",
+    "trajectory": "test/Test_Problems/th_sn1aflame",
+    "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
+  },
+  "input_sha256": {
+    "test/regression/cases/tnsn_torch47/control": "0c1a9d8d2fa05679d5fcbeb6c7998edc864521b81605e2f602b5cd505d44290d",
+    "test/Data_torch47/sunet": "9ef57a2c8081dcc63c1e907490c5a9b5738bc007f2cd305c92b551c879da5af7",
+    "test/Data_torch47/netsu": "1ac76a3f6a80d41dbb7d9059bf81da6edd0c04cc2c0ea9734ddae40cbb2ba59f",
+    "test/Data_torch47/netweak": "66ba4aebbf379c5c0e8be22edfbbccdaa4029a4aa3143b41e5987fc4effb14f9",
+    "test/Data_torch47/netwinv": "933fdbc57f2a4bd5adf4750587b4e5aed72ffe333c8598b123504ad5d4e4ddc1",
+    "test/Data_torch47/ab_co": "2406fe838d469e45f30c53ce977f5f1286ef6e846c64671da207c5d49736253a",
+    "test/Test_Problems/th_sn1aflame": "22f633cfe29439a6633e06009d5356599d827c9724f2baecf43de55e25be0f0b",
+    "tools/starkiller-helmholtz/helm_table.dat": "c9a57c26c6fd2b2b378b9d5295ca1214022f6fec6289d038b47bf8c8938881a1"
+  },
+  "expected_zones": [1],
+  "final_step": 2928,
+  "fields": {
+    "target_time": {
+      "value": 2.0,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    },
+    "temperature_gk": {
+      "value": 2.1289538,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    },
+    "density": {
+      "value": 4471732.7,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    },
+    "electron_fraction": {
+      "value": 0.49999598,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    }
+  },
+  "mass_fraction_selection": {
+    "1": ["si28", "s31", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "co55", "ni56"]
+  },
+  "mass_fraction_tolerances": {
+    "all_selected": {
+      "atol": 4.3e-09,
+      "rtol": 0,
+      "exact": false
+    }
+  },
+  "mass_fraction_printed_sum": {
+    "value": 0.9999999960856473,
+    "atol": 4.7e-09,
+    "rtol": 0,
+    "exact": false
+  },
+  "composition_norm_limits": {
+    "l1": 1.1e-08,
+    "linf": 4.3e-09
+  },
+  "mass_fractions": {
+    "n": 2.4955614e-24,
+    "p": 5.1383457e-10,
+    "d": 0.0,
+    "t": 6.0194868e-26,
+    "he3": 1.6876335e-24,
+    "he4": 2.1453214e-10,
+    "li7": 9.8355742e-29,
+    "be7": 0.0,
+    "b8": 0.0,
+    "c12": 1.5467384e-7,
+    "c13": 1.9807838e-21,
+    "n13": 5.6320027e-16,
+    "n14": 5.1677437e-16,
+    "n15": 4.2695376e-19,
+    "o14": 1.1342258e-18,
+    "o15": 3.227757e-12,
+    "o16": 5.8316058e-7,
+    "o17": 2.8553008e-21,
+    "o18": 1.8969683e-26,
+    "f17": 4.1133691e-18,
+    "f18": 3.0053014e-20,
+    "f19": 2.6381507e-23,
+    "ne18": 5.5821212e-23,
+    "ne19": 2.5900733e-18,
+    "ne20": 4.4921082e-11,
+    "na23": 1.002018e-13,
+    "mg23": 9.5812917e-10,
+    "mg24": 2.9650327e-6,
+    "al27": 3.0101082e-10,
+    "si27": 1.4155342e-7,
+    "si28": 0.24050499,
+    "p30": 1.4159796e-5,
+    "p31": 7.865519e-7,
+    "s31": 0.000193224,
+    "s32": 0.21255831,
+    "cl35": 3.0414303e-7,
+    "ar36": 0.058638946,
+    "k39": 3.1643451e-7,
+    "ca40": 0.068410851,
+    "sc43": 5.2673423e-11,
+    "ti44": 5.6882251e-5,
+    "v47": 4.3572237e-8,
+    "cr48": 0.0016050967,
+    "mn51": 1.8033318e-5,
+    "fe52": 0.026411395,
+    "co55": 0.00076324081,
+    "ni56": 0.39081957
+  },
+  "mass_fraction_sum_atol": 1.7e-08
+}

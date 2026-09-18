@@ -1,0 +1,101 @@
+{
+  "comparison_schema": "xnet-comparison-v1",
+  "baseline_kind": "characterization",
+  "case": "tnsn_alpha",
+  "generated_from_revision": "e650a076654e1253d7cf3769249ccb841f371c71",
+  "generated_on": "2026-08-04",
+  "platform": "macOS arm64",
+  "compiler": "GNU Fortran (Homebrew GCC 16.1.0) 16.1.0",
+  "build": {
+    "executable": "source/xnet",
+    "CMODE": "OPT",
+    "PE_ENV": "GNU",
+    "MPI_MODE": "OFF",
+    "OPENMP_MODE": "OFF",
+    "GPU_MODE": "OFF",
+    "EOS": "STARKILLER",
+    "MATRIX_SOLVER": "dense",
+    "LAPACK_VER": "NETLIB"
+  },
+  "inputs": {
+    "control": "test/regression/cases/tnsn_alpha/control",
+    "network_data": "test/Data_alpha",
+    "initial_abundance": "test/Data_alpha/ab_co",
+    "trajectory": "test/Test_Problems/th_sn1aflame",
+    "eos_table": "tools/starkiller-helmholtz/helm_table.dat"
+  },
+  "expected_zones": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "final_step": 2841,
+  "fields": {
+    "target_time": {
+      "value": 2.0,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    },
+    "temperature_gk": {
+      "value": 2.1289538,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    },
+    "density": {
+      "value": 4471732.7,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    },
+    "electron_fraction": {
+      "value": 0.5,
+      "exact": true,
+      "atol": 0,
+      "rtol": 0
+    }
+  },
+  "mass_fraction_selection": {
+    "1": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "2": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "3": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "4": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "5": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "6": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "7": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "8": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "9": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"],
+    "10": ["si28", "s32", "ar36", "ca40", "ti44", "cr48", "fe52", "ni56"]
+  },
+  "mass_fraction_tolerances": {
+    "all_selected": {
+      "atol": 2e-10,
+      "rtol": 0,
+      "exact": false
+    }
+  },
+  "mass_fraction_printed_sum": {
+    "value": 0.9999999999286628,
+    "atol": 2e-10,
+    "rtol": 0,
+    "exact": false
+  },
+  "composition_norm_limits": {
+    "l1": 2e-10,
+    "linf": 2e-10
+  },
+  "mass_fractions": {
+    "he4": 7.0844553e-12,
+    "c12": 1.299695e-7,
+    "o16": 3.3225937e-6,
+    "ne20": 1.3172849e-10,
+    "mg24": 4.205449e-6,
+    "si28": 0.30212305,
+    "s32": 0.34965091,
+    "ar36": 0.13167765,
+    "ca40": 0.19075684,
+    "ti44": 0.00020973267,
+    "cr48": 0.0081303739,
+    "fe52": 0.010695266,
+    "ni56": 0.0067485191,
+    "zn60": 1.076499e-10
+  },
+  "mass_fraction_sum_atol": 2.2e-08
+}

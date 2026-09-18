@@ -8,7 +8,8 @@
 ##   ./test_xnet.sh <xnet executables to test> <test problem ID #'s>
 ##
 ## Description:
-##   <xnet executables to test> (Optional)      default: ../source/xnetp
+##   <xnet executables to test> (Optional)
+##     default: ../build/GNU-OPT/bin/xnet
 ##     Paths to XNet exeuctables to test.
 ##     This is useful for testing custom builds of that do not correspond to a specific Makefile target.
 ##     Currently, this only works with serial tests.
@@ -57,17 +58,10 @@
 ##
 ###############################################################################
 
-xnetd=../source/xnetd
-xnetm=../source/xnetm
-xnetp=../source/xnetp
-xnet_nse=../source/xnet_nse
-xnetd_mpi=../source/xnetd_mpi
-xnetm_mpi=../source/xnetm_mpi
-xnetp_mpi=../source/xnetp_mpi
-xnet_nse_mpi=../source/xnet_nse_mpi
-xnse=../source/xnse
-
-xnet_mpi=$xnetp_mpi
+xnet_default=../build/GNU-OPT/bin/xnet
+xnet_mpi=${XNET_MPI:-../build/GNU-OPT-MPI/bin/xnet}
+xnet_nse=${XNET_NSE:-$xnet_default}
+xnse=${XNSE:-../build/GNU-OPT/bin/xnse}
 
 function test_diff {
   # Remove timers from files for diff
@@ -164,9 +158,9 @@ for arg in $*; do
     test_list+=($arg)
   fi
 done
-# If no executable specified, use serial PARDISO
+# If no executable is specified, use the default production build.
 if [ ${#xnet_list[@]} -lt 1 ]; then
-  xnet_list+=($xnetp)
+  xnet_list+=($xnet_default)
 fi
 
 mkdir -pv Test_Results

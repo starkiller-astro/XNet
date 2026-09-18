@@ -13,7 +13,7 @@ New parameters
 ## NSE Initial Conditions 
 11.0      Temperature in GK to use NSE initial conditions instead of file
 ## Integration Controls
-1         Choice of integration Scheme (1=Backward Euler, 2= Bader-Deufelhard)
+1         Choice of integration Scheme (1=Backward Euler, 3=Backward Differentiation Formula, 2=obsolete Bader-Deuflhard)
 9999      Max. number of timesteps before quit
 5         Max. iterations per step
 1         Rebuild the jacobian every ijac iterations after the first
