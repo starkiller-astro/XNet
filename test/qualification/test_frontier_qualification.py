@@ -697,6 +697,9 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
         "!XDIR XPRESENT(probe)\n"
         "Do first = 1, 1\n"
         "EndDo\n"
+        "!XDIR XLOOP_SERIAL(1)\n"
+        "Do second = 1, 1\n"
+        "EndDo\n"
         "probe = 0\n"
         "End Function probe\n",
         encoding="utf-8",
@@ -752,6 +755,7 @@ def test_cray_wrapper_preserves_fortran_and_expands_variadic_macros(
     assert "nowait" not in preprocessed
     assert "barrier" not in preprocessed
     assert "\n!$omp\n" not in preprocessed
+    assert "!$omp nothing" not in preprocessed
 
 
 def test_cray_gpu_preprocessing_remains_selected_after_mpi_compiler_override(

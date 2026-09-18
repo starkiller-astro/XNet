@@ -84,6 +84,9 @@ fi
 
 # Drop OpenMP no-op sentinels and reconnect directives across ignored OpenACC present clauses.
 if ! awk '
+  /^[[:space:]]*!\$omp[[:space:]]+nothing([[:space:]]*&)?[[:space:]]*$/ {
+    next
+  }
   /^[[:space:]]*!\$omp[[:space:]]*$/ {
     next
   }
