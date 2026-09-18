@@ -12,6 +12,10 @@ include $(ROOT_DIR)/Makefile.internal
 
 BUILD_DIR := build/$(shell echo $(CMODE) | tr A-Z a-z)
 TEST_EXE := $(BUILD_DIR)/xnet_contract_tests
+NSE_VALIDATION_EXE := $(BUILD_DIR)/nse_scientific_validation_tests
+NSE_VALIDATION_DIR := $(ROOT_DIR)/test/nse_validation
+NSE_VALIDATION_NETWORK_DIR := $(NSE_VALIDATION_DIR)/network
+NSE_VALIDATION_REFERENCE := $(NSE_VALIDATION_DIR)/reference.dat
 NSE_TEST_SOURCE := $(BUILD_DIR)/xnet_nse.F90
 MODULE_FLAGS := -J$(BUILD_DIR) -I$(BUILD_DIR) -I$(XNET_DIR)
 LAPACK_OBJECTS := $(patsubst $(NETLIB_DIR)/%.f,$(BUILD_DIR)/lapack/%.o,$(LAPACK_SRC))
@@ -53,6 +57,11 @@ OBJECTS := \
   $(LAPACK_OBJECTS) \
   $(BUILD_DIR)/test_xnet_contracts.o
 
+NSE_VALIDATION_OBJECTS := \
+  $(filter-out $(BUILD_DIR)/test_xnet_contracts.o,$(OBJECTS)) \
+  $(BUILD_DIR)/nse_validation_support.o \
+  $(BUILD_DIR)/test_nse_scientific_validation.o
+
 PREPROCESS_CORE_OBJECTS := \
   $(PREPROCESS_BUILD_DIR)/xnet_types.o \
   $(PREPROCESS_BUILD_DIR)/xnet_constants.o \
@@ -87,10 +96,12 @@ BUILD_NET_OBJECTS := \
 
 .PHONY: test eos-test model-input-test clean production-xnet
 
-test: eos-test model-input-test $(TEST_EXE) $(PREPROCESS_DIRECT_EXE) \
+test: eos-test model-input-test $(TEST_EXE) $(NSE_VALIDATION_EXE) $(PREPROCESS_DIRECT_EXE) \
     $(PREPROCESS_NET_SETUP_EXE) $(PREPROCESS_VERIFY_EXE) $(BUILD_NET_READER_EXE) \
     $(NUCLEAR_INPUT_MUTATOR_EXE) $(BUILD_NET_EXE) production-xnet
 	@$(TEST_EXE)
+	@PYTHONDONTWRITEBYTECODE=1 python3 $(NSE_VALIDATION_DIR)/test_reference_tooling.py
+	@$(NSE_VALIDATION_EXE) $(NSE_VALIDATION_NETWORK_DIR) $(NSE_VALIDATION_REFERENCE)
 	@bash run_preprocess_contracts.sh $(PREPROCESS_FIXTURE_DIR) $(PREPROCESS_WORK_DIR) \
 	  $(abspath $(PREPROCESS_DIRECT_EXE)) $(abspath $(PREPROCESS_NET_SETUP_EXE)) \
 	  $(abspath $(PREPROCESS_VERIFY_EXE))
@@ -108,6 +119,9 @@ model-input-test: $(MODEL_INPUT_TEST_EXE)
 
 $(TEST_EXE): $(OBJECTS)
 	$(LDR) -o $@ $(OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
+
+$(NSE_VALIDATION_EXE): $(NSE_VALIDATION_OBJECTS)
+	$(LDR) -o $@ $(NSE_VALIDATION_OBJECTS) $(LDFLAGS) $(LAPACK_LIBDIR) $(LAPACK_LIBS)
 
 $(BUILD_DIR):
 	mkdir -p $@
@@ -217,6 +231,15 @@ $(BUILD_DIR)/lapack/%.o: $(NETLIB_DIR)/%.f | $(BUILD_DIR)/lapack
 
 $(BUILD_DIR)/test_xnet_contracts.o: test_xnet_contracts.F90 $(OBJECTS:$(BUILD_DIR)/test_xnet_contracts.o=) \
     | $(BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_DIR)/nse_validation_support.o: support/nse_validation_support.F90 \
+    $(BUILD_DIR)/xnet_types.o | $(BUILD_DIR)
+	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
+
+$(BUILD_DIR)/test_nse_scientific_validation.o: test_nse_scientific_validation.F90 \
+    $(BUILD_DIR)/nse_validation_support.o $(BUILD_DIR)/xnet_nse.o \
+    $(BUILD_DIR)/testdrive.o | $(BUILD_DIR)
 	$(FC) $(FFLAGS) $(F90FLAGS) $(MODULE_FLAGS) -c $< -o $@
 
 $(PREPROCESS_DIRECT_EXE): $(PREPROCESS_CORE_OBJECTS) $(PREPROCESS_BUILD_DIR)/preprocess_direct.o

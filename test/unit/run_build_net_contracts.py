@@ -114,10 +114,16 @@ def write_partition_source(path: Path) -> None:
 
 def write_mass_source(path: Path) -> None:
     lines = [f"synthetic mass header {index:02d}" for index in range(1, 16)]
+    first_data_index = len(lines)
     lines.extend(
         f"{zz:d} {int(aa):d} synthetic {mass * 1.0e3:.8f}"
         for _, aa, zz, _, _, mass in MASTER_SPECIES
     )
+    # A missing uncertainty after a valid mass must not discard that mass.
+    lines[first_data_index] += " #"
+    # The retained JINA-derived tables use '#' for unavailable evaluations.
+    # An unselected unavailable record must not make network construction fail.
+    lines.append("75 203 synthetic #")
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
 
 
@@ -189,7 +195,9 @@ def prepare_case(
     malformed_namelist: bool = False,
     malformed_reaclib: bool = False,
     malformed_reaclib_late: bool = False,
+    malformed_mass_hash_record: bool = False,
     missing_mass: bool = False,
+    selected_unavailable_mass: bool = False,
     missing_weak: bool = False,
 ) -> None:
     directory.mkdir(parents=True)
@@ -221,8 +229,22 @@ def prepare_case(
     )
     for name in mass_names:
         write_mass_source(directory / "mass_data" / name)
+    ame11_path = directory / "mass_data" / "mass_ame11.dat"
+    if malformed_mass_hash_record:
+        lines = ame11_path.read_text(encoding="ascii").splitlines()
+        lines.append("this is not a mass record #")
+        ame11_path.write_text("\n".join(lines) + "\n", encoding="ascii")
+    if selected_unavailable_mass:
+        lines = ame11_path.read_text(encoding="ascii").splitlines()
+        for index, line in enumerate(lines):
+            if line.split()[:3] == ["6", "12", "synthetic"]:
+                lines[index] = "6 12 synthetic #"
+                break
+        else:
+            fail("could not locate selected c12 mass fixture")
+        ame11_path.write_text("\n".join(lines) + "\n", encoding="ascii")
     if missing_mass:
-        (directory / "mass_data" / "mass_ame11.dat").unlink()
+        ame11_path.unlink()
     if weak_enabled:
         write_weak_sources(directory / "weak_data")
         if missing_weak:
@@ -265,6 +287,14 @@ def require_failure(label: str, result: subprocess.CompletedProcess[str]) -> Non
         fail(f"{label} unexpectedly returned zero")
     if "error" not in (result.stdout + result.stderr).lower():
         fail(f"{label} failed without a clear error diagnostic")
+
+
+def require_failure_diagnostic(
+    label: str, result: subprocess.CompletedProcess[str], diagnostic: str
+) -> None:
+    require_failure(label, result)
+    if diagnostic.lower() not in (result.stdout + result.stderr).lower():
+        fail(f"{label} failed without expected diagnostic: {diagnostic}")
 
 
 def require_reader_rejection(
@@ -719,6 +749,7 @@ def main(argv: list[str]) -> int:
         ("malformed-namelist", {"malformed_namelist": True}),
         ("malformed-reaclib-initial", {"malformed_reaclib": True}),
         ("malformed-reaclib-late", {"malformed_reaclib_late": True}),
+        ("malformed-mass-hash-record", {"malformed_mass_hash_record": True}),
         ("missing-required-mass", {"missing_mass": True}),
         ("missing-enabled-weak", {"missing_weak": True}),
     )
@@ -726,6 +757,14 @@ def main(argv: list[str]) -> int:
         case = work_dir / name
         prepare_case(case, **options)
         require_failure(name, run_process([str(build_net)], case))
+
+    selected_missing = work_dir / "selected-unavailable-mass"
+    prepare_case(selected_missing, selected_unavailable_mass=True)
+    require_failure_diagnostic(
+        "selected-unavailable-mass",
+        run_process([str(build_net)], selected_missing),
+        "Mass source has no value for c12",
+    )
 
     positive_output = work_dir / "positive-a" / "out"
     mutations = (

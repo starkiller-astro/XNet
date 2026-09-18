@@ -33,9 +33,13 @@ modules that supply only the state needed by those routines. They check:
 - STARKILLER and Bahcall EOS interfaces; and
 - ASCII model-input success, missing-file status, and malformed input.
 
-The NSE checks in this directory exercise software behavior and basic physical
-invariants. Independent scientific comparison against a reference calculation
-is outside this suite.
+The compact NSE checks exercise software behavior and basic physical
+invariants. A separate executable loads the retained 489-species `torch489`
+network and three independently calculated complete compositions under
+`test/nse_validation/`, then calls the production `nse_initialize` and
+`nse_solve` routines. The scientific formulation, exact inputs, acceptance
+limits, reproduction steps, and finite-network limitations are documented in
+`test/nse_validation/README.md`.
 
 The test programs use shared module state, so Test Drive runs them serially.
 This restriction applies only to the test process; production sources are
@@ -84,9 +88,13 @@ unavailable participant, allowing the checks to verify selection behavior.
 No private neutrino data are used.
 
 The runner builds identical positive cases twice and compares their parsed
-contents. It also checks a configuration without weak rates and requires
-nonzero status for duplicate, blank, unavailable, malformed, missing, or
-truncated inputs. Mutated generated files exercise:
+contents. Its mass catalog includes a valid selected mass with a `#` in an
+unrelated field, an unselected unavailable mass, a selected unavailable mass,
+and a malformed row containing `#`; these distinguish an unavailable required
+mass field from other uses of the character. It also checks a configuration
+without weak rates and requires nonzero status for duplicate, blank,
+unavailable, malformed, missing, or truncated inputs. Mutated generated files
+exercise:
 
 - reaction participants, species order, masses, and Q values;
 - `sunet`/`netwinv` count and order mismatches, including the last species;
