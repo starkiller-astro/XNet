@@ -256,7 +256,7 @@ Contains
       EndIf
 
       ! XNet supplies no permutation, solves A*x=b in one-based full-system storage,
-      ! and copies the solution from x. These adapter invariants are not user controls.
+      ! and copies the solution from x. These settings are required by XNet and are not user controls.
       iparm(5) = 0
       iparm(6) = 0
       iparm(12) = 0

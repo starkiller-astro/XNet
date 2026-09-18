@@ -19,7 +19,7 @@ def test_identical_executable_content_is_rejected(tmp_path: Path) -> None:
         (
             sys.executable,
             str(SCRIPT),
-            "--provider=ma48",
+            "--backend=ma48",
             f"--dense-executable={dense}",
             f"--sparse-executable={sparse}",
             f"--work-directory={tmp_path / 'work'}",

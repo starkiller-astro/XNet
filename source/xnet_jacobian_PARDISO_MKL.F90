@@ -255,7 +255,7 @@ Contains
       EndIf
 
       ! oneMKL reserves iparm(3). XNet supplies no permutation, solves A*x=b in one-based
-      ! full-system storage, and copies the solution from x. These are adapter invariants.
+      ! full-system storage, and copies the solution from x. These settings are required by XNet.
       iparm(3) = 0
       iparm(5) = 0
       iparm(6) = 0

@@ -73,7 +73,7 @@ def _field_value(state, name: str) -> float:
     return state.time if name == "achieved_time" else getattr(state, name)
 
 
-def _comparison_report(provider: str, dense_states, sparse_states, reference):
+def _comparison_report(backend: str, dense_states, sparse_states, reference):
     dense_by_zone = {state.zone: state for state in dense_states}
     sparse_by_zone = {state.zone: state for state in sparse_states}
     norms = calculate_composition_norms(sparse_states, reference)
@@ -125,7 +125,7 @@ def _comparison_report(provider: str, dense_states, sparse_states, reference):
         )
     return {
         "schema": "xnet-sparse-qualification-v1",
-        "provider": provider,
+        "backend": backend,
         "case": "heat_sn160",
         "comparison_policy": (
             "xnet-comparison-v1 tolerances reanchored to the same-source dense run; "
@@ -137,7 +137,7 @@ def _comparison_report(provider: str, dense_states, sparse_states, reference):
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--provider", required=True, choices=("ma48", "pardiso-mkl"))
+    parser.add_argument("--backend", required=True, choices=("ma48", "pardiso-mkl"))
     parser.add_argument("--dense-executable", required=True, type=Path)
     parser.add_argument("--sparse-executable", required=True, type=Path)
     parser.add_argument("--work-directory", required=True, type=Path)
@@ -162,13 +162,13 @@ def main() -> int:
     )
     sparse_result, sparse_states = _run_endpoint(
         arguments.sparse_executable,
-        arguments.work_directory / arguments.provider,
+        arguments.work_directory / arguments.backend,
         arguments.timeout,
     )
     comparison_reference = reanchor_reference_to_states(
         policy,
         dense_states,
-        case_name=f"heat_sn160 dense versus {arguments.provider}",
+        case_name=f"heat_sn160 dense versus {arguments.backend}",
     )
     comparison_reference = scale_comparison_tolerances(
         comparison_reference,
@@ -177,7 +177,7 @@ def main() -> int:
     compare_final_states(sparse_states, comparison_reference)
 
     report = _comparison_report(
-        arguments.provider,
+        arguments.backend,
         dense_states,
         sparse_states,
         comparison_reference,
@@ -198,7 +198,7 @@ def main() -> int:
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     maximum_linf = max(zone["composition"]["linf"] for zone in report["zones"])
     print(
-        f"{arguments.provider} heat_sn160 agrees with the same-source dense run; "
+        f"{arguments.backend} heat_sn160 agrees with the same-source dense run; "
         f"maximum full-composition L-infinity difference={maximum_linf:.3e}"
     )
     print(f"qualification report: {report_path}")

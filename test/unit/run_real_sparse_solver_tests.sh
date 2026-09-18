@@ -2,16 +2,16 @@
 set -euo pipefail
 
 if [[ $# -ne 4 ]]; then
-  echo "usage: $0 PROVIDER WORK_DIR EXECUTABLE CONTROLS" >&2
+  echo "usage: $0 SOLVER WORK_DIR EXECUTABLE CONTROLS" >&2
   exit 1
 fi
 
-provider=$1
+solver=$1
 work_root=$2
 executable=$3
 tracked_controls=$4
 
-case "$provider" in
+case "$solver" in
   ma48)
     failure_diagnostic='Error during MA48'
     ;;
@@ -19,7 +19,7 @@ case "$provider" in
     failure_diagnostic='PARDISO factorization failed'
     ;;
   *)
-    echo "unsupported real sparse provider: $provider" >&2
+    echo "unsupported real sparse solver: $solver" >&2
     exit 1
     ;;
 esac
@@ -38,7 +38,7 @@ run_case() {
   else
     status=$?
   fi
-  echo "$provider $mode process status=$status"
+  echo "$solver $mode process status=$status"
   return "$status"
 }
 
@@ -56,7 +56,7 @@ run_tracked_controls() {
   else
     status=$?
   fi
-  echo "$provider tracked-controls process status=$status"
+  echo "$solver tracked-controls process status=$status"
   return "$status"
 }
 
@@ -70,17 +70,17 @@ expect_solver_failure() {
     cd "$work_dir"
     "$executable" failure .
   ) >"$log_file" 2>&1; then
-    echo "$provider accepted controlled failure input" >&2
+    echo "$solver accepted controlled failure input" >&2
     exit 1
   else
     status=$?
   fi
   if ! grep -Fq "$failure_diagnostic" "$log_file"; then
-    echo "$provider failure probe did not reach the expected production status path" >&2
+    echo "$solver failure probe did not reach the expected production status path" >&2
     cat "$log_file" >&2
     exit 1
   fi
-  echo "$provider controlled-failure process status=$status diagnostic='$failure_diagnostic'"
+  echo "$solver controlled-failure process status=$status diagnostic='$failure_diagnostic'"
 }
 
 expect_residual_mutation_failure() {
@@ -93,12 +93,12 @@ expect_residual_mutation_failure() {
     cd "$work_dir"
     XNET_SPARSE_REAL_MUTATION=excessive_residual "$executable" base .
   ) >"$log_file" 2>&1; then
-    echo "$provider residual check accepted a controlled result perturbation" >&2
+    echo "$solver residual check accepted a controlled result perturbation" >&2
     exit 1
   else
     status=$?
   fi
-  echo "$provider residual-mutation process status=$status"
+  echo "$solver residual-mutation process status=$status"
 }
 
 run_case base
@@ -107,4 +107,4 @@ run_tracked_controls
 expect_solver_failure
 expect_residual_mutation_failure
 
-echo "$provider real-backend sparse contracts passed"
+echo "$solver real-library sparse solver tests passed"

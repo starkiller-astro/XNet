@@ -132,14 +132,14 @@ run_tracked_controls pardiso-mkl "$pardiso_mkl_exe"
 run_recovery_case ma48 "$ma48_exe" ma48_analysis_warning
 run_recovery_case ma48 "$ma48_exe" ma48_storage_resize
 
-for provider in ma48 pardiso pardiso-mkl; do
-  case "$provider" in
+for solver in ma48 pardiso pardiso-mkl; do
+  case "$solver" in
     ma48) input_exe=$ma48_exe ;;
     pardiso) input_exe=$pardiso_exe ;;
     pardiso-mkl) input_exe=$pardiso_mkl_exe ;;
   esac
-  expect_input_failure "$provider" "$input_exe" missing-file 'Failed to open sparse_ind file'
-  expect_input_failure "$provider" "$input_exe" truncated-header 'Error reading sparse_ind header record'
+  expect_input_failure "$solver" "$input_exe" missing-file 'Failed to open sparse_ind file'
+  expect_input_failure "$solver" "$input_exe" truncated-header 'Error reading sparse_ind header record'
 done
 
 expect_failure pardiso "$pardiso_exe" pardiso_init 'PARDISO initialization failed'
@@ -162,4 +162,4 @@ expect_mutation_failure pardiso "$pardiso_exe" base result_offset
 expect_mutation_failure pardiso "$pardiso_exe" base cross_zone_copy
 expect_mutation_failure pardiso "$pardiso_exe" base excessive_residual
 
-echo "sparse Jacobian and solver-adapter contracts passed"
+echo "sparse Jacobian and solver tests passed"

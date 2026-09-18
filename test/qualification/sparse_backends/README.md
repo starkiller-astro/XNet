@@ -2,7 +2,7 @@
 
 These manual, dependency-bound checks qualify the real serial CPU backends
 described below. They do not run as part of `make -C test/unit`, download
-solver software, or turn an unavailable provider into a stubbed success.
+solver software, or turn an unavailable solver into a stubbed success.
 
 The opt-in component targets compile the production `xnet_jacobian` implementation
 against the real library and reuse the three-equation component fixture. Base
@@ -14,7 +14,7 @@ max(abs(matmul(A,x)-b)) <= 1e-12 * (1 + max(abs(b)))
 
 for two distinct right-hand sides and two zones. The runner also requires the
 tracked solver controls to work, a controlled real-solver error to reach the
-provider's production fatal-status path, and a `1e-11` controlled result
+solver implementation's production fatal-status path, and a `1e-11` controlled result
 perturbation to fail the residual check. MA48 uses a singular matrix for the
 status probe. oneMKL uses its matrix checker with a controlled invalid CRS
 column index because its default pivot perturbation accepts a numerically zero
@@ -54,7 +54,7 @@ make BUILD_NAME=ma48-dense MATRIX_SOLVER=dense -j xnet
 make BUILD_NAME=ma48-sparse MATRIX_SOLVER=MA48 MA48_DIR="$HSL_MA48_DIR" -j xnet
 
 python3 test/qualification/sparse_backends/compare_heat_sn160.py \
-  --provider=ma48 \
+  --backend=ma48 \
   --dense-executable="$PWD/build/ma48-dense/bin/xnet" \
   --sparse-executable="$PWD/build/ma48-sparse/bin/xnet" \
   --work-directory=/tmp/xnet-ma48
@@ -69,7 +69,7 @@ redistribution rights.
 The recorded qualification used oneMKL PARDISO, not the distinct
 standalone PARDISO ABI. Intel documents oneMKL licensing in its
 [oneMKL License FAQ](https://www.intel.com/content/www/us/en/developer/articles/tool/onemkl-license-faq.html).
-The oneMKL adapter keeps one solver handle per local batch slot. This preserves
+The oneMKL implementation keeps one solver handle per local batch slot. This preserves
 each concurrently evolved zone's analysis/refactorization state independently;
 sharing one handle across the two test zones corrupted the first
 stored factorization under oneMKL 2026.1 even though both solver calls returned
@@ -86,7 +86,7 @@ make BUILD_NAME=pardiso-mkl-dense MATRIX_SOLVER=dense LAPACK_VER=MKL -j xnet
 make BUILD_NAME=pardiso-mkl-sparse MATRIX_SOLVER=PARDISO_MKL LAPACK_VER=MKL -j xnet
 
 python3 test/qualification/sparse_backends/compare_heat_sn160.py \
-  --provider=pardiso-mkl \
+  --backend=pardiso-mkl \
   --dense-executable="$PWD/build/pardiso-mkl-dense/bin/xnet" \
   --sparse-executable="$PWD/build/pardiso-mkl-sparse/bin/xnet" \
   --work-directory=/tmp/xnet-pardiso-mkl
@@ -112,7 +112,7 @@ For each real qualification, record the exact Git revision, date, host,
 compiler, library/source version, clean build commands and link line, component
 process statuses, singular-path diagnostic, comparison report quantities, and
 generated-file cleanup. These checks establish build, serial runtime,
-adapter/error behavior, known-system residual, and dense-versus-sparse endpoint
+solver setup and error behavior, known-system residual, and dense-versus-sparse endpoint
 agreement. They are not independent scientific validation, performance or
 scaling evidence, or qualification of MPI, OpenMP, accelerators, alternate
-compilers, providers, versions, or hosts.
+compilers, solver implementations, versions, or hosts.

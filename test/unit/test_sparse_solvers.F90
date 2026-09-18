@@ -263,7 +263,7 @@ Contains
 
 End Module sparse_component_fixture
 
-Module test_sparse_contracts
+Module test_sparse_solvers
   Use sparse_component_fixture, Only: expected_matrix, heat_mode, tracked_controls
   Use testdrive, Only: check, error_type, new_unittest, unittest_type
   Use xnet_controls, Only: lun_diag
@@ -278,12 +278,12 @@ Module test_sparse_contracts
   Real(dp), Parameter :: association_tolerance = 1.0e-10_dp
   Real(dp), Parameter :: tolerance = 1.0e-12_dp
 
-  Public :: collect_sparse_contracts
+  Public :: collect_sparse_solver_tests
   Public :: run_real_failure_probe
 
 Contains
 
-  Subroutine collect_sparse_contracts(testsuite)
+  Subroutine collect_sparse_solver_tests(testsuite)
     Implicit None
 
     Type(unittest_type), Allocatable, Intent(out) :: testsuite(:)
@@ -297,11 +297,11 @@ Contains
       & new_unittest('sparse structure and maps',test_sparse_structure), &
       & new_unittest('sparse matrix storage',test_matrix_storage), &
       & new_unittest('solver controls',test_solver_controls), &
-      & new_unittest('adapter sequence and solve',test_known_system_solve) ]
+      & new_unittest('solver sequence and solve',test_known_system_solve) ]
 #endif
 
     Return
-  End Subroutine collect_sparse_contracts
+  End Subroutine collect_sparse_solver_tests
 
 #if !defined(TEST_DENSE)
   Subroutine test_sparse_structure(error)
@@ -692,7 +692,7 @@ Contains
     Integer :: zone
     Real(dp) :: maximum_residual, residual
 
-    ! Keep the copy-back association check independent of the stricter residual contract.
+    ! Keep the copy-back association check independent of the stricter residual check.
     Call check(error,all(abs(actual-expected) <= association_tolerance))
     If ( allocated(error) ) Return
     maximum_residual = 0.0_dp
@@ -709,12 +709,12 @@ Contains
     Return
   End Subroutine check_solutions
 
-End Module test_sparse_contracts
+End Module test_sparse_solvers
 
-Program sparse_contract_test_runner
+Program sparse_solver_test_runner
   Use, Intrinsic :: iso_fortran_env, Only: error_unit
   Use sparse_component_fixture, Only: initialize_component
-  Use test_sparse_contracts, Only: collect_sparse_contracts, run_real_failure_probe
+  Use test_sparse_solvers, Only: collect_sparse_solver_tests, run_real_failure_probe
   Use testdrive, Only: new_testsuite, run_testsuite, testsuite_type
   Implicit None
 
@@ -725,7 +725,7 @@ Program sparse_contract_test_runner
   Type(testsuite_type), Allocatable :: testsuites(:)
 
   If ( command_argument_count() /= 2 ) Then
-    Write(error_unit,*) 'usage: sparse contract test MODE DATA_DIR'
+    Write(error_unit,*) 'usage: sparse solver test MODE DATA_DIR'
     Stop 1
   EndIf
   Call get_command_argument(1,mode)
@@ -738,18 +738,18 @@ Program sparse_contract_test_runner
 #if defined(TEST_DENSE)
   suite_name = 'dense Jacobian '//trim(mode)
 #elif defined(TEST_MA48)
-  suite_name = 'MA48 adapter '//trim(mode)
+  suite_name = 'MA48 solver '//trim(mode)
 #elif defined(TEST_PARDISO)
-  suite_name = 'standalone PARDISO adapter '//trim(mode)
+  suite_name = 'standalone PARDISO solver '//trim(mode)
 #else
-  suite_name = 'MKL PARDISO adapter '//trim(mode)
+  suite_name = 'MKL PARDISO solver '//trim(mode)
 #endif
   stat = 0
-  testsuites = [ new_testsuite(trim(suite_name),collect_sparse_contracts) ]
+  testsuites = [ new_testsuite(trim(suite_name),collect_sparse_solver_tests) ]
   Write(error_unit,'("# Testing: ",a)') testsuites(1)%name
   Call run_testsuite(testsuites(1)%collect,error_unit,stat,parallel=.False.)
   If ( stat > 0 ) Then
     Write(error_unit,'(i0,1x,a)') stat,'test(s) failed'
     Stop 1
   EndIf
-End Program sparse_contract_test_runner
+End Program sparse_solver_test_runner

@@ -52,7 +52,7 @@ They cover the persisted `sparse_ind` dimensions, one-based ordered CRS
 topology, required diagonal entries, reaction maps, malformed and truncated
 records, and the self-heating CRS augmentation and remapping.
 
-The solver-adapter checks compare dense, MA48 coordinate, standalone PARDISO,
+The sparse solver checks compare dense, MA48 coordinate, standalone PARDISO,
 and oneMKL PARDISO compressed-row representations produced from the same small
 reaction network. Test-only solver routines record calls and solve a known
 system with the bundled NETLIB code. These checks cover XNet's matrix

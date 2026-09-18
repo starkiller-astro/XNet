@@ -1,5 +1,5 @@
 !***************************************************************************************************
-! Persisted sparse_ind data and CRS storage operations shared by sparse Jacobian providers.
+! Persisted sparse_ind data and CRS storage operations shared by sparse Jacobian implementations.
 !***************************************************************************************************
 
 Module xnet_sparse

@@ -154,9 +154,9 @@
   ! PARDISO initializes iparm and, for the standalone ABI, dparm before reading this group.
   ! Standalone PARDISO defaults iparm(3) to one thread; oneMKL reserves iparm(3) at zero.
   ! XNet enforces iparm(5,6,12,31,35)=0 for its permutation, solution, equation, full-system,
-  ! and indexing contracts; the oneMKL adapter also enforces iparm(36)=0.
+  ! and indexing settings; the oneMKL implementation also enforces iparm(36)=0.
   ! oneMKL iparm(7) is solver output; iparm(8) controls iterative refinement steps.
-  ! Uncomment only backend-supported entries that do not conflict with those invariants.
+  ! Uncomment only entries supported by the selected solver that do not conflict with these settings.
 
 !   dparm(1) = 0.0
 
