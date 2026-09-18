@@ -11,6 +11,13 @@ source_archive="${artifact_root}/source.tar"
 source_root="${artifact_root}/source"
 launcher_status="${artifact_root}/srun.status.txt"
 
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+  python3 --version >&2 || true
+  echo "Frontier qualification requires Python 3.10 or newer" >&2
+  exit 2
+fi
+python3 --version > "${artifact_root}/python.version.txt" 2>&1
+
 actual_archive_sha256=$(sha256sum "${source_archive}" | cut -d ' ' -f 1)
 if [[ ${actual_archive_sha256} != "${archive_sha256}" ]]; then
   echo "Frontier qualification source archive SHA-256 differs before extraction" >&2

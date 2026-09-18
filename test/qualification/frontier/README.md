@@ -82,6 +82,7 @@ module load cpe/26.03
 module load rocm/7.0.2
 module load craype-accel-amd-gfx90a
 module load hipfort
+module load cray-python/3.12.12
 export LD_LIBRARY_PATH="${CRAY_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 python3 test/qualification/frontier/submit_frontier.py \
@@ -103,6 +104,11 @@ inside the allocated job, after queue wait. CPU and GPU builds use separate
 caller-selected build directories. Different directories may run concurrently;
 do not run two top-level Make invocations or a clean concurrently in one
 affected directory.
+
+The qualification tools require Python 3.10 or newer. The current Frontier
+procedure loads `cray-python/3.12.12`; the job checks the interpreter version
+before invoking the runner and retains `python.version.txt` with the other run
+files.
 
 The explicit build selections are:
 

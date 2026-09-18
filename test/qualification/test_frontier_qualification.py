@@ -232,6 +232,7 @@ def _manifest() -> dict[str, object]:
                 "rocm/1",
                 "craype-accel-amd-gfx90a",
                 "hipfort/1",
+                "cray-python/3.12.12",
             ],
             "compiler": {**command_evidence, "artifact": "environment/compiler.stdout.txt"},
             "preprocessor": {**command_evidence, "artifact": "environment/preprocessor.stdout.txt"},

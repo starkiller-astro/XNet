@@ -29,6 +29,7 @@ REQUIRED_MODULE_MARKERS = (
     "rocm",
     "craype-accel-amd-gfx90a",
     "hipfort",
+    "cray-python",
 )
 
 
