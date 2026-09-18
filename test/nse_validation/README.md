@@ -7,9 +7,10 @@ inputs.  It is not a general NSE package and it does not change XNet physics.
 
 ## Verification record (before reference generation)
 
-The statements below were checked at base commit
+The statements below were checked at historical `jaharris87/XNet` fork commit
 `65271bcbeea430534c1adc92748ef13bea10c228`.  This record was written before
-freezing expected compositions or running XNet against them.
+freezing expected compositions or running XNet against them; that commit is
+not expected to exist in a normal `starkiller-astro/XNet` clone.
 
 ### XNet software facts
 
@@ -381,13 +382,20 @@ renormalized.
 
 ### Reproduction and ordinary test separation
 
-The retained JSON's generator/source payload was frozen at commit
-`66e3ee7399e522011aae17fc714a942511f47041`; the later
-`scientific_input_sha256` field is the separately checked preservation identity
-documented above.  Reproducing the historical payload and `reference.dat`
-requires that snapshot and the recorded CPython and libmpdec versions:
+The retained JSON's generator/source payload was frozen at historical
+`jaharris87/XNet` fork commit
+`66e3ee7399e522011aae17fc714a942511f47041`; the earlier verification record
+began at fork commit `65271bcbeea430534c1adc92748ef13bea10c228`.
+Neither commit is expected to exist in a normal `starkiller-astro/XNet` clone.
+The later `scientific_input_sha256` field is the separately checked
+preservation identity documented above.  Reproducing the historical payload
+and `reference.dat` therefore requires fetching the fork's development history,
+then using the recorded CPython and libmpdec versions:
 
 ```bash
+git fetch https://github.com/jaharris87/XNet.git development
+git cat-file -e 65271bcbeea430534c1adc92748ef13bea10c228^{commit}
+git cat-file -e 66e3ee7399e522011aae17fc714a942511f47041^{commit}
 mkdir /tmp/xnet-nse-reference-snapshot
 git archive 66e3ee7399e522011aae17fc714a942511f47041 | \
   tar -x -C /tmp/xnet-nse-reference-snapshot
