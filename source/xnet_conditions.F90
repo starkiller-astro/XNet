@@ -54,8 +54,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     Use, Intrinsic :: iso_fortran_env, Only: lun_stdout=>output_unit
     Use xnet_types, Only: dp
-    !XDIR XROUTINE_SEQ
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Integer, Intent(in) :: kstep, ns

@@ -34,8 +34,8 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This function computes factorials.
     !-----------------------------------------------------------------------------------------------
-    !XDIR XROUTINE_SEQ
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Integer, Intent(in) :: n
@@ -57,8 +57,8 @@ Contains
     ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
     !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: dp
-    !XDIR XROUTINE_SEQ
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: x
@@ -76,8 +76,8 @@ Contains
     ! This routine safely calculates e^{x} with x constrained to prevent overflow and underflow.
     !-----------------------------------------------------------------------------------------------
     Use xnet_types, Only: dp
-    !XDIR XROUTINE_SEQ
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: x(:)
@@ -312,10 +312,10 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine calculate various plasma quantities
     !-----------------------------------------------------------------------------------------------
-    !XDIR XROUTINE_SEQ
     Use xnet_constants, Only: avn, bok, e2, pi, third, thbim2, twm2bi
     Use xnet_types, Only: dp
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: t9, rho, ytot, ye, zbar, zibar, ztilde

@@ -100,16 +100,16 @@ module actual_eos_module
     real(dp), parameter :: onethird = 1.0_dp/3.0_dp
     real(dp), parameter :: esqu = qe * qe
 
-    !XDIR XDECLARE_VAR(tlo, thi, dlo, dhi)
-    !XDIR XDECLARE_VAR(tstp, tstpi, dstp, dstpi)
-    !XDIR XDECLARE_VAR(ttol, dtol)
-    !XDIR XDECLARE_VAR(itmax, jtmax, d, t)
-    !XDIR XDECLARE_VAR(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
-    !XDIR XDECLARE_VAR(dpdf, dpdfd, dpdft, dpdfdt)
-    !XDIR XDECLARE_VAR(ef, efd, eft, efdt, xf, xfd, xft, xfdt)
-    !XDIR XDECLARE_VAR(dt_sav, dt2_sav, dti_sav, dt2i_sav)
-    !XDIR XDECLARE_VAR(dd_sav, dd2_sav, ddi_sav, dd2i_sav)
-    !XDIR XDECLARE_VAR(do_coulomb, input_is_constant)
+    !XDIR XDECLARE_ALLOC(tlo, thi, dlo, dhi)
+    !XDIR XDECLARE_ALLOC(tstp, tstpi, dstp, dstpi)
+    !XDIR XDECLARE_ALLOC(ttol, dtol)
+    !XDIR XDECLARE_ALLOC(itmax, jtmax, d, t)
+    !XDIR XDECLARE_ALLOC(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt)
+    !XDIR XDECLARE_ALLOC(dpdf, dpdfd, dpdft, dpdfdt)
+    !XDIR XDECLARE_ALLOC(ef, efd, eft, efdt, xf, xfd, xft, xfdt)
+    !XDIR XDECLARE_ALLOC(dt_sav, dt2_sav, dti_sav, dt2i_sav)
+    !XDIR XDECLARE_ALLOC(dd_sav, dd2_sav, ddi_sav, dd2i_sav)
+    !XDIR XDECLARE_ALLOC(do_coulomb, input_is_constant)
 
     public :: actual_eos, actual_eos_init, actual_eos_finalize, eos_supports_input_type
     public :: xnet_actual_eos, actual_eos_eta, actual_eos_cv
@@ -168,9 +168,8 @@ contains
 
     subroutine actual_eos(input, state)
 
-        !XDIR XROUTINE_SEQ
-
         implicit none
+        !XDIR XROUTINE_SEQ
 
         !..input arguments
         integer,      intent(in   ) :: input
@@ -1153,9 +1152,8 @@ contains
         ! quantities needed by XNet: electron chemical potential, its derivative
         ! w.r.t. temperature, and specific heat.
 
-        !XDIR XROUTINE_SEQ
-
         implicit none
+        !XDIR XROUTINE_SEQ
 
         !..input arguments
         integer,      intent(in   ) :: input
@@ -1188,9 +1186,8 @@ contains
         ! quantities needed by XNet: electron chemical potential, its derivative
         ! w.r.t. temperature, and specific heat.
 
-        !XDIR XROUTINE_SEQ
-
         implicit none
+        !XDIR XROUTINE_SEQ
 
         !..input arguments
         real(dp),     intent(in ) :: temp,den,ye
@@ -1701,10 +1698,27 @@ contains
         mindens = 10.d0**dlo
         maxdens = 10.d0**dhi
 
+#if defined(XNET_OMP_OL)
+        ! Establish the linked device descriptor and its initialized payload
+        ! together for these host-allocated variables.
+        !XDIR XENTER_DATA &
+        !XDIR XCOPYIN(mintemp, maxtemp, mindens, maxdens) &
+        !XDIR XCOPYIN(tlo, thi, dlo, dhi) &
+        !XDIR XCOPYIN(tstp, tstpi, dstp, dstpi) &
+        !XDIR XCOPYIN(ttol, dtol) &
+        !XDIR XCOPYIN(itmax, jtmax, d, t) &
+        !XDIR XCOPYIN(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+        !XDIR XCOPYIN(dpdf, dpdfd, dpdft, dpdfdt) &
+        !XDIR XCOPYIN(ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
+        !XDIR XCOPYIN(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+        !XDIR XCOPYIN(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+        !XDIR XCOPYIN(do_coulomb, input_is_constant)
+#else
         !XDIR XUPDATE &
         !XDIR XDEVICE(mintemp, maxtemp, mindens, maxdens) &
         !XDIR XDEVICE(tlo, thi, dlo, dhi) &
         !XDIR XDEVICE(tstp, tstpi, dstp, dstpi) &
+        !XDIR XDEVICE(ttol, dtol) &
         !XDIR XDEVICE(itmax, jtmax, d, t) &
         !XDIR XDEVICE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
         !XDIR XDEVICE(dpdf, dpdfd, dpdft, dpdfdt) &
@@ -1712,6 +1726,7 @@ contains
         !XDIR XDEVICE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
         !XDIR XDEVICE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
         !XDIR XDEVICE(do_coulomb, input_is_constant)
+#endif
 
     end subroutine actual_eos_init
 
@@ -1864,6 +1879,22 @@ contains
     subroutine actual_eos_finalize
 
       implicit none
+
+#if defined(XNET_OMP_OL)
+      ! Release device mappings before deallocating their host storage.
+      !XDIR XEXIT_DATA &
+      !XDIR XDELETE(mintemp, maxtemp, mindens, maxdens) &
+      !XDIR XDELETE(tlo, thi, dlo, dhi) &
+      !XDIR XDELETE(tstp, tstpi, dstp, dstpi) &
+      !XDIR XDELETE(ttol, dtol) &
+      !XDIR XDELETE(itmax, jtmax, d, t) &
+      !XDIR XDELETE(f, fd, ft, fdd, ftt, fdt, fddt, fdtt, fddtt) &
+      !XDIR XDELETE(dpdf, dpdfd, dpdft, dpdfdt) &
+      !XDIR XDELETE(ef, efd, eft, efdt, xf, xfd, xft, xfdt) &
+      !XDIR XDELETE(dt_sav, dt2_sav, dti_sav, dt2i_sav) &
+      !XDIR XDELETE(dd_sav, dd2_sav, ddi_sav, dd2i_sav) &
+      !XDIR XDELETE(do_coulomb, input_is_constant)
+#endif
 
       ! Deallocate managed module variables
 

@@ -49,11 +49,19 @@ def _complete_inventory(directory: Path, worker_count: int = 1) -> None:
         (directory / f"net_diag{worker:02d}").write_text("diag\n", encoding="utf-8")
 
 
-def _write_ascii_state(directory: Path, state: FinalState, filename_zone: int) -> None:
+def _write_ascii_state(
+    directory: Path,
+    state: FinalState,
+    filename_zone: int,
+    *,
+    neutrino_loss_rate: str = "0.0",
+    time_value: str | None = None,
+) -> None:
     values = " ".join(f"{value:.8E}" for value in state.mass_fractions.values())
     row = (
-        f"{state.counters.ts} {state.time:.8E} {state.temperature_gk:.3E} "
-        f"{state.density:.3E} 0.0 0.0 1.0E-6 {values} 1 1\n"
+        f"{state.counters.ts} {time_value or f'{state.time:.8E}'} "
+        f"{state.temperature_gk:.3E} "
+        f"{state.density:.3E} 0.0 {neutrino_loss_rate} 1.0E-6 {values} 1 1\n"
     )
     (directory / f"ev_parallel_zones_{filename_zone:02d}").write_text(
         "header\n" + row, encoding="utf-8"
@@ -91,6 +99,32 @@ def test_ascii_filename_association_rejects_swapped_zone_content(tmp_path: Path)
     _write_ascii_state(tmp_path, states[0], filename_zone=2)
     with pytest.raises(QualificationFailure, match="association mismatch for zone 1"):
         validate_ascii_association(tmp_path, states)
+
+
+def test_ascii_parser_accepts_fortran_omitted_exponent_letter(tmp_path: Path) -> None:
+    state = _state(1)
+    _write_ascii_state(
+        tmp_path,
+        state,
+        filename_zone=1,
+        neutrino_loss_rate="6.95-310",
+    )
+    endpoint = validate_ascii_association(tmp_path, (state,))[0]
+    assert endpoint.neutrino_loss_rate == float("6.95e-310")
+
+
+def test_ascii_association_accepts_difference_from_documented_time_formats(
+    tmp_path: Path,
+) -> None:
+    state = replace(_state(1), time=1.2345678)
+    _write_ascii_state(
+        tmp_path,
+        state,
+        filename_zone=1,
+        time_value="1.23456784E+00",
+    )
+    endpoint = validate_ascii_association(tmp_path, (state,))[0]
+    assert endpoint.zone == 1
 
 
 def test_expected_failure_requires_nonzero_status(tmp_path: Path) -> None:
