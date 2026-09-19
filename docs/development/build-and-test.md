@@ -103,7 +103,7 @@ The exact opt-in component and same-source dense comparison commands are in
 
 | Configuration | Current status |
 | --- | --- |
-| GNU serial OPT and DEBUG | The maintained 194-case serial regression suite and the optimized and DEBUG component suites passed during the staged sequence on macOS arm64 with GNU Fortran 16.2.0. This is not a general cross-platform claim. |
+| GNU serial | The maintained serial regression suite passed in the optimized GNU configuration (194 pytest tests), and the component suite passed in both OPT and DEBUG configurations during the staged sequence on macOS arm64 with GNU Fortran 16.2.0. This is not a general cross-platform claim. |
 | GNU MPI and OpenMP | Serial, two-rank MPI, and two-thread OpenMP results agreed on the ten-zone qualification problem on macOS arm64 with GNU Fortran 16.2.0 and Open MPI 5.0.10. This checks the selected functional and numerical behavior, not scaling, multi-node placement, binding performance, or hybrid MPI+OpenMP execution. |
 | Frontier HIP/ROCm OpenMP offload | The accepted source `64951196032bf4622ee6c887323db33cf1de5beb`, included in this tree, passed Frontier job `5512553` on one MI250X with CPE 25.09, Cray Fortran 20.0.0, ROCm 6.4.2, hipfort 6.4.2, OpenMP target offload, Starkiller EOS, dense solver, and MPI off. The device-probe maximum residual was `3.552713678800501e-17` against a `1e-12` limit. The ten-zone partial batch and six-zone `heat_sn160` comparisons passed; the latter's maximum numerical-limit fraction was `0.16072834133922473`, with nonzero neutrino loss in every zone. CPE 26.03 with ROCm 7.0.2 encountered a hipfort/rocBLAS link incompatibility and is not qualified. |
 | Perlmutter CUDA/OpenACC | Supplemental evidence for the same accepted source passed Perlmutter job `58588659` on one A100-SXM4-80GB with NVHPC 26.5, PrgEnv-nvidia 8.7.0, CUDA 13.2, OpenACC, and the cuBLAS pointer-array batched solve. Device-probe residuals were zero. The ten-zone partial batch and `heat_sn160` comparisons passed; the latter's maximum numerical-limit fraction was `0.07912200248018902`, with nonzero neutrino loss in every zone. This evidence applies only to that tested configuration. |
@@ -215,6 +215,30 @@ See `test/unit/README.md` for the tested behavior, narrow test-only
 state and stubs, vendored `test-drive` revision and license, update procedure,
 and focused effectiveness checks.
 
+## Maintained serial regression suite
+
+The pytest suite under `test/regression/` is the normal serial CPU regression
+path. It requires Python 3.11 or newer and the dependency recorded in
+`test/regression/requirements.txt`. Build the production programs and pass
+their paths explicitly:
+
+```bash
+python3 -m pip install -r test/regression/requirements.txt
+make BUILD_NAME=regression-serial -j xnet xnse
+python3 -m pytest test/regression \
+    --xnet-executable="$PWD/build/regression-serial/bin/xnet" \
+    --xnse-executable="$PWD/build/regression-serial/bin/xnse"
+```
+
+The suite runs `xnet` and `xnse` as external programs in isolated temporary
+directories. It checks direct process status, required output, parsed
+diagnostics, and numerical comparisons with stated limits. Its current 194
+pytest tests include runner, parsing, and effectiveness checks as well as the
+physical regression scenarios; they are not 194 separate scientific cases.
+This evidence does not by itself establish scientific validity or portability.
+See `test/regression/README.md` for the case definitions, requirements,
+timeouts, reference provenance, and comparison policy.
+
 ## Runtime inputs
 
 The stand-alone driver reads a file named `control` from its working directory.
@@ -232,10 +256,11 @@ meaning.
 preprocessing work should identify whether these tracked files are inputs,
 generated results, or comparison data before changing them.
 
-## Legacy test behavior
+## Legacy shell test drivers
 
-The current test infrastructure supports investigation and historical problem
-runs. It has unreliable pass/fail reporting.
+The older shell drivers remain useful for investigation and historical problem
+runs, but they are secondary to the maintained pytest suite and have unreliable
+pass/fail reporting.
 
 `test/test_xnet.sh`:
 
