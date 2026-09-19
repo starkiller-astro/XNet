@@ -1,0 +1,437 @@
+name: XNet GNU serial
+
+on:
+  pull_request:
+    branches:
+      - staging
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression-helpers:
+    name: regression-helpers
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start job measurements
+        shell: bash
+        run: |
+          date +%s > "$RUNNER_TEMP/xnet-gnu-start-epoch"
+          {
+            printf 'job_started_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            df -h "$GITHUB_WORKSPACE"
+          } | tee "$RUNNER_TEMP/xnet-gnu-start.log"
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install pytest
+        shell: bash
+        run: |
+          mkdir -p xnet-gnu-logs
+          python3 -m pip install --disable-pip-version-check --no-cache-dir pytest==9.1.1 \
+            2>&1 | tee xnet-gnu-logs/pip-install.log
+
+      - name: Record environment and tool versions
+        shell: bash
+        run: |
+          report_version() {
+            local label="$1"
+            shift
+            local output
+            if output=$("$@" 2>&1); then
+              printf '%s: %s\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            else
+              printf '%s: unavailable (%s)\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            fi
+          }
+          {
+            printf 'ImageOS=%s\n' "${ImageOS:-not set}"
+            printf 'ImageVersion=%s\n' "${ImageVersion:-not set}"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            uname -a
+            sed -n '1,8p' /etc/os-release
+            report_version git git --version
+            report_version gfortran gfortran --version
+            report_version mpifort mpifort --version
+            report_version make make --version
+            report_version python python3 --version
+            report_version pip python3 -m pip --version
+            report_version pytest python3 -m pytest --version
+          } 2>&1 | tee xnet-gnu-logs/tool-versions.log
+
+      - name: Run regression helper tests
+        shell: bash
+        run: |
+          python3 -m pytest -q test/regression/test_xnet_regression.py \
+            2>&1 | tee xnet-gnu-logs/regression-helpers.log
+
+      - name: Record final job measurements
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p xnet-gnu-logs
+          cp "$RUNNER_TEMP/xnet-gnu-start.log" xnet-gnu-logs/job-start.log
+          start_epoch=$(cat "$RUNNER_TEMP/xnet-gnu-start-epoch")
+          end_epoch=$(date +%s)
+          {
+            printf 'job_finished_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
+            df -h "$GITHUB_WORKSPACE"
+            du -sh "$GITHUB_WORKSPACE" xnet-gnu-logs
+          } 2>&1 | tee xnet-gnu-logs/job-finish.log
+
+      - name: Upload failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: xnet-gnu-logs
+          retention-days: 7
+          if-no-files-found: error
+
+  unit-components:
+    name: unit-components
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start job measurements
+        shell: bash
+        run: |
+          date +%s > "$RUNNER_TEMP/xnet-gnu-start-epoch"
+          {
+            printf 'job_started_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            df -h "$GITHUB_WORKSPACE"
+          } | tee "$RUNNER_TEMP/xnet-gnu-start.log"
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install GNU Fortran and MPI wrapper
+        shell: bash
+        run: |
+          mkdir -p xnet-gnu-logs
+          sudo apt-get update 2>&1 | tee xnet-gnu-logs/apt-update.log
+          sudo apt-get install --no-install-recommends -y gfortran libopenmpi-dev \
+            2>&1 | tee xnet-gnu-logs/apt-install.log
+
+      - name: Record environment and tool versions
+        shell: bash
+        run: |
+          report_version() {
+            local label="$1"
+            shift
+            local output
+            if output=$("$@" 2>&1); then
+              printf '%s: %s\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            else
+              printf '%s: unavailable (%s)\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            fi
+          }
+          {
+            printf 'ImageOS=%s\n' "${ImageOS:-not set}"
+            printf 'ImageVersion=%s\n' "${ImageVersion:-not set}"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            uname -a
+            sed -n '1,8p' /etc/os-release
+            report_version git git --version
+            report_version gfortran gfortran --version
+            report_version mpifort mpifort --version
+            report_version make make --version
+            report_version python python3 --version
+            report_version pip python3 -m pip --version
+            report_version pytest python3 -m pytest --version
+          } 2>&1 | tee xnet-gnu-logs/tool-versions.log
+
+      - name: Run unit and component tests
+        shell: bash
+        run: |
+          make -C test/unit clean test 2>&1 | tee xnet-gnu-logs/unit-components.log
+          xnet_executable="$GITHUB_WORKSPACE/build/unit-opt/bin/xnet"
+          test -x "$xnet_executable"
+          ls -l "$xnet_executable" | tee -a xnet-gnu-logs/unit-components.log
+
+      - name: Record final job measurements
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p xnet-gnu-logs
+          cp "$RUNNER_TEMP/xnet-gnu-start.log" xnet-gnu-logs/job-start.log
+          start_epoch=$(cat "$RUNNER_TEMP/xnet-gnu-start-epoch")
+          end_epoch=$(date +%s)
+          {
+            printf 'job_finished_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
+            df -h "$GITHUB_WORKSPACE"
+            du -sh "$GITHUB_WORKSPACE" xnet-gnu-logs
+            if [[ -d test/unit/build ]]; then
+              du -sh test/unit/build
+              find test/unit/build -type f | wc -l
+            fi
+          } 2>&1 | tee xnet-gnu-logs/job-finish.log
+
+      - name: Collect failing unit evidence
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          UNIT_BUILD_ROOT: ${{ github.workspace }}/test/unit/build
+          UNIT_FAILURE_ROOT: ${{ runner.temp }}/xnet-unit-failures
+          WORKSPACE_ROOT: ${{ github.workspace }}
+        run: |
+          python3 - <<'PY' 2>&1 | tee xnet-gnu-logs/failure-collection.log
+          import os
+          from pathlib import Path
+          import shutil
+
+          source = Path(os.environ["UNIT_BUILD_ROOT"])
+          failure_root = Path(os.environ["UNIT_FAILURE_ROOT"])
+          workspace_root = Path(os.environ["WORKSPACE_ROOT"]).resolve(strict=True)
+          failure_root.mkdir(parents=True, exist_ok=True)
+          manifest = failure_root / "MANIFEST.txt"
+
+          if not source.exists():
+              manifest.write_text("Unit build directory was not created.\n")
+              print(manifest.read_text(), end="")
+              raise SystemExit(0)
+
+          if source.is_symlink() or not source.is_dir():
+              raise SystemExit("refusing unit build root that is not a regular directory")
+          source = source.resolve(strict=True)
+          if workspace_root not in source.parents:
+              raise SystemExit("refusing unit build root outside the workspace")
+
+          omitted = []
+
+          def ignore_staged_inputs(directory, names):
+              ignored = []
+              for name in names:
+                  candidate = Path(directory) / name
+                  if name == "helm_table.dat" or candidate.is_symlink():
+                      ignored.append(name)
+                      omitted.append(candidate.relative_to(source).as_posix())
+              return ignored
+
+          shutil.copytree(
+              source,
+              failure_root / "unit-build",
+              ignore=ignore_staged_inputs,
+          )
+          manifest.write_text(
+              "Copied regular files from test/unit/build.\n"
+              "Omitted staged symlinks and helm_table.dat:\n"
+              + "".join(f"{path}\n" for path in sorted(set(omitted)))
+          )
+          print(manifest.read_text(), end="")
+          PY
+          du -sh "$UNIT_FAILURE_ROOT" | tee -a xnet-gnu-logs/failure-collection.log
+          find "$UNIT_FAILURE_ROOT" -type f | wc -l | tee -a xnet-gnu-logs/failure-collection.log
+
+      - name: Upload failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            xnet-gnu-logs
+            ${{ runner.temp }}/xnet-unit-failures
+          retention-days: 7
+          if-no-files-found: error
+
+  serial-regression:
+    name: serial-regression
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start job measurements
+        shell: bash
+        run: |
+          date +%s > "$RUNNER_TEMP/xnet-gnu-start-epoch"
+          {
+            printf 'job_started_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            df -h "$GITHUB_WORKSPACE"
+          } | tee "$RUNNER_TEMP/xnet-gnu-start.log"
+
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install GNU Fortran and MPI wrapper
+        shell: bash
+        run: |
+          mkdir -p xnet-gnu-logs
+          sudo apt-get update 2>&1 | tee xnet-gnu-logs/apt-update.log
+          sudo apt-get install --no-install-recommends -y gfortran libopenmpi-dev \
+            2>&1 | tee xnet-gnu-logs/apt-install.log
+
+      - name: Install pytest
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-cache-dir pytest==9.1.1 \
+            2>&1 | tee xnet-gnu-logs/pip-install.log
+
+      - name: Record environment and tool versions
+        shell: bash
+        run: |
+          report_version() {
+            local label="$1"
+            shift
+            local output
+            if output=$("$@" 2>&1); then
+              printf '%s: %s\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            else
+              printf '%s: unavailable (%s)\n' "$label" "$(printf '%s\n' "$output" | head -n 1)"
+            fi
+          }
+          {
+            printf 'ImageOS=%s\n' "${ImageOS:-not set}"
+            printf 'ImageVersion=%s\n' "${ImageVersion:-not set}"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            uname -a
+            sed -n '1,8p' /etc/os-release
+            report_version git git --version
+            report_version gfortran gfortran --version
+            report_version mpifort mpifort --version
+            report_version make make --version
+            report_version python python3 --version
+            report_version pip python3 -m pip --version
+            report_version pytest python3 -m pytest --version
+          } 2>&1 | tee xnet-gnu-logs/tool-versions.log
+
+      - name: Build serial executables
+        shell: bash
+        run: |
+          make BUILD_NAME=ci-gnu clean 2>&1 | tee xnet-gnu-logs/serial-clean.log
+          make BUILD_NAME=ci-gnu -j xnet xnse 2>&1 | tee xnet-gnu-logs/serial-build.log
+          xnet_executable="$GITHUB_WORKSPACE/build/ci-gnu/bin/xnet"
+          xnse_executable="$GITHUB_WORKSPACE/build/ci-gnu/bin/xnse"
+          test -x "$xnet_executable" && test -x "$xnse_executable"
+          ls -l "$xnet_executable" "$xnse_executable" | tee -a xnet-gnu-logs/serial-build.log
+          printf 'XNET_EXECUTABLE=%s\nXNSE_EXECUTABLE=%s\n' "$xnet_executable" "$xnse_executable" >> "$GITHUB_ENV"
+
+      - name: Run serial regression
+        shell: bash
+        run: |
+          python3 -m pytest -q test/regression \
+            --xnet-executable="$XNET_EXECUTABLE" \
+            --xnse-executable="$XNSE_EXECUTABLE" \
+            --basetemp="$RUNNER_TEMP/xnet-regression" \
+            2>&1 | tee xnet-gnu-logs/serial-regression.log
+
+      - name: Record final job measurements
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p xnet-gnu-logs
+          cp "$RUNNER_TEMP/xnet-gnu-start.log" xnet-gnu-logs/job-start.log
+          start_epoch=$(cat "$RUNNER_TEMP/xnet-gnu-start-epoch")
+          end_epoch=$(date +%s)
+          {
+            printf 'job_finished_utc='
+            date -u +%Y-%m-%dT%H:%M:%SZ
+            printf 'measured_job_seconds=%s\n' "$((end_epoch - start_epoch))"
+            df -h "$GITHUB_WORKSPACE"
+            du -sh "$GITHUB_WORKSPACE" xnet-gnu-logs
+            if [[ -d "$RUNNER_TEMP/xnet-regression" ]]; then
+              du -sh "$RUNNER_TEMP/xnet-regression"
+              find "$RUNNER_TEMP/xnet-regression" -type f | wc -l
+            fi
+          } 2>&1 | tee xnet-gnu-logs/job-finish.log
+
+      - name: Collect failing regression evidence
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          REGRESSION_ROOT: ${{ runner.temp }}/xnet-regression
+          FAILURE_ROOT: ${{ runner.temp }}/xnet-regression-failures
+        run: |
+          python3 - <<'PY' 2>&1 | tee xnet-gnu-logs/failure-collection.log
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+
+          log_path = Path("xnet-gnu-logs/serial-regression.log")
+          if not log_path.is_file():
+              print("serial regression did not run; no regression directory to collect")
+              raise SystemExit(0)
+
+          regression_root = Path(os.environ["REGRESSION_ROOT"]).resolve(strict=True)
+          failure_root = Path(os.environ["FAILURE_ROOT"])
+          artifact_paths = sorted(set(re.findall(r"artifacts: (\S+)", log_path.read_text())))
+          if not artifact_paths:
+              print("no failing regression artifact paths were reported")
+              raise SystemExit(0)
+
+          copied = []
+          omitted = []
+
+          def ignore_staged_inputs(directory, names):
+              ignored = []
+              for name in names:
+                  candidate = Path(directory) / name
+                  if name == "helm_table.dat" or candidate.is_symlink():
+                      ignored.append(name)
+                      omitted.append(candidate.relative_to(regression_root).as_posix())
+              return ignored
+
+          for raw_path in artifact_paths:
+              source = Path(raw_path).resolve(strict=True)
+              if regression_root not in source.parents or not source.is_dir():
+                  raise SystemExit(f"refusing artifact path outside regression root: {raw_path}")
+
+              relative = source.relative_to(regression_root)
+              destination = failure_root / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copytree(
+                  source,
+                  destination,
+                  ignore=ignore_staged_inputs,
+              )
+              copied.append(relative.as_posix())
+
+          manifest = failure_root / "MANIFEST.txt"
+          manifest.write_text(
+              "Copied failing regression directories:\n"
+              + "".join(f"{path}\n" for path in copied)
+              + "Omitted staged symlinks and helm_table.dat:\n"
+              + "".join(f"{path}\n" for path in sorted(set(omitted)))
+          )
+          print(manifest.read_text(), end="")
+          PY
+          du -sh "$FAILURE_ROOT" | tee -a xnet-gnu-logs/failure-collection.log
+          find "$FAILURE_ROOT" -type f | wc -l | tee -a xnet-gnu-logs/failure-collection.log
+
+      - name: Upload failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            xnet-gnu-logs
+            ${{ runner.temp }}/xnet-regression-failures
+          retention-days: 7
+          if-no-files-found: error
