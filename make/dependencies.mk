@@ -23,7 +23,7 @@ $(call SOBJ,xnet_nnu): $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_controls) $
 $(call SOBJ,xnet_match): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
 $(call SOBJ,xnet_preprocess): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_data) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(call source_obj,$(MPI_SRC))
 $(call SOBJ,xnet_gpu): $(call SOBJ,xnet_controls) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(GPU_OBJ)
-$(call SOBJ,xnet_linalg): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_gpu) $(call SOBJ,xnet_types) $(LAPACK_OBJ)
+$(call SOBJ,xnet_linalg): $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_gpu) $(call SOBJ,xnet_types) $(call SOBJ,xnet_util) $(LAPACK_OBJ)
 $(call SOBJ,xnet_screening): $(call SOBJ,xnet_abundances) $(call SOBJ,xnet_conditions) $(call SOBJ,xnet_constants) $(call SOBJ,xnet_controls) $(call SOBJ,xnet_data) $(call SOBJ,xnet_timers) $(call SOBJ,xnet_types) $(EOS_OBJ)
 $(call EOBJ,eos_type): $(call SOBJ,xnet_types) $(call SOBJ,xnet_util)
 $(call EOBJ,actual_eos): $(call EOBJ,eos_type) $(call SOBJ,xnet_util) $(call source_obj,$(MPI_SRC))

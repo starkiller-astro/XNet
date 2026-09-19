@@ -13,6 +13,7 @@ Module xnet_linalg
   Use xnet_types, Only: dp
   Use xnet_constants, Only: pi
   Use xnet_controls, Only: tid
+  Use xnet_util, Only: xnet_terminate
   Use xnet_gpu, Only: &
     mydevice, &
     device_is_present, &
@@ -1706,10 +1707,7 @@ Contains
 
     If ( data_on_device ) Then
 
-#if defined(XNET_LA_ROCM)
-      Call LinearSolveBatched_ROCM_Strided &
-        & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
-#else
+#if defined(XNET_LA_CUBLAS) || defined(XNET_LA_MAGMA)
       Do i = 1, batchcount
         osa = (i-1) * n + 1
         osb = (i-1) * nrhs + 1
@@ -1719,15 +1717,15 @@ Contains
       End Do
       !XDIR XENTER_DATA XASYNC(tid) &
       !XDIR XCOPYIN(da,db,dipiv)
+#endif
 
       Call LinearSolveBatched_GPU &
         &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
-#endif
 #if defined(XNET_OMP_OL)
       Call stream_sync( stream )
 #endif
 
-#if !defined(XNET_LA_ROCM)
+#if defined(XNET_LA_CUBLAS) || defined(XNET_LA_MAGMA)
       !XDIR XEXIT_DATA XASYNC(tid) &
       !XDIR XDELETE(da,db,dipiv)
 #endif
@@ -1753,88 +1751,6 @@ Contains
     End If
 
   End Subroutine LinearSolveBatched
-
-
-#if defined(XNET_LA_ROCM)
-  Subroutine LinearSolveBatched_ROCM_Strided &
-    & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
-    !-----------------------------------------------------------------------------------------------
-    ! Solve a contiguous ROCm batch through explicit device base addresses and element strides,
-    ! without constructing device arrays of pointers.
-    !-----------------------------------------------------------------------------------------------
-    Character, Intent(in)                             :: trans
-    Integer, Intent(in)                               :: n, nrhs, lda, ldb, batchcount
-    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
-    Real(dp), Dimension(ldb,*), Target, Intent(inout) :: b
-    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
-
-    Call LUDecompBatched_ROCM_Strided &
-      & ( n, n, a, lda, ipiv, info, batchcount )
-    Call LUBksubBatched_ROCM_Strided &
-      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
-
-    Return
-  End Subroutine LinearSolveBatched_ROCM_Strided
-
-
-  Subroutine LUDecompBatched_ROCM_Strided &
-    & ( m, n, a, lda, ipiv, info, batchcount )
-    !-----------------------------------------------------------------------------------------------
-    ! Factor a contiguous batch through device base addresses and element strides.
-    !-----------------------------------------------------------------------------------------------
-    Integer, Intent(in)                               :: m, n, lda, batchcount
-    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
-    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
-
-    Integer(C_INT64_T) :: stridea, stridep
-    Type(C_PTR) :: da, dipiv, dinfo
-
-    stridea = Int( lda * n, C_INT64_T )
-    stridep = Int( n, C_INT64_T )
-
-    da = dev_ptr( a(1,1) )
-    dipiv = dev_ptr( ipiv(1) )
-    dinfo = dev_ptr( info(1) )
-
-    Call hipblasCheck( hipblasDgetrfStridedBatched &
-      & ( hipblas_handle, n, da, lda, stridea, dipiv, stridep, dinfo, batchcount ) )
-
-    Return
-  End Subroutine LUDecompBatched_ROCM_Strided
-
-
-  Subroutine LUBksubBatched_ROCM_Strided &
-    & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
-    !-----------------------------------------------------------------------------------------------
-    ! Back-substitute a contiguous batch through device base addresses and element strides.
-    !-----------------------------------------------------------------------------------------------
-    Character, Intent(in)                             :: trans
-    Integer, Intent(in)                               :: n, nrhs, lda, ldb, batchcount
-    Real(dp), Dimension(lda,*), Target, Intent(inout) :: a
-    Real(dp), Dimension(ldb,*), Target, Intent(inout) :: b
-    Integer, Dimension(*), Target, Intent(inout)      :: ipiv, info
-
-    Integer(C_INT) :: itrans
-    Integer(C_INT64_T) :: stridea, strideb, stridep
-    Type(C_PTR) :: da, db, dipiv, hinfo
-
-    stridea = Int( lda * n, C_INT64_T )
-    strideb = Int( ldb * nrhs, C_INT64_T )
-    stridep = Int( n, C_INT64_T )
-    itrans = itrans_from_char( trans )
-
-    da = dev_ptr( a(1,1) )
-    db = dev_ptr( b(1,1) )
-    dipiv = dev_ptr( ipiv(1) )
-    hinfo = C_LOC( info(1) )
-
-    Call hipblasCheck( hipblasDgetrsStridedBatched &
-      & ( hipblas_handle, itrans, n, nrhs, da, lda, stridea, dipiv, stridep, db, ldb, strideb, &
-      & hinfo, batchcount ) )
-
-    Return
-  End Subroutine LUBksubBatched_ROCM_Strided
-#endif
 
 
   Subroutine LinearSolveBatched_CPU( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
@@ -1901,11 +1817,21 @@ Contains
     Type(C_PTR), Dimension(*),  Target :: da, dipiv
     Logical, Optional                  :: pivot
 
-    Integer                         :: ierr, stridea, strideipiv
+    Logical :: lpiv
+
+#if defined(XNET_LA_CUBLAS) || defined(XNET_LA_MAGMA)
     Integer,  Dimension(:), Pointer :: pinfo
     Type(C_PTR)                     :: da_array, dipiv_array, dinfo
-    Logical                         :: lpiv
+#endif
+#if defined(XNET_LA_CUBLAS)
+    Integer                         :: ierr
     Type(C_PTR)                     :: dipiv0
+#elif defined(XNET_LA_ROCM)
+    Integer(C_INT64_T)              :: stridea, strideipiv
+    Type(C_PTR)                     :: da_base, dipiv_base, dinfo
+#elif defined(XNET_LA_ONEMKL)
+    Integer                         :: stridea, strideipiv
+#endif
 
     If ( present(pivot) ) Then
       lpiv = pivot
@@ -1913,18 +1839,11 @@ Contains
       lpiv = .true.
     EndIf
 
-    stridea    = n * n
-    strideipiv = n
-
+#if defined(XNET_LA_CUBLAS)
     pinfo => info(1:batchcount)
-
-#if !defined(XNET_LA_ROCM)
     da_array = dev_ptr( da(1) )
     dipiv_array = dev_ptr( dipiv(1) )
     dinfo = dev_ptr( pinfo(1) )
-#endif
-
-#if defined(XNET_LA_CUBLAS)
     If ( lpiv ) Then
       ierr = cublasDgetrfBatched &
              ( cublas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount )
@@ -1934,16 +1853,37 @@ Contains
              ( cublas_handle, n, da_array, lda, dipiv0, dinfo, batchcount )
     EndIf
 #elif defined(XNET_LA_ROCM)
-    Call LUDecompBatched_ROCM_Strided &
-      & ( m, n, a, lda, ipiv, info, batchcount )
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU factorization is not implemented for the ROCm/hipBLAS backend in XNet')
+    stridea = Int( lda * n, C_INT64_T )
+    strideipiv = Int( n, C_INT64_T )
+    da_base = dev_ptr( a(1,1) )
+    dipiv_base = dev_ptr( ipiv(1) )
+    dinfo = dev_ptr( info(1) )
+    Call hipblasCheck( hipblasDgetrfStridedBatched &
+      & ( hipblas_handle, n, da_base, lda, stridea, dipiv_base, strideipiv, &
+      &   dinfo, batchcount ) )
 #elif defined(XNET_LA_ONEMKL)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU factorization is not implemented for the oneMKL backend in XNet')
+    stridea = n * n
+    strideipiv = n
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, ipiv )
     Call DGETRF_BATCH_STRIDED &
            ( n, n, a, lda, stridea, ipiv, strideipiv, batchcount, info )
     !$OMP END TARGET VARIANT DISPATCH
 #elif defined(XNET_LA_MAGMA)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU factorization is not implemented for the MAGMA backend in XNet')
+    pinfo => info(1:batchcount)
+    da_array = dev_ptr( da(1) )
+    dipiv_array = dev_ptr( dipiv(1) )
+    dinfo = dev_ptr( pinfo(1) )
     Call magma_dgetrf_batched &
            ( n, n, da_array, lda, dipiv_array, dinfo, batchcount, magma_queue )
+#else
+    Call xnet_terminate &
+      & ('Batched GPU LU factorization requires a supported GPU linear-algebra backend')
 #endif
 
   End Subroutine LUDecompBatched_GPU
@@ -1982,13 +1922,22 @@ Contains
     Type(C_PTR), Dimension(*),  Target :: da, dipiv, db
     Logical, Optional                  :: pivot
 
-    Integer                         :: ierr, stridea, strideb, strideipiv
+    Logical :: lpiv
+
+#if defined(XNET_LA_CUBLAS)
     Integer(C_INT)                  :: itrans
-    Integer,  Dimension(:), Pointer :: pinfo
-    Type(C_PTR)                     :: hinfo
-    Type(C_PTR)                     :: da_array, db_array, dipiv_array, dinfo
-    Type(C_PTR)                     :: dipiv0
-    Logical                         :: lpiv
+    Integer                         :: ierr
+    Type(C_PTR)                     :: da_array, db_array, dipiv0, hinfo
+#elif defined(XNET_LA_ROCM)
+    Integer(C_INT)                  :: itrans
+    Integer(C_INT64_T)              :: stridea, strideb, strideipiv
+    Type(C_PTR)                     :: da_base, db_base, dipiv_base, hinfo
+#elif defined(XNET_LA_ONEMKL)
+    Integer                         :: stridea, strideb, strideipiv
+#elif defined(XNET_LA_MAGMA)
+    Integer(C_INT)                  :: itrans
+    Type(C_PTR)                     :: da_array, db_array, dipiv_array
+#endif
 
     If ( present(pivot) ) Then
       lpiv = pivot
@@ -1996,24 +1945,11 @@ Contains
       lpiv = .true.
     EndIf
 
-    stridea    = n * n
-    strideb    = n * nrhs
-    strideipiv = n
-
-    pinfo => info(1:batchcount)
-
-    hinfo = C_LOC( pinfo )
-
-#if !defined(XNET_LA_ROCM)
+#if defined(XNET_LA_CUBLAS)
+    hinfo = C_LOC( info(1) )
     da_array = dev_ptr( da(1) )
     db_array = dev_ptr( db(1) )
-    dipiv_array = dev_ptr( dipiv(1) )
-    dinfo = dev_ptr( pinfo(1) )
-#endif
-
     itrans = itrans_from_char( trans )
-
-#if defined(XNET_LA_CUBLAS)
     If ( lpiv ) Then
       ierr = cublasDgetrsBatched &
              ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount )
@@ -2023,17 +1959,42 @@ Contains
              ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv0, db_array, ldb, hinfo, batchcount )
     EndIf
 #elif defined(XNET_LA_ROCM)
-    Call LUBksubBatched_ROCM_Strided &
-      & ( trans, n, nrhs, a, lda, ipiv, b, ldb, info, batchcount )
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU solve is not implemented for the ROCm/hipBLAS backend in XNet')
+    stridea = Int( lda * n, C_INT64_T )
+    strideb = Int( ldb * nrhs, C_INT64_T )
+    strideipiv = Int( n, C_INT64_T )
+    itrans = itrans_from_char( trans )
+    da_base = dev_ptr( a(1,1) )
+    db_base = dev_ptr( b(1,1) )
+    dipiv_base = dev_ptr( ipiv(1) )
+    hinfo = C_LOC( info(1) )
+    Call hipblasCheck( hipblasDgetrsStridedBatched &
+      & ( hipblas_handle, itrans, n, nrhs, da_base, lda, stridea, dipiv_base, &
+      &   strideipiv, db_base, ldb, strideb, hinfo, batchcount ) )
     Call stream_sync( stream )
 #elif defined(XNET_LA_ONEMKL)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU solve is not implemented for the oneMKL backend in XNet')
+    stridea = n * n
+    strideb = n * nrhs
+    strideipiv = n
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, ipiv )
-    Call dgetrs_batch_strided &
+    Call DGETRS_BATCH_STRIDED &
            ( trans, n, nrhs, a, lda, stridea, ipiv, strideipiv, b, ldb, strideb, info )
     !$OMP END TARGET VARIANT DISPATCH
 #elif defined(XNET_LA_MAGMA)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU solve is not implemented for the MAGMA backend in XNet')
+    da_array = dev_ptr( da(1) )
+    db_array = dev_ptr( db(1) )
+    dipiv_array = dev_ptr( dipiv(1) )
+    itrans = itrans_from_char( trans )
     Call magma_dgetrs_batched &
            ( itrans, n, nrhs, da_array, lda, dipiv_array, db_array, ldb, batchcount, magma_queue )
+#else
+    Call xnet_terminate &
+      & ('Batched GPU LU solve requires a supported GPU linear-algebra backend')
 #endif
 
   End Subroutine LUBksubBatched_GPU

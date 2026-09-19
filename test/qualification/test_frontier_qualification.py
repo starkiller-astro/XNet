@@ -936,94 +936,103 @@ def test_supported_gpu_batched_factor_and_solve_paths() -> None:
     if shutil.which("cpp") is None:
         pytest.skip("system C preprocessor is unavailable")
     repository = FRONTIER_DIRECTORY.parents[2]
-    completed = subprocess.run(
-        [
-            "cpp",
-            "-P",
-            "-C",
-            "-nostdinc",
-            "-DXNET_GPU",
-            "-DXNET_HIP",
-            "-DXNET_OMP_OL",
-            "-DXNET_LA_ROCM",
-            f"-I{repository / 'source'}",
-            str(repository / "source" / "xnet_linalg.F90"),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    configurations = (
+        (
+            ("XNET_CUDA", "XNET_OACC", "XNET_LA_CUBLAS"),
+            "cublasDgetrfBatched",
+            "cublasDgetrsBatched",
+        ),
+        (
+            ("XNET_HIP", "XNET_OMP_OL", "XNET_LA_ROCM"),
+            "hipblasDgetrfStridedBatched",
+            "hipblasDgetrsStridedBatched",
+        ),
+        (
+            ("XNET_SYCL", "XNET_OMP_OL", "XNET_LA_ONEMKL"),
+            "DGETRF_BATCH_STRIDED",
+            "DGETRS_BATCH_STRIDED",
+        ),
+        (
+            ("XNET_CUDA", "XNET_OACC", "XNET_LA_MAGMA"),
+            "magma_dgetrf_batched",
+            "magma_dgetrs_batched",
+        ),
     )
-    assert completed.returncode == 0, completed.stderr
-    batched_solve = completed.stdout.split("Subroutine LinearSolveBatched(", 1)[1]
-    batched_solve = batched_solve.split("End Subroutine LinearSolveBatched", 1)[0]
-    assert "Call LinearSolveBatched_ROCM_Strided" in batched_solve
-    assert "Call LinearSolveBatched_GPU" not in batched_solve
-    assert "target enter data" not in batched_solve
-    strided_solve = completed.stdout.split(
-        "Subroutine LinearSolveBatched_ROCM_Strided", 1
-    )[1]
-    strided_solve = strided_solve.split(
-        "End Subroutine LinearSolveBatched_ROCM_Strided", 1
-    )[0]
-    assert "Call LUDecompBatched_ROCM_Strided" in strided_solve
-    assert "Call LUBksubBatched_ROCM_Strided" in strided_solve
 
-    strided_factor = completed.stdout.split(
-        "Subroutine LUDecompBatched_ROCM_Strided", 1
-    )[1]
-    strided_factor = strided_factor.split(
-        "End Subroutine LUDecompBatched_ROCM_Strided", 1
-    )[0]
-    assert "hipblasDgetrfStridedBatched" in strided_factor
+    for macros, factor_call, solve_call in configurations:
+        command = ["cpp", "-P", "-C", "-nostdinc", "-DXNET_GPU"]
+        command.extend(f"-D{macro}" for macro in macros)
+        command.extend(
+            [
+                f"-I{repository / 'source'}",
+                str(repository / "source" / "xnet_linalg.F90"),
+            ]
+        )
+        completed = subprocess.run(
+            command, capture_output=True, text=True, check=False
+        )
+        assert completed.returncode == 0, completed.stderr
 
-    strided_bksub = completed.stdout.split(
-        "Subroutine LUBksubBatched_ROCM_Strided", 1
-    )[1]
-    strided_bksub = strided_bksub.split(
-        "End Subroutine LUBksubBatched_ROCM_Strided", 1
-    )[0]
-    assert "hipblasDgetrsStridedBatched" in strided_bksub
+        batched_solve = completed.stdout.split(
+            "Subroutine LinearSolveBatched(", 1
+        )[1]
+        batched_solve = batched_solve.split(
+            "End Subroutine LinearSolveBatched", 1
+        )[0]
+        assert "Call LinearSolveBatched_GPU" in batched_solve
 
-    factor = completed.stdout.split("Subroutine LUDecompBatched_GPU", 1)[1]
-    factor = factor.split("End Subroutine LUDecompBatched_GPU", 1)[0]
-    assert "Call LUDecompBatched_ROCM_Strided" in factor
-    assert "hipblasDgetrfBatched" not in factor
-    assert "dev_ptr( da(1) )" not in factor
+        gpu_solve = completed.stdout.split("Subroutine LinearSolveBatched_GPU", 1)[1]
+        gpu_solve = gpu_solve.split("End Subroutine LinearSolveBatched_GPU", 1)[0]
+        assert "Call LUDecompBatched_GPU" in gpu_solve
+        assert "Call LUBksubBatched_GPU" in gpu_solve
 
-    bksub = completed.stdout.split("Subroutine LUBksubBatched_GPU", 1)[1]
-    bksub = bksub.split("End Subroutine LUBksubBatched_GPU", 1)[0]
-    assert "Call LUBksubBatched_ROCM_Strided" in bksub
-    assert "Call stream_sync( stream )" in bksub
-    assert "hipblasDgetrsBatched" not in bksub
-    assert "dev_ptr( da(1) )" not in bksub
+        factor = completed.stdout.split("Subroutine LUDecompBatched_GPU", 1)[1]
+        factor = factor.split("End Subroutine LUDecompBatched_GPU", 1)[0]
+        assert factor_call in factor
 
-    openacc_cuda = subprocess.run(
-        [
-            "cpp",
-            "-P",
-            "-C",
-            "-nostdinc",
-            "-DXNET_GPU",
-            "-DXNET_CUDA",
-            "-DXNET_OACC",
-            "-DXNET_LA_CUBLAS",
-            f"-I{repository / 'source'}",
-            str(repository / "source" / "xnet_linalg.F90"),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+        bksub = completed.stdout.split("Subroutine LUBksubBatched_GPU", 1)[1]
+        bksub = bksub.split("End Subroutine LUBksubBatched_GPU", 1)[0]
+        assert solve_call in bksub
+
+        if "XNET_LA_CUBLAS" in macros:
+            assert "C_NULL_PTR" in factor
+            assert "C_NULL_PTR" in bksub
+        else:
+            assert "If ( .not. lpiv ) Call xnet_terminate" in factor
+            assert "If ( .not. lpiv ) Call xnet_terminate" in bksub
+
+        if "XNET_LA_ROCM" in macros:
+            assert "da_base = dev_ptr( a(1,1) )" in factor
+            assert "dipiv_base = dev_ptr( ipiv(1) )" in factor
+            assert "stridea = Int( lda * n, C_INT64_T )" in factor
+            assert "strideipiv = Int( n, C_INT64_T )" in factor
+            assert "db_base = dev_ptr( b(1,1) )" in bksub
+            assert "strideb = Int( ldb * nrhs, C_INT64_T )" in bksub
+            assert "Call stream_sync( stream )" in bksub
+
+        jacobian_command = command[:-1] + [
+            str(repository / "source" / "xnet_jacobian_dense.F90")
+        ]
+        jacobian = subprocess.run(
+            jacobian_command, capture_output=True, text=True, check=False
+        )
+        assert jacobian.returncode == 0, jacobian.stderr
+        assert "LinearSolveBatched_GPU" in jacobian.stdout
+        assert "LUDecompBatched_GPU" in jacobian.stdout
+        assert "LUBksubBatched_GPU" in jacobian.stdout
+        assert "StridedBatched_GPU" not in jacobian.stdout
+        assert "ROCM_Strided" not in jacobian.stdout
+
+    source_text = (repository / "source" / "xnet_linalg.F90").read_text(
+        encoding="utf-8"
     )
-    assert openacc_cuda.returncode == 0, openacc_cuda.stderr
-    factor = openacc_cuda.stdout.split("Subroutine LUDecompBatched_GPU", 1)[1]
-    factor = factor.split("End Subroutine LUDecompBatched_GPU", 1)[0]
-    assert "cublasDgetrfBatched" in factor
-    assert "dev_ptr( da(1) )" in factor
-
-    bksub = openacc_cuda.stdout.split("Subroutine LUBksubBatched_GPU", 1)[1]
-    bksub = bksub.split("End Subroutine LUBksubBatched_GPU", 1)[0]
-    assert "cublasDgetrsBatched" in bksub
-    assert "dev_ptr( da(1) )" in bksub
+    assert "StridedBatched_GPU" not in source_text
+    assert "ROCM_Strided" not in source_text
+    jacobian_text = (
+        repository / "source" / "xnet_jacobian_dense.F90"
+    ).read_text(encoding="utf-8")
+    assert "XNET_LA_ROCM" not in jacobian_text
+    assert "XNET_LA_ONEMKL" not in jacobian_text
 
 
 def test_timestep_output_updates_all_device_computed_fields() -> None:
