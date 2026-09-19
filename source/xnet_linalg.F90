@@ -13,6 +13,7 @@ Module xnet_linalg
   Use xnet_types, Only: dp
   Use xnet_constants, Only: pi
   Use xnet_controls, Only: tid
+  Use xnet_util, Only: xnet_terminate
   Use xnet_gpu, Only: &
     mydevice, &
     device_is_present, &
@@ -78,11 +79,7 @@ Module xnet_linalg
   Use rocsolverf, Only: &
     rocsolver_handle, &
     rocsolver_dgeqrf, &
-    rocsolver_dormqr, &
-    rocsolver_dgetrf, &
-    rocsolver_dgetrf_batched, &
-    rocsolver_dgetrs, &
-    rocsolver_dgetrs_batched
+    rocsolver_dormqr
   Use rocsparsef, Only: &
     rocsparse_handle, &
     rocsparse_dgthr, &
@@ -94,9 +91,9 @@ Module xnet_linalg
     hipblasDgemm, &
     hipblasDgemmStridedBatched, &
     hipblasDgetrf, &
-    hipblasDgetrfBatched, &
+    hipblasDgetrfStridedBatched, &
     hipblasDgetrs, &
-    hipblasDgetrsBatched, &
+    hipblasDgetrsStridedBatched, &
     hipblasDgemv, &
     hipblasDtrsv, &
     hipblasDtrsm, &
@@ -106,10 +103,6 @@ Module xnet_linalg
     HIPBLAS_SIDE_LEFT, &
     HIPBLAS_FILL_MODE_UPPER, &
     HIPBLAS_DIAG_NON_UNIT
-  Use hipsparsef, Only: &
-    hipsparse_handle, &
-    hipsparseDgthr, &
-    HIPSPARSE_INDEX_BASE_ONE
 #elif defined(XNET_LA_ONEMKL)
   Use onemkl_blas_omp_offload_lp64
 #elif defined(XNET_LA_MAGMA)
@@ -1714,6 +1707,7 @@ Contains
 
     If ( data_on_device ) Then
 
+#if defined(XNET_LA_CUBLAS) || defined(XNET_LA_MAGMA)
       Do i = 1, batchcount
         osa = (i-1) * n + 1
         osb = (i-1) * nrhs + 1
@@ -1723,6 +1717,7 @@ Contains
       End Do
       !XDIR XENTER_DATA XASYNC(tid) &
       !XDIR XCOPYIN(da,db,dipiv)
+#endif
 
       Call LinearSolveBatched_GPU &
         &  ( trans, n, nrhs, a, da(1), lda, ipiv, dipiv(1), b, db(1), ldb, info, batchcount )
@@ -1730,8 +1725,10 @@ Contains
       Call stream_sync( stream )
 #endif
 
+#if defined(XNET_LA_CUBLAS) || defined(XNET_LA_MAGMA)
       !XDIR XEXIT_DATA XASYNC(tid) &
       !XDIR XDELETE(da,db,dipiv)
+#endif
 
     Else
 
@@ -1820,12 +1817,21 @@ Contains
     Type(C_PTR), Dimension(*),  Target :: da, dipiv
     Logical, Optional                  :: pivot
 
-    Integer                         :: ierr, i, stridea, strideipiv
-    Integer(C_INT64_T)              :: strideP_64
+    Logical :: lpiv
+
+#if defined(XNET_LA_CUBLAS) || defined(XNET_LA_MAGMA)
     Integer,  Dimension(:), Pointer :: pinfo
     Type(C_PTR)                     :: da_array, dipiv_array, dinfo
-    Logical                         :: lpiv
+#endif
+#if defined(XNET_LA_CUBLAS)
+    Integer                         :: ierr
     Type(C_PTR)                     :: dipiv0
+#elif defined(XNET_LA_ROCM)
+    Integer(C_INT64_T)              :: stridea, strideipiv
+    Type(C_PTR)                     :: da_base, dipiv_base, dinfo
+#elif defined(XNET_LA_ONEMKL)
+    Integer                         :: stridea, strideipiv
+#endif
 
     If ( present(pivot) ) Then
       lpiv = pivot
@@ -1833,16 +1839,11 @@ Contains
       lpiv = .true.
     EndIf
 
-    stridea    = n * n
-    strideipiv = n
-
+#if defined(XNET_LA_CUBLAS)
     pinfo => info(1:batchcount)
-
     da_array = dev_ptr( da(1) )
     dipiv_array = dev_ptr( dipiv(1) )
     dinfo = dev_ptr( pinfo(1) )
-
-#if defined(XNET_LA_CUBLAS)
     If ( lpiv ) Then
       ierr = cublasDgetrfBatched &
              ( cublas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount )
@@ -1852,19 +1853,37 @@ Contains
              ( cublas_handle, n, da_array, lda, dipiv0, dinfo, batchcount )
     EndIf
 #elif defined(XNET_LA_ROCM)
-    !strideP_64 = n
-    !Call rocsolverCheck( rocsolver_dgetrf_batched &
-    !       ( rocsolver_handle, n, n, da_array, lda, dipiv(1), strideP_64, dinfo, batchcount ) )
-    Call hipblasCheck( hipblasDgetrfBatched &
-           ( hipblas_handle, n, da_array, lda, dipiv(1), dinfo, batchcount ) )
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU factorization is not implemented for the ROCm/hipBLAS backend in XNet')
+    stridea = Int( lda * n, C_INT64_T )
+    strideipiv = Int( n, C_INT64_T )
+    da_base = dev_ptr( a(1,1) )
+    dipiv_base = dev_ptr( ipiv(1) )
+    dinfo = dev_ptr( info(1) )
+    Call hipblasCheck( hipblasDgetrfStridedBatched &
+      & ( hipblas_handle, n, da_base, lda, stridea, dipiv_base, strideipiv, &
+      &   dinfo, batchcount ) )
 #elif defined(XNET_LA_ONEMKL)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU factorization is not implemented for the oneMKL backend in XNet')
+    stridea = n * n
+    strideipiv = n
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, ipiv )
     Call DGETRF_BATCH_STRIDED &
            ( n, n, a, lda, stridea, ipiv, strideipiv, batchcount, info )
     !$OMP END TARGET VARIANT DISPATCH
 #elif defined(XNET_LA_MAGMA)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU factorization is not implemented for the MAGMA backend in XNet')
+    pinfo => info(1:batchcount)
+    da_array = dev_ptr( da(1) )
+    dipiv_array = dev_ptr( dipiv(1) )
+    dinfo = dev_ptr( pinfo(1) )
     Call magma_dgetrf_batched &
            ( n, n, da_array, lda, dipiv_array, dinfo, batchcount, magma_queue )
+#else
+    Call xnet_terminate &
+      & ('Batched GPU LU factorization requires a supported GPU linear-algebra backend')
 #endif
 
   End Subroutine LUDecompBatched_GPU
@@ -1903,14 +1922,22 @@ Contains
     Type(C_PTR), Dimension(*),  Target :: da, dipiv, db
     Logical, Optional                  :: pivot
 
-    Integer                         :: ierr, i, stridea, strideb, strideipiv
+    Logical :: lpiv
+
+#if defined(XNET_LA_CUBLAS)
     Integer(C_INT)                  :: itrans
-    Integer(C_INT64_T)              :: strideP_64
-    Integer,  Dimension(:), Pointer :: pinfo
-    Type(C_PTR)                     :: hinfo
-    Type(C_PTR)                     :: da_array, db_array, dipiv_array, dinfo
-    Type(C_PTR)                     :: dipiv0
-    Logical                         :: lpiv
+    Integer                         :: ierr
+    Type(C_PTR)                     :: da_array, db_array, dipiv0, hinfo
+#elif defined(XNET_LA_ROCM)
+    Integer(C_INT)                  :: itrans
+    Integer(C_INT64_T)              :: stridea, strideb, strideipiv
+    Type(C_PTR)                     :: da_base, db_base, dipiv_base, hinfo
+#elif defined(XNET_LA_ONEMKL)
+    Integer                         :: stridea, strideb, strideipiv
+#elif defined(XNET_LA_MAGMA)
+    Integer(C_INT)                  :: itrans
+    Type(C_PTR)                     :: da_array, db_array, dipiv_array
+#endif
 
     If ( present(pivot) ) Then
       lpiv = pivot
@@ -1918,22 +1945,11 @@ Contains
       lpiv = .true.
     EndIf
 
-    stridea    = n * n
-    strideb    = n * nrhs
-    strideipiv = n
-
-    pinfo => info(1:batchcount)
-
-    hinfo = C_LOC( pinfo )
-
+#if defined(XNET_LA_CUBLAS)
+    hinfo = C_LOC( info(1) )
     da_array = dev_ptr( da(1) )
     db_array = dev_ptr( db(1) )
-    dipiv_array = dev_ptr( dipiv(1) )
-    dinfo = dev_ptr( pinfo(1) )
-
     itrans = itrans_from_char( trans )
-
-#if defined(XNET_LA_CUBLAS)
     If ( lpiv ) Then
       ierr = cublasDgetrsBatched &
              ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount )
@@ -1943,19 +1959,42 @@ Contains
              ( cublas_handle, itrans, n, nrhs, da_array, lda, dipiv0, db_array, ldb, hinfo, batchcount )
     EndIf
 #elif defined(XNET_LA_ROCM)
-    !strideP_64 = n
-    !Call rocsolverCheck( rocsolver_dgetrs_batched &
-    !       ( rocsolver_handle, itrans, n, nrhs, da_array, lda, dipiv(1), strideP_64, db_array, ldb, batchcount ) )
-    Call hipblasCheck( hipblasDgetrsBatched &
-           ( hipblas_handle, itrans, n, nrhs, da_array, lda, dipiv(1), db_array, ldb, hinfo, batchcount ) )
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU solve is not implemented for the ROCm/hipBLAS backend in XNet')
+    stridea = Int( lda * n, C_INT64_T )
+    strideb = Int( ldb * nrhs, C_INT64_T )
+    strideipiv = Int( n, C_INT64_T )
+    itrans = itrans_from_char( trans )
+    da_base = dev_ptr( a(1,1) )
+    db_base = dev_ptr( b(1,1) )
+    dipiv_base = dev_ptr( ipiv(1) )
+    hinfo = C_LOC( info(1) )
+    Call hipblasCheck( hipblasDgetrsStridedBatched &
+      & ( hipblas_handle, itrans, n, nrhs, da_base, lda, stridea, dipiv_base, &
+      &   strideipiv, db_base, ldb, strideb, hinfo, batchcount ) )
+    Call stream_sync( stream )
 #elif defined(XNET_LA_ONEMKL)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU solve is not implemented for the oneMKL backend in XNet')
+    stridea = n * n
+    strideb = n * nrhs
+    strideipiv = n
     !$OMP TARGET VARIANT DISPATCH USE_DEVICE_PTR( a, b, ipiv )
-    Call dgetrs_batch_strided &
+    Call DGETRS_BATCH_STRIDED &
            ( trans, n, nrhs, a, lda, stridea, ipiv, strideipiv, b, ldb, strideb, info )
     !$OMP END TARGET VARIANT DISPATCH
 #elif defined(XNET_LA_MAGMA)
+    If ( .not. lpiv ) Call xnet_terminate &
+      & ('No-pivot batched LU solve is not implemented for the MAGMA backend in XNet')
+    da_array = dev_ptr( da(1) )
+    db_array = dev_ptr( db(1) )
+    dipiv_array = dev_ptr( dipiv(1) )
+    itrans = itrans_from_char( trans )
     Call magma_dgetrs_batched &
            ( itrans, n, nrhs, da_array, lda, dipiv_array, db_array, ldb, batchcount, magma_queue )
+#else
+    Call xnet_terminate &
+      & ('Batched GPU LU solve requires a supported GPU linear-algebra backend')
 #endif
 
   End Subroutine LUBksubBatched_GPU

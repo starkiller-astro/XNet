@@ -175,7 +175,7 @@ Contains
     start_timer = xnet_wtime()
     timer_tstep = timer_tstep - start_timer
 
-    !XDIR XENTER_DATA ASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(ierr)
 
     ! Initial setup and allocations
@@ -300,7 +300,7 @@ Contains
       EndDo
     EndIf
 
-    !XDIR XEXIT_DATA ASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(ierr)
 
     stop_timer = xnet_wtime()
@@ -724,8 +724,8 @@ Contains
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
     !XDIR XPRESENT(bdf_active) &
     !XDIR XPRESENT(lvec,hvec,q,tq,gam,gamhat,gamratio,tdel) &
-    !XDIR PRIVATE(hsum,xi_inv,xistar_inv,alpha0,alpha0_hat,c,cinv) &
-    !XDIR PRIVATE(a1,a2,a3,a4,a5,a6)
+    !XDIR XPRIVATE(hsum,xi_inv,xistar_inv,alpha0,alpha0_hat,c,cinv) &
+    !XDIR XPRIVATE(a1,a2,a3,a4,a5,a6)
     Do izb = zb_lo, zb_hi
       If ( bdf_active(izb) ) Then
 
@@ -742,10 +742,12 @@ Contains
         alpha0_hat = -1.0_dp
         hsum = tdel(izb)
         If ( q(izb) > 1 ) Then
+#ifndef XNET_OMP_OL
           !XDIR XLOOP_SERIAL(1) &
           !XDIR XREDUCTION(+,hsum) &
           !XDIR XREDUCTION(-,alpha0) &
           !XDIR XPRIVATE(xi_inv)
+#endif
           Do j = 2, q(izb)-1
             hsum = hsum + hvec(j-1,izb)
             xi_inv = tdel(izb) / hsum
@@ -806,7 +808,7 @@ Contains
 
     If ( idiag >= 3 ) Then
       !XDIR XUPDATE XWAIT(tid) &
-      !XDIR HOST(bdf_active,q,tdel,tt,hvec,tq,ewt)
+      !XDIR XHOST(bdf_active,q,tdel,tt,hvec,tq,ewt)
       Do izb = zb_lo, zb_hi
         If ( bdf_active(izb) ) Then
           izone = izb + szbatch - zb_lo
@@ -942,7 +944,7 @@ Contains
       !XDIR XPRESENT(refactor,rebuild,iterate) &
       !XDIR XPRESENT(gam,gamhat,gamratio,crate,p_age,j_age,lvec,acor) &
       !XDIR XPRESENT(yrhs,ydot,t9rhs,t9dot,zt0) &
-      !XDIR PRIVATE(cstar)
+      !XDIR XPRIVATE(cstar)
       Do izb = zb_lo, zb_hi
 
         ! Reset Jacobian age
@@ -1622,10 +1624,12 @@ Contains
     !XDIR XPRIVATE(qp,rrc,sqmx,qjk,vrat,qc,qco) &
     !XDIR XPRIVATE(rr,smink,smaxk,sumrat,sumrsq,vmin,vmax,drrmax,adrr) &
     !XDIR XPRIVATE(tem,sqmax,saqk,s,sqmaxk,saqj,sqmin) &
-    !XDIR XPRIVATE(ratp,ratm,qfac1,qfac2,bb,rrb)
+    !XDIR XPRIVATE(ratp,ratm,qfac1,qfac2,bb,rrb) &
+    !XDIR XPRIVATE(rsa,rsb,rsc,rsd,rd1a,rd1b,rd1c,rd2a,rd2b,rd3a,cest1,corr1)
     loop0: Do izb = zb_lo, zb_hi
       kflag(izb) = 0
       If ( mask(izb) ) Then
+        zone: Do
         !XDIR XLOOP_INNER(2)
         Do k = 1, 3
           Do i = 1, 5
@@ -1683,7 +1687,7 @@ Contains
         If ( vmin < vrrtol*vrrtol ) Then
           If ( vmax > vrrt2*vrrt2 ) Then
             kflag(izb) = -2
-            Cycle loop0
+            Exit zone
           Else
             rr = 0.0_dp
             !XDIR XLOOP_INNER(1) &
@@ -1700,7 +1704,7 @@ Contains
             EndDo
             If ( drrmax > vrrt2 ) Then
               kflag(izb) = -3
-              Cycle loop0
+              Exit zone
             Else
               kflag(izb) = 1
             EndIf
@@ -1708,7 +1712,7 @@ Contains
         Else
           If ( abs(qco(1,1)) < small*ssmax(1) ) Then
             kflag(izb) = -4
-            Cycle loop0
+            Exit zone
           EndIf
           !XDIR XLOOP_INNER(1)
           Do k = 2, 3
@@ -1720,7 +1724,7 @@ Contains
           EndDo
           If ( abs(qco(2,2)) < small*ssmax(2) ) Then
             kflag(izb) = -4
-            Cycle loop0
+            Exit zone
           EndIf
           !XDIR XLOOP_INNER(1)
           Do i = 3, 5
@@ -1728,12 +1732,12 @@ Contains
           EndDo
           If ( abs(qco(4,3)) < small*ssmax(3) ) Then
             kflag(izb) = -4
-            Cycle loop0
+            Exit zone
           EndIf
           rr = -qco(5,3)/qco(4,3)
           If ( rr < small .or. rr > 100.0_dp ) Then
             kflag(izb) = -5
-            Cycle loop0
+            Exit zone
           EndIf
           sqmax = -huge(0.0_dp)
           !XDIR XLOOP_INNER(1) &
@@ -1782,12 +1786,10 @@ Contains
             EndDo
             If ( sqmin > sqtol ) Then
               kflag(izb) = -6
-              Cycle loop0
+              Exit zone
             EndIf
           EndIf
         EndIf
-        !XDIR XLOOP_INNER(1) &
-        !XDIR XPRIVATE(rsa,rsb,rsc,rsd,rd1a,rd1b,rd1c,rd2a,rd2b,rd3a,cest1,corr1)
         Do k = 1, 3
           rsa = ssdat(1,k)
           rsb = ssdat(2,k)*rr
@@ -1801,19 +1803,19 @@ Contains
           rd3a = rd2a - rd2b
           If ( abs(rd1b) < small*smax(k) ) Then
             kflag(izb) = -7
-            Cycle loop0
+            Exit zone
           EndIf
           cest1 = -rd3a/rd1b
           If ( cest1 < small .or. cest1 > 4.0_dp ) Then
             kflag(izb) = -7
-            Cycle loop0
+            Exit zone
           EndIf
           corr1 = (rd2b/cest1)/(rr*rr)
           sigsq(k) = ssdat(3,k) + corr1
         EndDo
         If ( sigsq(2) < small ) Then
           kflag(izb) = -8
-          Cycle loop0
+          Exit zone
         EndIf
         ratp = sigsq(3) / sigsq(2)
         ratm = sigsq(1) / sigsq(2)
@@ -1823,18 +1825,20 @@ Contains
         tem = 1.0_dp - qfac2*bb
         If ( abs(tem) < small ) Then
           kflag(izb) = -8
-          Cycle loop0
+          Exit zone
         EndIf
         rrb = 1.0_dp / tem
         If ( abs(rrb - rr) > rrtol ) Then
           kflag(izb) = -9
-          Cycle loop0
+          Exit zone
         EndIf
         If ( rr > rrcut ) Then
           If ( kflag(izb) == 1 ) kflag(izb) = 4
           If ( kflag(izb) == 2 ) kflag(izb) = 5
           If ( kflag(izb) == 3 ) kflag(izb) = 6
         EndIf
+        Exit zone
+        EndDo zone
       EndIf
     EndDo loop0
 
@@ -1949,7 +1953,7 @@ Contains
     ! Local variables
     Integer :: i, j, izb
 
-    !XDIR XENTER_DATA ASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask)
 
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
@@ -1971,7 +1975,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA ASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(mask)
 
     Return
@@ -1989,7 +1993,7 @@ Contains
     ! Local variables
     Integer :: i, j, izb
 
-    !XDIR XENTER_DATA ASYNC(tid) &
+    !XDIR XENTER_DATA XASYNC(tid) &
     !XDIR XCOPYIN(mask)
 
     !XDIR XLOOP_OUTER(1) XASYNC(tid) &
@@ -2005,7 +2009,7 @@ Contains
       EndIf
     EndDo
 
-    !XDIR XEXIT_DATA ASYNC(tid) &
+    !XDIR XEXIT_DATA XASYNC(tid) &
     !XDIR XCOPYOUT(mask)
 
     Return
@@ -2049,9 +2053,9 @@ Contains
     !-----------------------------------------------------------------------------------------------
     ! This routine returns the error weights for comparing errors in y
     !-----------------------------------------------------------------------------------------------
-    !XDIR XROUTINE_VECTOR
     Use xnet_controls, Only: iconvc, ymin
     Implicit None
+    !XDIR XROUTINE_VECTOR
 
     ! Input variables
     Real(dp), Intent(in) :: y(n), rtol(n), atol(n)
@@ -2094,8 +2098,8 @@ Contains
     !   iconvc = 3 : RMS norm
     !-----------------------------------------------------------------------------------------------
     Use xnet_controls, Only: iconvc
-    !XDIR XROUTINE_VECTOR
     Implicit None
+    !XDIR XROUTINE_VECTOR
 
     ! Input variables
     Real(dp), Intent(in) :: x(n), wt(n)

@@ -122,10 +122,10 @@ Contains
   End Subroutine nnu_match
 
   Subroutine nnu_flux(tf,nf,ltnuf,fluxf,ts,ns,tnus,fluxs)
-    !XDIR XROUTINE_SEQ
     Use xnet_types, Only: dp
     Use xnet_util, Only: safe_exp
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Integer, Intent(in) :: ns

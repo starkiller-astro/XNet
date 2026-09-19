@@ -17,6 +17,7 @@ module rocblasf
     rocblas_pointer_mode_device
   use hipfort_rocblas, only: &
     rocblas_create_handle, &
+    rocblas_destroy_handle, &
     rocblas_get_stream, &
     rocblas_set_stream, &
     rocblas_set_pointer_mode, &

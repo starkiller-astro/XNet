@@ -331,8 +331,8 @@ Contains
     Use xnet_constants, Only: m_e, bok
     Use xnet_types, Only: dp
     Use fd, Only: fd0h, fd2h, fd4h, fd6h, fd8h
-    !XDIR XROUTINE_SEQ
     Implicit None
+    !XDIR XROUTINE_SEQ
 
     ! Input variables
     Real(dp), Intent(in) :: t9, chem, qec

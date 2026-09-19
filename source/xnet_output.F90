@@ -68,7 +68,7 @@ Contains
 
     If ( itsout >= 1 ) Then
       !XDIR XUPDATE XWAIT(tid) &
-      !XDIR XHOST(t,t9,rho,tdel,edot,y,kmon)
+      !XDIR XHOST(t,t9,rho,tdel,edot,sqnu,y,kmon)
       Write(ev_format,"(a)") "(i4,1es15.8,2es10.3,3es10.2,"//trim(nnucout_string)//"es9.2,2i2)"
       Do izb = zb_lo, zb_hi
         If ( mask(izb) ) Then

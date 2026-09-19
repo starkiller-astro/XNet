@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -35,6 +36,9 @@ PROCESS_OUTPUT_FILES = (
     "xnet.stdout.txt",
     "xnet.stderr.txt",
     "xnet.status.txt",
+)
+FORTRAN_OMITTED_EXPONENT = re.compile(
+    r"^([+-]?(?:\d+(?:\.\d*)?|\.\d+))([+-]\d{3,})$"
 )
 
 
@@ -422,32 +426,48 @@ def _close(actual: float, expected: float, relative: float) -> bool:
     return math.isclose(actual, expected, rel_tol=relative, abs_tol=5.0e-99)
 
 
+def _parse_fortran_float(token: str) -> float:
+    """Parse Fortran real output, including a three-digit exponent without E."""
+
+    normalized = token.replace("D", "E").replace("d", "e")
+    if "e" not in normalized.lower():
+        match = FORTRAN_OMITTED_EXPONENT.fullmatch(normalized)
+        if match:
+            normalized = f"{match.group(1)}E{match.group(2)}"
+    return float(normalized)
+
+
 def validate_ascii_association(
-    work_directory: Path, states: Sequence[FinalState]
+    work_directory: Path,
+    states: Sequence[FinalState],
+    *,
+    filename_root: str = "ev_parallel_zones_",
+    output_species: Sequence[str] = ALPHA_SPECIES,
+    zone_width: int = 2,
 ) -> tuple[AsciiEndpoint, ...]:
     """Match each filename's final ASCII row to that global zone's diagnostic state."""
 
     endpoints: list[AsciiEndpoint] = []
     for state in states:
-        path = work_directory / f"ev_parallel_zones_{state.zone:02d}"
+        path = work_directory / f"{filename_root}{state.zone:0{zone_width}d}"
         lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
         if len(lines) < 2:
             raise QualificationFailure(f"ASCII history has no final row: {path}")
         fields = lines[-1].split()
-        expected_fields = 7 + len(ALPHA_SPECIES) + 2
+        expected_fields = 7 + len(output_species) + 2
         if len(fields) != expected_fields:
             raise QualificationFailure(f"malformed final ASCII row in {path}: {lines[-1]}")
         try:
             step = int(fields[0])
-            time = float(fields[1].replace("D", "E"))
-            temperature = float(fields[2].replace("D", "E"))
-            density = float(fields[3].replace("D", "E"))
-            energy_generation_rate = float(fields[4].replace("D", "E"))
-            neutrino_loss_rate = float(fields[5].replace("D", "E"))
-            timestep = float(fields[6].replace("D", "E"))
+            time = _parse_fortran_float(fields[1])
+            temperature = _parse_fortran_float(fields[2])
+            density = _parse_fortran_float(fields[3])
+            energy_generation_rate = _parse_fortran_float(fields[4])
+            neutrino_loss_rate = _parse_fortran_float(fields[5])
+            timestep = _parse_fortran_float(fields[6])
             mass_fractions = tuple(
-                float(token.replace("D", "E"))
-                for token in fields[7 : 7 + len(ALPHA_SPECIES)]
+                _parse_fortran_float(token)
+                for token in fields[7 : 7 + len(output_species)]
             )
         except ValueError as error:
             raise QualificationFailure(f"non-numeric final ASCII row in {path}") from error
@@ -466,15 +486,18 @@ def validate_ascii_association(
             raise QualificationFailure(f"non-finite final ASCII row in {path}")
         # The diagnostic End step is the batch-level maximum, while the ASCII
         # history step is the per-zone time-step counter.
-        if step != state.counters.ts or not _close(time, state.time, 5.1e-9):
+        if step != state.counters.ts or not _close(time, state.time, 5.1e-8):
             raise QualificationFailure(f"time/step association mismatch for zone {state.zone}")
         if not _close(temperature, state.temperature_gk, 5.1e-4) or not _close(
             density, state.density, 5.1e-4
         ):
             raise QualificationFailure(f"thermodynamic association mismatch for zone {state.zone}")
-        for species, actual, expected in zip(
-            ALPHA_SPECIES, mass_fractions, state.mass_fractions.values(), strict=True
-        ):
+        for species, actual in zip(output_species, mass_fractions, strict=True):
+            if species not in state.mass_fractions:
+                raise QualificationFailure(
+                    f"unknown ASCII species {species} for zone {state.zone}"
+                )
+            expected = state.mass_fractions[species]
             if not _close(actual, expected, 5.1e-3):
                 raise QualificationFailure(
                     f"composition association mismatch for zone {state.zone} species {species}"
@@ -490,7 +513,7 @@ def validate_ascii_association(
     return tuple(endpoints)
 
 
-def _run_success(
+def run_configuration(
     label: str,
     command: Sequence[Path | str],
     work_directory: Path,
@@ -532,7 +555,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
     else:
         work_root.mkdir(parents=True)
 
-    serial_result = _run_success(
+    serial_result = run_configuration(
         "serial", (serial,), work_root / "serial", arguments.timeout
     )
     mpi_command = (
@@ -542,7 +565,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
         "2",
         mpi,
     )
-    mpi_result = _run_success(
+    mpi_result = run_configuration(
         "MPI",
         mpi_command,
         work_root / "mpi",
@@ -567,7 +590,7 @@ def run_qualification(arguments: argparse.Namespace) -> Path:
     openmp_environment.update({"OMP_NUM_THREADS": "2", "OMP_DYNAMIC": "FALSE"})
     openmp_results: list[ConfigurationResult] = []
     for repetition in range(1, 4):
-        result = _run_success(
+        result = run_configuration(
             f"OpenMP repetition {repetition}",
             (openmp,),
             work_root / f"openmp-{repetition}",

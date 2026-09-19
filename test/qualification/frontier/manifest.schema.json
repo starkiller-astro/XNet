@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/starkiller-astro/XNet/test/qualification/frontier/manifest.schema.json",
+  "title": "XNet Frontier qualification manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "failure",
+    "source",
+    "environment",
+    "slurm",
+    "builds",
+    "inputs",
+    "checks",
+    "artifact_inventory",
+    "started_at_utc",
+    "finished_at_utc",
+    "runtime_seconds"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "passed"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "failure": {"type": "null"},
+          "environment": {"minProperties": 1},
+          "builds": {"minProperties": 1},
+          "checks": {"minProperties": 1}
+        }
+      },
+      "else": {
+        "properties": {"failure": {"type": "object"}}
+      }
+    }
+  ],
+  "properties": {
+    "schema": {"const": "xnet-frontier-qualification-v2"},
+    "status": {"enum": ["passed", "failed"]},
+    "failure": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category", "phase", "message"],
+          "properties": {
+            "category": {
+              "enum": [
+                "source",
+                "environment",
+                "submission",
+                "queue",
+                "allocation",
+                "facility",
+                "build",
+                "test",
+                "comparison"
+              ]
+            },
+            "phase": {"type": "string", "minLength": 1},
+            "message": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha",
+        "worktree_clean",
+        "archive_sha256",
+        "archive_commit_sha",
+        "tree_sha256",
+        "verified_before_build"
+      ],
+      "properties": {
+        "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "worktree_clean": {"const": true},
+        "archive_sha256": {"$ref": "#/$defs/sha256"},
+        "archive_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree_sha256": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]
+        },
+        "verified_before_build": {"type": "boolean"}
+      }
+    },
+    "environment": {
+      "oneOf": [
+        {"type": "object", "maxProperties": 0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "modules",
+            "compiler",
+            "preprocessor",
+            "rocm",
+            "gpu",
+            "gpu_model",
+            "rocm_version",
+            "hipfort_module"
+          ],
+          "properties": {
+            "modules": {"type": "array", "items": {"type": "string"}},
+            "compiler": {"$ref": "#/$defs/commandEvidence"},
+            "preprocessor": {"$ref": "#/$defs/commandEvidence"},
+            "rocm": {"$ref": "#/$defs/commandEvidence"},
+            "gpu": {"$ref": "#/$defs/commandEvidence"},
+            "gpu_model": {"type": "string", "minLength": 1},
+            "rocm_version": {"type": "string", "minLength": 1},
+            "hipfort_module": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "slurm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "account_supplied",
+        "partition",
+        "qos_supplied",
+        "reservation_supplied",
+        "nodes",
+        "tasks",
+        "cpus_per_task",
+        "gpus_per_task",
+        "time_limit"
+      ],
+      "properties": {
+        "job_id": {"type": "string", "minLength": 1},
+        "account_supplied": {"const": true},
+        "partition": {"type": "string", "minLength": 1},
+        "qos_supplied": {"type": "boolean"},
+        "reservation_supplied": {"type": "boolean"},
+        "nodes": {"const": 1},
+        "tasks": {"const": 1},
+        "cpus_per_task": {"type": "integer", "minimum": 1},
+        "gpus_per_task": {"const": 1},
+        "time_limit": {
+          "type": "string",
+          "pattern": "^(?:[0-9]+-)?[0-9]{1,2}:[0-9]{2}:[0-9]{2}$"
+        }
+      }
+    },
+    "builds": {
+      "oneOf": [
+        {"type": "object", "maxProperties": 0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "gpu"],
+          "properties": {
+            "cpu": {"$ref": "#/$defs/buildEvidence"},
+            "gpu": {"$ref": "#/$defs/buildEvidence"}
+          }
+        }
+      ]
+    },
+    "inputs": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "checks": {
+      "oneOf": [
+        {"type": "object", "maxProperties": 0},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["gpu_linalg", "partial_batch", "heat_sn160"],
+          "properties": {
+            "gpu_linalg": {"type": "object"},
+            "partial_batch": {"type": "object"},
+            "heat_sn160": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "artifact_inventory": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "started_at_utc": {"type": "string", "format": "date-time"},
+    "finished_at_utc": {"type": "string", "format": "date-time"},
+    "runtime_seconds": {"type": "number", "minimum": 0}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "size": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "commandEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "sha256", "runtime_seconds", "summary"],
+      "properties": {
+        "artifact": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "runtime_seconds": {"type": "number", "minimum": 0},
+        "summary": {"type": "string", "minLength": 1}
+      }
+    },
+    "buildEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "variables",
+        "resolved_variables",
+        "resolved_variable_values",
+        "timeout_seconds",
+        "runtime_seconds",
+        "executables"
+      ],
+      "properties": {
+        "status": {"const": "passed"},
+        "variables": {"type": "object"},
+        "resolved_variables": {"type": "string", "minLength": 1},
+        "resolved_variable_values": {"type": "object"},
+        "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "runtime_seconds": {"type": "number", "minimum": 0},
+        "executables": {"type": "object"}
+      }
+    }
+  }
+}
