@@ -67,7 +67,6 @@ The tracked selector defaults are:
 
 | Setting | Value | Meaning |
 | --- | --- | --- |
-| `EXE` | `xnet` | Main executable name |
 | `CMODE` | `OPT` | Optimized build |
 | `PE_ENV` | `GNU` | GNU compiler configuration |
 | `MPI_MODE` | `OFF` | Selects the serial parallel-interface stubs |

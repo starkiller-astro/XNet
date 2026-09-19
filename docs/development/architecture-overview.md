@@ -50,11 +50,13 @@ these areas, especially through shared module state.
 
 `net.F90` is the stand-alone production program. Its setup path currently:
 
-1. initializes serial or MPI execution;
+1. initializes serial or MPI execution, determines the OpenMP thread count,
+   initializes GPU execution when selected, and starts setup timing;
 2. reads `control` through `xnet_controls`;
-3. preprocesses or reads nuclear and reaction data;
-4. initializes the selected EOS, NSE support, screening, flux, integrators,
-   Jacobian implementation, accelerator state, and timers;
+3. preprocesses the requested network when needed, then reads nuclear,
+   reaction, Jacobian, and match data;
+4. initializes screening, flux evaluation, the selected EOS and integrator,
+   NSE support, and shared run arrays;
 5. reads thermodynamic histories and initial abundances through
    `model_input_ascii`;
 6. evolves assigned zones and writes diagnostic or timestep output;
